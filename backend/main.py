@@ -118,9 +118,15 @@ async def websocket(ws: WebSocket):
                 accumulated += min(now - last_tick, 0.1)
                 count = min(int(accumulated / 0.002), 50)
                 if count:
-                    await asyncio.to_thread(sim.step, count)
-                    accumulated -= count * 0.002
-                    await ws.send_json(sim.state())
+                    try:
+                        await asyncio.to_thread(sim.step, count)
+                        accumulated -= count * 0.002
+                        await ws.send_json(sim.state())
+                    except ValueError as exc:
+                        await ws.send_json(sim.snapshot())
+                        await ws.send_json(
+                            dict(type="error", message=str(exc), revision=sim.revision)
+                        )
             last_tick = now
     except (WebSocketDisconnect, RuntimeError):
         pass

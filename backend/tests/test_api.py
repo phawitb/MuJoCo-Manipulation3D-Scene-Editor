@@ -69,3 +69,25 @@ def test_separate_websocket_sessions_are_isolated():
         assert len(receive(a, "snapshot")["scene"]["objects"]) == 1
         b.send_json({"type": "snapshot"})
         assert receive(b, "snapshot")["scene"]["objects"] == []
+
+
+def test_workspace_boundary_pauses_stream_and_preserves_loadable_scene():
+    with TestClient(app) as client, client.websocket_connect("/ws") as ws:
+        initial = receive(ws, "snapshot")
+        initial["scene"]["objects"] = [
+            {
+                "id": "ghost",
+                "asset": "cube",
+                "position": [0, 0.1, 1],
+                "collision": False,
+            }
+        ]
+        ws.send_json({"type": "load", "scene": initial["scene"]})
+        receive(ws, "snapshot")
+        ws.send_json({"type": "run"})
+        paused = receive(ws, "snapshot")
+        assert not paused["running"]
+        assert paused["scene"]["objects"][0]["position"][2] >= -5
+        assert "workspace" in receive(ws, "error")["message"]
+        ws.send_json({"type": "load", "scene": paused["scene"]})
+        assert len(receive(ws, "snapshot")["scene"]["objects"]) == 1

@@ -3,9 +3,9 @@ import type { Asset, MeshData, Scene, Snapshot, StatePacket } from "./types";
 
 export function useSimulation() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [status, setStatus] = useState<"connecting" | "connected" | "offline">(
-    "connecting",
-  );
+  const [status, setStatus] = useState<
+    "connecting" | "connected" | "offline" | "recovery-error"
+  >("connecting");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -22,6 +22,8 @@ export function useSimulation() {
     timer: ReturnType<typeof setTimeout>;
   } | null>(null);
   const counter = useRef(0);
+  const serverRevision = useRef<number | undefined>(undefined);
+  const recoveryBlocked = useRef(false);
   const busyRef = useRef(false);
   const updatePacket = (packet: StatePacket) => {
     live.current = packet;
@@ -46,6 +48,12 @@ export function useSimulation() {
   const command = useCallback(
     (type: string, extra: Record<string, unknown> = {}) =>
       new Promise<StatePacket>((resolve, reject) => {
+        if (recoveryBlocked.current && type !== "load" && type !== "reset")
+          return reject(
+            new Error(
+              "Restore failed. Save your retained scene, then open a scene or reset to continue.",
+            ),
+          );
         if (socket.current?.readyState !== WebSocket.OPEN)
           return reject(new Error("Simulation server is disconnected"));
         if (busyRef.current)
@@ -70,13 +78,29 @@ export function useSimulation() {
           JSON.stringify({
             type,
             requestId: id,
-            revision: live.current?.revision,
+            revision: serverRevision.current,
             ...extra,
           }),
         );
       }),
     [],
   );
+  const waitForPending = useCallback(() => {
+    const current = pending.current;
+    if (!current) return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      const accepted = current.resolve;
+      const rejected = current.reject;
+      current.resolve = (packet) => {
+        accepted(packet);
+        resolve();
+      };
+      current.reject = (error) => {
+        rejected(error);
+        reject(error);
+      };
+    });
+  }, []);
   useEffect(() => {
     let cancelled = false,
       reconnect: ReturnType<typeof setTimeout>,
@@ -118,6 +142,7 @@ export function useSimulation() {
       ws.onmessage = (event) => {
         if (cancelled) return;
         const p = JSON.parse(event.data);
+        serverRevision.current = p.revision;
         if (p.type === "error") {
           setError(p.message);
           if (pending.current && pending.current.id === p.requestId) {
@@ -131,15 +156,22 @@ export function useSimulation() {
         }
         if (first) {
           first = false;
-          setStatus("connected");
           if (recovery.current) {
             const restore = recovery.current;
-            live.current = p;
+            setStatus("connecting");
+            recoveryBlocked.current = true;
             command("load", { scene: restore }).catch((e) => {
-              setError(`Could not restore scene: ${e.message}`);
+              setStatus("recovery-error");
+              setError(
+                `Could not restore scene: ${e.message}. Your scene is retained. Save it, then open a scene or reset to continue.`,
+              );
             });
             return;
           }
+        }
+        if (p.type === "snapshot") {
+          recoveryBlocked.current = false;
+          setStatus("connected");
         }
         updatePacket(p);
         if (pending.current && pending.current.id === p.requestId) {
@@ -153,6 +185,10 @@ export function useSimulation() {
       ws.onclose = () => {
         if (cancelled) return;
         setStatus("offline");
+        if (live.current) {
+          live.current = { ...live.current, running: false };
+          setState(live.current);
+        }
         if (pending.current) {
           clearTimeout(pending.current.timer);
           pending.current.reject(
@@ -204,6 +240,7 @@ export function useSimulation() {
     assets,
     meshes,
     command,
+    waitForPending,
     currentScene,
   };
 }

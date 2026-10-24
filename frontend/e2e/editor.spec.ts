@@ -260,3 +260,224 @@ test("asset loading recovers from a transient server failure", async ({
     page.getByRole("button", { name: "Add Plastic cup", exact: true }),
   ).toBeEnabled();
 });
+
+test("native library drag and rotation gizmo work in the top view", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(
+    page.getByText("Simulation connected", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("canvas")).toHaveCount(2);
+  await page.getByRole("button", { name: "Top view", exact: true }).click();
+  const viewport = page.getByTestId("viewport-top");
+  const canvas = viewport.locator("canvas");
+  await expect
+    .poll(async () => (await canvas.boundingBox())?.width || 0)
+    .toBeGreaterThan(600);
+  const b = (await canvas.boundingBox())!;
+  await page.getByTestId("asset-spoon").dragTo(viewport, {
+    targetPosition: { x: b.width / 2 + 65, y: b.height / 2 + 45 },
+  });
+  await expect(page.getByLabel("Object name", { exact: true })).toHaveValue(
+    "Plastic spoon",
+  );
+  const x = Number(
+    await page.getByLabel("Position X", { exact: true }).inputValue(),
+  );
+  const y = Number(
+    await page.getByLabel("Position Y", { exact: true }).inputValue(),
+  );
+  expect(x).toBeCloseTo(65 / 320, 2);
+  expect(y).toBeCloseTo(-45 / 320, 2);
+  await page.getByRole("button", { name: "Rotate tool", exact: true }).click();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  const cx = b.x + b.width / 2 + x * 320,
+    cy = b.y + b.height / 2 - y * 320;
+  const d = (b.height * 0.8) / 7 / Math.sqrt(2);
+  await page.mouse.move(cx + d, cy - d);
+  await page.mouse.down();
+  await page.mouse.move(cx - d, cy - d, { steps: 16 });
+  await page.mouse.up();
+  await expect
+    .poll(async () =>
+      Math.abs(
+        Number(
+          await page.getByLabel("Rotation Z", { exact: true }).inputValue(),
+        ),
+      ),
+    )
+    .toBeGreaterThan(40);
+  await page.screenshot({ path: "test-results/rotation.png" });
+});
+
+test("Save commits a focused draft and waits for server acknowledgement", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Add Plastic cup", exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole("button", { name: "Add Plastic cup", exact: true })
+    .click();
+  const x = page.getByLabel("Position X", { exact: true });
+  await expect(x).toBeEnabled();
+  await x.fill("0.2");
+  let downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Save scene", exact: true }).click();
+  let file = await downloading;
+  expect(
+    JSON.parse(await fs.readFile((await file.path())!, "utf8")).scene.objects[0]
+      .position[0],
+  ).toBe(0.2);
+  await x.fill("0.25");
+  downloading = page.waitForEvent("download");
+  await x.press("ControlOrMeta+s");
+  file = await downloading;
+  expect(
+    JSON.parse(await fs.readFile((await file.path())!, "utf8")).scene.objects[0]
+      .position[0],
+  ).toBe(0.25);
+});
+
+test("rejected numeric edit restores authoritative inspector value", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Add Plastic cup", exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole("button", { name: "Add Plastic cup", exact: true })
+    .click();
+  const x = page.getByLabel("Position X", { exact: true });
+  await expect(x).toBeEnabled();
+  await x.fill("8");
+  await x.press("Enter");
+  await expect(page.getByRole("alert")).toContainText("within 5 m");
+  await expect(x).toHaveValue("0.08");
+});
+
+test("failed reconnect preserves recoverable work and blocks simulation until reset", async ({
+  page,
+}) => {
+  let session = 0,
+    connection: WebSocketRoute | undefined;
+  await page.routeWebSocket("**/ws", (ws) => {
+    connection = ws;
+    const server = ws.connectToServer();
+    const number = ++session;
+    if (number > 1)
+      ws.onMessage((message) => {
+        const command = JSON.parse(String(message));
+        if (command.type === "load")
+          ws.send(
+            JSON.stringify({
+              type: "error",
+              requestId: command.requestId,
+              revision: 1,
+              message: "Injected restore rejection",
+            }),
+          );
+        else server.send(message);
+      });
+  });
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Add Plastic cup", exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole("button", { name: "Add Plastic cup", exact: true })
+    .click();
+  await expect(page.getByLabel("Object name", { exact: true })).toHaveValue(
+    "Plastic cup",
+  );
+  await connection!.close({ code: 1001 });
+  await expect(page.getByRole("alert")).toContainText("restore");
+  await expect(
+    page.getByRole("button", { name: "Run simulation", exact: true }),
+  ).toBeDisabled();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Save scene", exact: true }).click();
+  const file = await downloadPromise;
+  expect(
+    JSON.parse(await fs.readFile((await file.path())!, "utf8")).scene.objects,
+  ).toHaveLength(1);
+  await page.getByRole("button", { name: "Reset scene", exact: true }).click();
+  await expect(
+    page.getByText("Your tabletop is a blank canvas."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Run simulation", exact: true }),
+  ).toBeEnabled();
+});
+
+test("camera actions are not replayed into another view or imported cameras", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Add Plastic cup", exact: true }),
+  ).toBeEnabled();
+  await expect(page.locator("canvas")).toHaveCount(2);
+  await page
+    .getByRole("button", { name: "Add Plastic cup", exact: true })
+    .click();
+  await expect(page.getByLabel("Object name", { exact: true })).toHaveValue(
+    "Plastic cup",
+  );
+  await page
+    .getByRole("button", { name: "Reset top camera", exact: true })
+    .click();
+  const before = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("so101.cameras")!).top,
+  );
+  await page
+    .getByRole("button", { name: "Frame main camera", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Top view", exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await page.getByTestId("viewport-top").locator("canvas").boundingBox())
+          ?.width || 0,
+    )
+    .toBeGreaterThan(600);
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  expect(
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem("so101.cameras")!).top,
+    ),
+  ).toEqual(before);
+  const d = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Save scene", exact: true }).click();
+  const file = await d;
+  const doc = JSON.parse(await fs.readFile((await file.path())!, "utf8"));
+  doc.cameras.top = {
+    position: [0.03, 0.02, 2.6],
+    target: [0.03, 0.02, 0.75],
+    zoom: 410,
+  };
+  await page.getByTestId("scene-file").setInputFiles({
+    name: "view.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(doc)),
+  });
+  await expect(page.getByRole("status")).toContainText("Scene loaded");
+  expect(
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem("so101.cameras")!).top,
+    ),
+  ).toEqual(doc.cameras.top);
+});

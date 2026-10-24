@@ -24,11 +24,7 @@ import { Library } from "./Library";
 import { Inspector } from "./Inspector";
 import { Viewport } from "./Viewport";
 import { useSimulation } from "./useSimulation";
-import {
-  dropPosition,
-  readCameras,
-  validateDocument,
-} from "./math";
+import { dropPosition, readCameras, validateDocument } from "./math";
 import type {
   Cameras,
   ObjectPose,
@@ -152,9 +148,11 @@ export default function App() {
       /* Camera remains available in memory. */
     }
   };
-  const save = () => {
+  const save = async () => {
     if (!sim.snapshot) return;
     try {
+      (document.activeElement as HTMLElement | null)?.blur();
+      await sim.waitForPending();
       const doc = {
         version: 1,
         scene: sim.currentScene(),
@@ -290,7 +288,9 @@ export default function App() {
             <CircleHelp size={18} />
           </button>
           <button
-            disabled={!editable}
+            disabled={
+              !editable && !(sim.status === "recovery-error" && !sim.busy)
+            }
             onClick={() => fileInput.current?.click()}
           >
             <ArrowUpFromLine size={15} />
@@ -496,7 +496,10 @@ export default function App() {
               <button
                 aria-label="Reset scene"
                 title="Reset scene; preserve cameras"
-                disabled={sim.busy || sim.status !== "connected"}
+                disabled={
+                  sim.busy ||
+                  !["connected", "recovery-error"].includes(sim.status)
+                }
                 onClick={() =>
                   void safe(async () => {
                     await sim.command("reset");
@@ -564,9 +567,11 @@ export default function App() {
           />
           {sim.status === "connected"
             ? "Simulation connected"
-            : sim.status === "offline"
-              ? "Reconnecting · scene retained"
-              : "Connecting to simulation…"}
+            : sim.status === "recovery-error"
+              ? "Restore needs attention · scene retained"
+              : sim.status === "offline"
+                ? "Reconnecting · scene retained"
+                : "Connecting to simulation…"}
         </span>
         <span>
           {sim.busy ? (

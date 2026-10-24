@@ -58,7 +58,8 @@ function NumberField({
             (max === undefined || v <= max)
           )
             onCommit(v);
-          else setDraft(String(Number(value.toFixed(4))));
+          // Only an acknowledged value is shown after committing a draft.
+          setDraft(String(Number(value.toFixed(4))));
         }}
       />
     </label>
@@ -135,9 +136,11 @@ function JointControl({
         onChange={(e) => setDraft(Number(e.target.value))}
         onPointerUp={() => {
           if (draft !== value) onCommit(draft);
+          setDraft(value);
         }}
         onKeyUp={() => {
           if (draft !== value) onCommit(draft);
+          setDraft(value);
         }}
       />
       <div className="joint-limits">

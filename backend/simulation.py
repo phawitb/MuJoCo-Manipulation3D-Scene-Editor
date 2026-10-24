@@ -185,8 +185,23 @@ class Simulation:
         ]
 
     def step(self, count=1):
+        # A physics result must remain valid input for saving, editing and recovery.
+        state_type = mujoco.mjtState.mjSTATE_INTEGRATION
+        previous = np.empty(mujoco.mj_stateSize(self.model, state_type))
+        mujoco.mj_getState(self.model, self.data, previous, state_type)
         mujoco.mj_step(self.model, self.data, nstep=count)
         mujoco.mj_forward(self.model, self.data)
+        escaped = not np.isfinite(self.data.qpos).all() or any(
+            np.any(np.abs(self.data.xpos[bid]) > 5)
+            for bid in self.object_bodies.values()
+        )
+        if escaped:
+            mujoco.mj_setState(self.model, self.data, previous, state_type)
+            mujoco.mj_forward(self.model, self.data)
+            self.running = False
+            raise ValueError(
+                "Object reached the 5 m workspace boundary. Physics paused at the last valid state; enable collision, reposition the object, or reset."
+            )
 
     def export_scene(self):
         scene = self.scene.model_copy(deep=True)

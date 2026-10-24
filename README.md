@@ -25,7 +25,7 @@ The app opens in Edit Mode with a fixed SO-101 near the left table edge and an e
 - Main view: left-drag orbits, right-drag pans, wheel zooms. Top view: drag pans, wheel zooms; the top-down direction is locked. Click a viewport to make it active. Each viewport has independent frame/reset controls.
 - **Save scene / Cmd-Ctrl+S** downloads JSON containing the current object poses and both cameras. **Open** validates and restores it. Invalid files leave the working scene unchanged. [Example empty scene](examples/empty-scene.json).
 - **Reset scene** restores the empty default scene and pauses physics, preserving cameras. Camera settings also survive page refresh in local storage. Scenes are saved explicitly with Save; refreshing without saving starts a new empty scene.
-- A transient network disconnect reconnects with the last acknowledged scene and pauses physics. Each browser connection has an isolated simulation.
+- A transient network disconnect reconnects with the last acknowledged scene and pauses physics. Each browser connection has an isolated simulation. If restoration is rejected, the retained scene remains available to save; simulation stays disabled until you open another scene or reset.
 
 ## Verification
 
@@ -52,6 +52,6 @@ The browser test configuration uses installed Google Chrome by default. Set `PLA
 
 The robot uses its real kinematic structure, inertias, actuator configuration and model collision geometry. Its base has no free joint. Robot collision shapes follow the upstream model's approximations; they are not exact visual-mesh collisions. Household objects are explicitly **procedural approximations**, not IKEA product models: the cup is open, the plate has a shallow rim, and the spoon uses a rounded solid bowl and handle. Their render primitives are their physics primitives. Model source and exact commit: [assets/PROVENANCE.md](assets/PROVENANCE.md).
 
-This is a local single-user editor with per-connection sessions, not a multi-user deployment or autonomous grasping system. There is no trajectory planner, IK, learning policy or hardware control. Maximum 64 objects per scene; physics advances at 500 Hz and publishes around 30 Hz, subject to machine load. Very large/high-contact scenes may run slower than real time. Arbitrary manual transforms may create overlaps; MuJoCo resolves contacts when simulation begins. No GPU is required for physics; browser WebGL is required for 3D rendering.
+This is a local single-user editor with per-connection sessions, not a multi-user deployment or autonomous grasping system. There is no trajectory planner, IK, learning policy or hardware control. Physics pauses at the last valid state before an object center leaves the ±5 m workspace, keeping saved scenes reloadable even with collision disabled. Maximum 64 objects per scene; physics advances at 500 Hz and publishes around 30 Hz, subject to machine load. Very large/high-contact scenes may run slower than real time. Arbitrary manual transforms may create overlaps; MuJoCo resolves contacts when simulation begins. No GPU is required for physics; browser WebGL is required for 3D rendering.
 
 The supplied specification was truncated midway through section 7. The implemented scope covers all complete requirements in that attachment and functional drag/drop behavior.

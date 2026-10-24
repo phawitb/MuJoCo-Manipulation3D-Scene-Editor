@@ -109,3 +109,23 @@ def test_disabled_collision_passes_through_table():
     )
     sim.step(200)
     assert sim.state()["objects"][0]["position"][2] < 0.4
+
+
+def test_physics_pauses_before_escaping_exportable_workspace():
+    sim = Simulation(
+        Scene(
+            objects=[
+                SceneObject(
+                    id="ghost", asset="cube", position=[0, 0.1, 1], collision=False
+                )
+            ]
+        )
+    )
+    sim.running = True
+    with pytest.raises(ValueError, match="workspace"):
+        for _ in range(100):
+            sim.step(50)
+    assert not sim.running
+    restored = Scene.model_validate(sim.export_scene().model_dump())
+    assert restored.objects[0].position[2] >= -5
+    assert sim.data.time > 0.5

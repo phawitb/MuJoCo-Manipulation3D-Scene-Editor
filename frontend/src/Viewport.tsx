@@ -245,6 +245,8 @@ function CameraRig(
   const { camera, gl } = useThree();
   const controls = useRef<OrbitControlsImpl>(null);
   const initial = useRef(p.cameraState);
+  const consumedFrame = useRef(p.frameSignal);
+  const consumedReset = useRef(p.resetSignal);
   const stateRef = useRef(p);
   stateRef.current = p;
   const apply = (state: CameraState) => {
@@ -267,13 +269,17 @@ function CameraRig(
     apply(initial.current);
   }, []);
   useEffect(() => {
-    if (p.resetSignal && p.active) {
+    const changed = consumedReset.current !== p.resetSignal;
+    consumedReset.current = p.resetSignal;
+    if (changed && p.active) {
       apply(defaultCameras()[p.kind]);
       save();
     }
   }, [p.resetSignal]);
   useEffect(() => {
-    if (!p.frameSignal || !p.active || !controls.current) return;
+    const changed = consumedFrame.current !== p.frameSignal;
+    consumedFrame.current = p.frameSignal;
+    if (!changed || !p.active || !controls.current) return;
     let target: Vec3 = [0, 0, p.snapshot.scene.table.height];
     if (p.selected === "robot")
       target = p.snapshot.scene.robot.position.map(
