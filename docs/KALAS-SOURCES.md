@@ -63,3 +63,7 @@ Only values explicitly marked official above are manufacturer-published single-p
 For editor display, use names such as “IKEA KALAS bowl (approx.)” and expose the article number/source where practical. A scalar size control should preserve the default physical proportions; separate axes may be offered only when clearly labelled as shape changes. Render open interiors. If physics uses simplified convex pieces, record that collision geometry is an approximation separate from the visible surface. Do not silently fill the bowl/cup/plate cavity with a single convex hull when containment matters.
 
 Unknowns needing a physical sample or manufacturer drawing: true wall/floor thickness, underside recess and foot dimensions, rim bead, spoon scoop depth and bend, individual object mass, friction and compliance. Pack-average mass can be an initial estimate but is not an individual measured mass. This document provides geometry references, not validated contact dynamics.
+
+## Implemented defaults
+
+The current reconstruction uses bowl Ø120 × 46 mm, cup Ø80 × 81 mm, plate Ø190 × 24 mm, spoon 160 × 33 × 8 mm. Spoon width is rounded from the photographic estimate and its 8 mm vertical envelope is a modelling choice. Container walls/floors use approximately 2 mm, with faceted convex collision pieces and a smoother visual shell. Approximate masses are bowl 45 g, cup 30 g, plate 65 g, spoon 9 g; these are simulation parameters, not measured individual-item weights. Inspector controls can calibrate mass, friction and scale after measurement.

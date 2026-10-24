@@ -1,4 +1,4 @@
-# Scene Studio control API (v2)
+# Scene Studio control API (v3)
 
 Service: `http://127.0.0.1:8765`; editor/proxy: `http://127.0.0.1:5173`. No key, cloud or hardware access. Local hosts/origins only; do not expose it publicly. All positions/lengths **meters**, world **Z up**, quaternions **[w,x,y,z]**, joint angles **radians**. Joint order: shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper.
 
@@ -15,7 +15,8 @@ Limit 16 sessions. Idle browser-only sessions can be evicted at capacity. API-cr
 | Method / path | Result |
 |---|---|
 | GET `/api/health` | Engine/version/API version |
-| GET `/api/assets` | Primitive library metadata |
+| GET `/api/assets` | KALAS and legacy library metadata, dimensions and approximation labels |
+| GET `/api/examples` | Ten named example IDs, names and descriptions |
 | GET `/api/default-scene` | Full default scene |
 | GET `/api/scene-schema` | Authoritative Scene JSON schema |
 | GET `/api/command-schema` | Authoritative Command JSON schema |
@@ -40,9 +41,10 @@ All commands accept optional unique `requestId`; edits accept optional current `
 | `snapshot` | Read current state |
 | `load` | `scene`: full Scene; compile atomically while paused |
 | `reset` | Empty default scene, preserve cameras, pause |
-| `example` | Load spoon → cup arrangement/instruction, preserve cameras, paused only |
+| `example` | Optional `exampleId` from /api/examples; load arrangement/instruction, preserve cameras, paused only. Omitted ID retains the legacy example. |
+| `plan` | Rehearse asynchronously without moving live physics; poll plan.status, inspect points, require verified:true before run |
 | `task` | `source`, `target`: object IDs or null; must exist and differ; paused only |
-| `run` | Start or resume selected IK task; **moves arm**; returns immediately |
+| `run` | Start an unchanged verified plan or resume a paused active task; **moves arm**; rejects missing/stale/failed plans |
 | `pause` | Freeze physics/controller, retaining phase/grasp |
 | `stop` | Cancel controller and release grasp; pause |
 | `physics` | Cancel/release task and run passive physics |
@@ -62,9 +64,21 @@ import httpx, time
 api = httpx.Client(base_url="http://127.0.0.1:8765", timeout=30)
 sid = api.post("/api/sessions").json()["sessionId"]
 path = f"/api/sessions/{sid}"
-for cmd in ({"type":"example"}, {"type":"run"}):
+for cmd in ({"type":"example", "exampleId":"kalas-cup-front"}, {"type":"plan"}):
     result = api.post(path + "/command", json=cmd)
     result.raise_for_status()
+deadline = time.monotonic() + 60
+while True:
+    state = api.get(path).json()
+    if state["plan"]["status"] != "calculating":
+        if not state["plan"]["verified"]:
+            raise RuntimeError(state["plan"]["message"])
+        break
+    if time.monotonic() > deadline:
+        api.post(path + "/command", json={"type":"stop"})
+        raise TimeoutError("Calculation timed out")
+    time.sleep(.1)
+api.post(path + "/command", json={"type":"run"}).raise_for_status()
 while True:
     state = api.get(path).json()
     if state["task"]["status"] in ("succeeded", "failed"):
@@ -96,9 +110,9 @@ Official Python SDK v2 stdio server. Start the editor first. Generate a client c
 }
 ```
 
-Tools: `list_sessions`, `create_session`, `get_scene`, `scene_command`, `import_mesh`, `delete_session`, `get_contract`, `camera_image`. `scene_command(session_id, command)` exposes the same typed command schema, so an agent can operate every editor domain. `import_mesh(filename,data_base64,longest_side_m)` returns portable geometry; follow with object_add. `camera_image` returns an MCP image content block. No arbitrary server path reading/execution. Missing sessions or validation errors become MCP tool errors. Native camera rendering runs in a bounded subprocess for macOS GL-context compatibility; it observes a consistent captured state, not a later simulation frame.
+Tools: `list_examples`, `list_sessions`, `create_session`, `get_scene`, `scene_command`, `import_mesh`, `delete_session`, `get_contract`, `camera_image`. `scene_command(session_id, command)` exposes the same typed command schema, so an agent can operate every editor domain. `import_mesh(filename,data_base64,longest_side_m)` returns portable geometry; follow with object_add. `camera_image` returns an MCP image content block. No arbitrary server path reading/execution. Missing sessions or validation errors become MCP tool errors. Native camera rendering runs in a bounded subprocess for macOS GL-context compatibility; it observes a consistent captured state, not a later simulation frame.
 
-Typical agent sequence: list sessions → get_scene → scene_command example/task → run → poll get_scene → inspect success → camera_image. For edits, include the revision from get_scene and handle conflict by rereading.
+Typical agent sequence: list sessions → get_scene → scene_command example/task → plan → poll plan.status → inspect verified path → run → poll get_scene → inspect success → camera_image. For edits, include the revision from get_scene and handle conflict by rereading.
 
 ## State, geometry and portable files
 
@@ -108,6 +122,14 @@ Geometry size uses MuJoCo conventions: box half-extents; cylinder/capsule radius
 
 Save wrapper: `{version:1, scene: <Scene>, cameras: <optional legacy camera map>}`. Scene version remains 1 with additive defaults: old primitive-only scenes remain valid. Scene includes `task:{source,target}`, `cameras:{main,top,front}` and object mesh data. Legacy wrapper cameras override scene cameras when opened in the editor. Mesh objects include `asset:"mesh"`, `mesh:{vertices:[...],faces:[...],filename:"part.stl"}`. Bounds: 64 objects, 8 MB scene/message, object centers ±5 m, scale .25–3, mass .001–10 kg, friction 0–5; imported files 10 MB, 20k vertices/40k triangles, longest side .005–1 m. The complete formatted portable scene is budgeted before accepting edits, including cumulative imports and serialization headroom; an oversized addition leaves the previous scene intact. Imported collision is convex: no hollow cavity or texture fidelity is implied.
 
+## Path lifecycle
+
+`plan` contains `status: idle|calculating|ready|failed`, `verified`, `message`, `points` (world-space gripper positions in trajectory order), `duration` (simulated seconds), and a stable `id` on success. Rainbow rendering may color points by index. Ready means the isolated trial completed measured success; command acceptance alone is not a plan. Completed tasks retain the path for inspection but set verified:false; calculate again for another run.
+
+Planning copies the full compiled model/integration state (including velocities, controls and warmstart). It tries up to five bounded IK configurations and checks actual lift/release/settling and unwanted table/distractor contacts. Limits: two workers, four jobs including queued work, 45-second budget, 30 simulated seconds per attempt. Cancel with `stop`. Physical edits, passive physics and stepping invalidate the plan; camera-only updates do not. Results from cancelled/deleted/edited sessions cannot revive a plan. Run checks the captured physics fingerprint before starting; paused execution can resume without recalculation. Planning is not serialized into saved files.
+
+KALAS IDs: `kalas_bowl`, `kalas_cup`, `kalas_spoon`, `kalas_plate`. They compile from original procedural profiles, not imported convex hulls. Published dimensions and estimates: [KALAS-SOURCES.md](KALAS-SOURCES.md).
+
 ## Policy limits
 
-The example is verified with ±5 mm source variations. IK uses actual robot kinematics and bounded joints; actuator targets interpolate smoothly. Grasp assist requires closure and measured proximity before enabling a soft weld. Delivery solves for the measured carried spoon bowl/axis, not a guessed fixed grasp transform. Object qpos is never animated by the controller. The weld is removed at release; success requires measured lift, bowl inside the upright cup, low translational speed and no active grasp. Unsupported destinations, disabled collisions, tilted cups or unreachable poses fail explicitly. This is not a general collision-free planner or hardware-ready controller.
+All ten named examples are rehearsed and executed in tests, plus four custom spoon yaw angles and legacy ±5 mm source variations. IK uses actual robot kinematics and bounded joints; actuator targets interpolate smoothly. Grasp assist requires closure and measured proximity before enabling a soft weld. Delivery solves for the measured carried spoon bowl/axis, not a guessed fixed grasp transform. Object qpos is never animated by the controller. The weld is removed at release; success requires measured lift, bowl inside the upright cup, low translational speed and no active grasp. Unsupported destinations, disabled collisions, tilted cups or unreachable poses fail explicitly. This is not a general collision-free planner or hardware-ready controller.

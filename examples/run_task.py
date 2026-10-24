@@ -21,7 +21,27 @@ with httpx.Client(
     print(f"View this session: http://127.0.0.1:5173/?session={sid}", flush=True)
     url = f"/api/sessions/{sid}"
     request("POST", url + "/command", json={"type": "pause"})
-    request("POST", url + "/command", json={"type": "example"})
+    request(
+        "POST",
+        url + "/command",
+        json={"type": "example", "exampleId": "kalas-cup-front"},
+    )
+    request("POST", url + "/command", json={"type": "plan"})
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        plan = request("GET", url)["plan"]
+        if plan["status"] != "calculating":
+            if not plan["verified"]:
+                raise ValueError(plan["message"])
+            print(
+                f"Verified path: {len(plan['points'])} points, {plan['duration']:.1f} s",
+                flush=True,
+            )
+            break
+        time.sleep(0.1)
+    else:
+        request("POST", url + "/command", json={"type": "stop"})
+        raise TimeoutError("Path calculation did not finish within 60 seconds")
     request("POST", url + "/command", json={"type": "run"})
     previous = None
     deadline = time.monotonic() + 60

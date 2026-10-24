@@ -1,6 +1,6 @@
 # SO-101 Scene Studio
 
-A local 3D manipulation workbench with **real MuJoCo physics**, an **SO-101 arm**, four camera views, portable mesh import, a verified **spoon → cup IK policy**, and **MCP / HTTP control** of the scene you see in the browser.
+A local 3D manipulation workbench with **real MuJoCo physics**, an **SO-101 arm**, four camera views, portable mesh import, researched **IKEA KALAS assets**, and **ten rehearsed pick/place examples**, and **MCP / HTTP control** of the scene you see in the browser.
 
 ![Successful spoon-to-cup task](docs/screenshots/pick-place-success.png)
 
@@ -17,15 +17,18 @@ Open **http://127.0.0.1:5173**. First launch installs dependencies automatically
 
 ## Try the task
 
-1. Click **Spoon → cup example**.
-2. Click **Run simulation**. The arm approaches, closes, lifts, transfers, lowers, releases and retreats.
-3. Watch **Wrist Camera** or expand any view. **Complete** appears only after the spoon has been lifted, released and settled with its bowl inside the upright cup. The default example takes about 16 simulated seconds.
+1. Choose a task from the **10-example menu** and click **Load example**.
+2. Click **Calculate path**. The app rehearses the task in an isolated MuJoCo copy; your live scene stays still.
+3. Inspect the **rainbow gripper path**, then click **Run simulation**. The arm approaches, closes, lifts, transfers, lowers, releases and retreats.
+4. **Complete** appears after measured lift, release and settling. Examples take about 16 simulated seconds. Pause/Run resumes the active task; physical edits require a new calculation.
+
+Calculation also works with user-arranged objects. Tests include moved destinations and spoon rotations of 0°, 45°, 90° and 270°. Unreachable or obstructed arrangements show a failure instead of enabling Run. This is a bounded rehearsal search, not a guarantee for every placement. Calculation can be cancelled; camera changes preserve a valid plan.
 
 The controller uses numerical IK and position actuators. **Grasp assist is on**: a temporary soft MuJoCo weld is enabled only after the gripper closes within 25 mm of the measured grasp point. No object teleportation is used. The delivery path is replanned from the measured grasp. The weld is removed before opening, and gravity/contact dynamics determine the result. This is a simulation controller, not a validated hardware grasp policy. Pure contact-only grasping, general collision-free motion planning and arbitrary-scene success are not claimed.
 
 ## Build your own task
 
-Click **Pick object**, then click the object directly in a viewport or the scene collection. Next click the destination. **Run simulation / Space moves the arm**; Pause freezes execution, Run resumes, Stop releases and cancels. Invalid or unreachable tasks show an actionable error. Cups, plates and solid supports can be destinations; the bundled spoon/cup arrangement is the tested insertion task. Bring objects closer to the arm if IK cannot reach them. Imported hollow vessels use solid collision; use the procedural cup for insertion.
+Click **Pick object**, then click the object directly in a viewport or the scene collection. Next click the destination. **Calculate path first, then Run simulation / Space moves the arm**; Pause freezes execution, Run resumes, Stop releases and cancels. Invalid or unreachable tasks show an actionable error. Cups, bowls, plates and solid supports can be destinations; the ten bundled arrangements cover cup insertion, bowl/plate placement and surrounding objects. Bring objects closer to the arm if IK cannot reach them. Imported hollow vessels use solid collision; use the procedural cup for insertion.
 
 **Physics only** runs passive physics without a manipulation policy. **Step** advances 20 ms while paused. While a task is paused, Step also advances its controller. Editing physical scene properties cancels the current task, recompiles and resets time/velocities.
 
@@ -33,12 +36,20 @@ Click **Pick object**, then click the object directly in a viewport or the scene
 
 - **Main**, **Top**, **Front**, **Wrist** tabs expand a view. Multi-view shows all four; narrow windows show front/wrist previews and keep Top available as a tab.
 - Front camera defaults to a front oblique/downward angle. Its settings button edits position, look-at target and field of view. Main/front support orbit/pan/zoom; top is orthographic with locked downward direction. Wrist follows the actual model-mounted `wrist_cam` pose and field of view.
-- Drag cup/plate/spoon/cube cards into a view or use +. **Import object** accepts STL, OBJ and self-contained GLB from your computer, with explicit longest-side sizing. The mesh is centered and embedded in saved scenes, with editable color and **convex hull collision**. Limits: 10 MB upload, 20k vertices/40k triangles; textures and external sidecar files are not imported.
+- Drag asset cards into a view or use +. During dragging a translucent object and footprint show the exact clamped drop position before release. **Import object** accepts STL, OBJ and self-contained GLB from your computer, with explicit longest-side sizing. The mesh is centered and embedded in saved scenes, with editable color and **convex hull collision**. Limits: 10 MB upload, 20k vertices/40k triangles; textures and external sidecar files are not imported.
+- Click empty tabletop/background to see the current object list in **Inspector**. Clicking a row selects the same object and axes as the viewport. Selection and task-source/destination buttons briefly highlight the object in every view.
+- **Arrow keys** move the selected object on world X/Y by 1 cm; **Shift + arrows** uses 1 mm. Footprints stay within the tabletop; typing in fields is unaffected.
 - Select an object for move/rotate gizmos, exact pose, scale, mass, friction, collision and color. **T/R**, **F**, **Delete**, **Cmd/Ctrl+S** shortcuts are available. Snap uses 1 cm / 15° increments.
 - Select the arm for five arm joint targets plus gripper, or base pose. Select the table to resize it. All coordinates use meters, Z up, WXYZ quaternions; UI angles are degrees.
 - **Save scene** downloads portable JSON including current poses, task and cameras. **Open** validates atomically; malformed files leave the current scene intact. Old version-1 files still load with new defaults. Max scene/message size 8 MB, 64 objects. A cumulative size budget rejects oversized additions before they can make your saved scene impossible to reopen.
 - **Reset scene** empties the table while preserving cameras. Camera preferences also survive refresh in local storage. Refresh opens a new empty session; save your scene explicitly. A transient disconnect reconnects to the same session; its controller may continue while disconnected. If the server restarted, the browser restores its last acknowledged scene paused. Failed restoration leaves a downloadable recovery copy.
 - At narrow widths, **Objects** and **Inspector** toggle side panels.
+
+## IKEA KALAS assets
+
+Defaults include bowl **603.786.69**, handleless cup **403.786.70**, spoon **204.406.54** and plate **203.786.71**. Official published dimensions are bowl Ø120 mm, spoon length 160 mm, plate Ø190 mm and cup capacity 230 mL. Heights, wall thicknesses, detailed profiles and physical properties are documented estimates. These are independently authored reconstructions, not manufacturer CAD. Open compound collision shells preserve container cavities; the visible spoon head is concave.
+
+Existing model listings were researched, but no redistributable four-item set was verified. No paid/restricted meshes were bundled. See **[sources and dimensional confidence](docs/KALAS-SOURCES.md)**. Legacy plastic assets remain available so old files keep their original geometry.
 
 ## AI agents and external programs
 

@@ -13,7 +13,7 @@ def receive(ws, kind):
 def test_http_metadata_and_websocket_controls():
     with TestClient(app) as client:
         assert client.get("/api/health").json()["engine"] == "MuJoCo"
-        assert len(client.get("/api/assets").json()) == 4
+        assert len(client.get("/api/assets").json()) == 8
         assert len(client.get("/api/meshes").json()) >= 10
         with client.websocket_connect("/ws") as ws:
             initial = receive(ws, "snapshot")

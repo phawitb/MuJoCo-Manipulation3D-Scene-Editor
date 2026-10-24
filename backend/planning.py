@@ -119,6 +119,7 @@ def calculate_plan(sim, cancel=None):
             points.append(trial.data.site("gripperframe").xpos.tolist())
             return dict(
                 status="ready",
+                id=physics_fingerprint(sim)[:16],
                 points=points,
                 duration=float(trial.data.time) - start,
                 message="Rehearsal succeeded. Inspect the rainbow path, then Run simulation.",

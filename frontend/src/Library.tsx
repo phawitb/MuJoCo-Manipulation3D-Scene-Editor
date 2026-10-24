@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { Asset, Scene } from "./types";
 export function AssetArt({ id, color }: { id: string; color: string }) {
+  id = id.replace("kalas_", "");
   return (
     <svg
       viewBox="0 0 100 76"
@@ -39,6 +40,19 @@ export function AssetArt({ id, color }: { id: string; color: string }) {
             strokeWidth="4"
             strokeLinecap="round"
             opacity=".25"
+          />
+        </>
+      ) : id === "bowl" ? (
+        <>
+          <path d="M13 28 Q19 65 50 66 Q81 65 87 28" fill={color} />
+          <ellipse cx="50" cy="28" rx="37" ry="16" fill={color} />
+          <ellipse cx="50" cy="28" rx="32" ry="12" fill="#000" opacity=".15" />
+          <path
+            d="M21 35 Q26 56 42 58"
+            stroke="#fff"
+            strokeWidth="3"
+            opacity=".25"
+            fill="none"
           />
         </>
       ) : id === "plate" ? (
@@ -81,6 +95,7 @@ interface Props {
   add: (id: string) => void;
   editable: boolean;
   onImport: () => void;
+  drag: (asset: Asset | null) => void;
 }
 export function Library(p: Props) {
   const [query, setQuery] = useState(""),
@@ -88,6 +103,7 @@ export function Library(p: Props) {
   const cats = [
     ["All assets", Layers],
     ["Cups", CircleDot],
+    ["Bowls", Circle],
     ["Plates", Circle],
     ["Spoons", Utensils],
     ["Other Objects", Box],
@@ -150,11 +166,15 @@ export function Library(p: Props) {
             onDragStart={(e) => {
               e.dataTransfer.setData("application/so101-asset", a.id);
               e.dataTransfer.effectAllowed = "copy";
+              p.drag(a);
             }}
+            onDragEnd={() => p.drag(null)}
           >
             <div className="asset-visual">
               <AssetArt id={a.id} color={a.color} />
-              <span className="asset-type">PROCEDURAL</span>
+              <span className="asset-type">
+                {a.approximate ? "KALAS · APPROX." : "PROCEDURAL"}
+              </span>
               <GripVertical size={14} className="grip" />
             </div>
             <div className="asset-meta">

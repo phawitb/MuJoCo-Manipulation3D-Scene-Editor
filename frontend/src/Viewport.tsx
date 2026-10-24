@@ -24,6 +24,7 @@ import {
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Focus, RotateCcw, Maximize2, Settings2 } from "lucide-react";
 import type {
+  Asset,
   CameraState,
   Geometry,
   MeshData,
@@ -34,10 +35,20 @@ import type {
   Vec3,
   ViewKind,
 } from "./types";
-import { defaultCameras, toMujocoQuaternion, toThreeQuaternion } from "./math";
+import { PlacementGhost, SelectionHalo, GripperPath } from "./SceneOverlays";
+import {
+  dropPosition,
+  defaultCameras,
+  toMujocoQuaternion,
+  toThreeQuaternion,
+} from "./math";
 
 interface Props {
   kind: ViewKind;
+  assets: Asset[];
+  dragAsset: Asset | null;
+  highlight: { id: string; token: number } | null;
+  path: Vec3[];
   snapshot: Snapshot;
   live: MutableRefObject<StatePacket | null>;
   meshes: MeshData;
@@ -167,7 +178,9 @@ function SimGeom({
       receiveShadow
       onClick={(e) => {
         e.stopPropagation();
-        select(geom.owner === "floor" ? null : geom.owner);
+        select(
+          geom.owner === "floor" || geom.owner === "table" ? null : geom.owner,
+        );
       }}
     >
       <meshStandardMaterial
@@ -419,8 +432,12 @@ function TableGrid({
 function Contents(
   p: Props & {
     dropRef: MutableRefObject<((x: number, y: number) => Vec3 | null) | null>;
+    ghost: Vec3 | null;
   },
 ) {
+  const highlighted = p.snapshot.scene.objects.find(
+    (o) => o.id === p.highlight?.id,
+  );
   return (
     <>
       <color attach="background" args={["#202a30"]} />
@@ -470,6 +487,22 @@ function Contents(
           p.snapshot.scene.table.height,
         ]}
       />
+      {p.dragAsset && p.ghost && (
+        <PlacementGhost
+          asset={p.dragAsset}
+          position={p.ghost}
+          tableHeight={p.snapshot.scene.table.height}
+        />
+      )}
+      {highlighted && (
+        <SelectionHalo
+          key={p.highlight?.token}
+          object={highlighted}
+          assets={p.assets}
+          live={p.live}
+        />
+      )}
+      <GripperPath points={p.path} />
       <CameraRig {...p} />
       <SelectionGizmo {...p} />
     </>
@@ -479,11 +512,21 @@ export function Viewport(p: Props) {
   const dropRef = useRef<(x: number, y: number) => Vec3 | null>(null);
   const pointerStart = useRef<[number, number]>([0, 0]);
   const [dragOver, setDragOver] = useState(false);
+  const [ghost, setGhost] = useState<Vec3 | null>(null);
+  useEffect(() => {
+    if (!p.dragAsset) {
+      setGhost(null);
+      setDragOver(false);
+    }
+  }, [p.dragAsset]);
   const [localFrame, setLocalFrame] = useState(0),
     [localReset, setLocalReset] = useState(0);
   return (
     <section
       data-testid={`viewport-${p.kind}`}
+      data-highlight={p.highlight?.id || ""}
+      data-path-visible={p.path.length > 1 ? "true" : "false"}
+      data-preview-position={ghost ? JSON.stringify(ghost) : ""}
       className={`viewport ${p.active ? "active" : ""} ${dragOver ? "drop-target" : ""}`}
       onPointerDown={p.onActive}
       onPointerDownCapture={(e) => {
@@ -501,12 +544,32 @@ export function Viewport(p: Props) {
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = p.editable ? "copy" : "none";
-        if (p.editable) setDragOver(true);
+        const hit = dropRef.current?.(e.clientX, e.clientY);
+        if (p.editable && p.dragAsset && hit) {
+          try {
+            setGhost(
+              dropPosition(hit, p.dragAsset.dimensions, p.snapshot.scene.table),
+            );
+            setDragOver(true);
+          } catch {
+            setGhost(null);
+            setDragOver(false);
+          }
+        } else {
+          setGhost(null);
+          setDragOver(false);
+        }
       }}
-      onDragLeave={() => setDragOver(false)}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          setDragOver(false);
+          setGhost(null);
+        }
+      }}
       onDrop={(e) => {
         e.preventDefault();
         setDragOver(false);
+        setGhost(null);
         if (!p.editable) return;
         const asset = e.dataTransfer.getData("application/so101-asset");
         const hit = dropRef.current?.(e.clientX, e.clientY);
@@ -600,6 +663,7 @@ export function Viewport(p: Props) {
           frameSignal={p.frameSignal + localFrame * 10000}
           resetSignal={p.resetSignal + localReset * 10000}
           dropRef={dropRef}
+          ghost={ghost}
         />
       </Canvas>
       <div className="viewport-caption">
@@ -610,7 +674,12 @@ export function Viewport(p: Props) {
             : "Drag to orbit · Right-drag to pan · Scroll to zoom"}
         <span>m · Z ↑</span>
       </div>
-      {dragOver && <div className="drop-hint">Drop onto the tabletop</div>}
+      {dragOver && ghost && (
+        <div className="drop-hint" data-testid="placement-preview">
+          {p.dragAsset?.name} · {ghost[0].toFixed(3)}, {ghost[1].toFixed(3)} m ·
+          release to place
+        </div>
+      )}
     </section>
   );
 }

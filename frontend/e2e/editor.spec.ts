@@ -64,7 +64,7 @@ test("empty startup, precise edits, simulation, cameras and scene persistence", 
   await page
     .getByRole("button", { name: "Delete object", exact: true })
     .click();
-  await expect(page.getByText("1 objects · 4 assets")).toBeVisible();
+  await expect(page.getByText("1 objects · 8 assets")).toBeVisible();
   await page.getByRole("button", { name: "Top view", exact: true }).click();
   await expect(page.locator("canvas")).toHaveCount(1);
   await page
@@ -103,14 +103,14 @@ test("empty startup, precise edits, simulation, cameras and scene persistence", 
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify(doc)),
   });
-  await expect(page.getByText("1 objects · 4 assets")).toBeVisible();
+  await expect(page.getByText("1 objects · 8 assets")).toBeVisible();
   await page.getByTestId("scene-file").setInputFiles({
     name: "bad.json",
     mimeType: "application/json",
     buffer: Buffer.from('{"version":99}'),
   });
   await expect(page.getByRole("alert")).toContainText("Not a supported");
-  await expect(page.getByText("1 objects · 4 assets")).toBeVisible();
+  await expect(page.getByText("1 objects · 8 assets")).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -411,7 +411,7 @@ test("failed reconnect preserves recoverable work and blocks simulation until re
   await connection!.close({ code: 1001 });
   await expect(page.getByRole("alert")).toContainText("restore");
   await expect(
-    page.getByRole("button", { name: "Run simulation", exact: true }),
+    page.getByRole("button", { name: "Calculate path", exact: true }),
   ).toBeDisabled();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Save scene", exact: true }).click();
@@ -424,7 +424,7 @@ test("failed reconnect preserves recoverable work and blocks simulation until re
     page.getByText("Your tabletop is a blank canvas."),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Run simulation", exact: true }),
+    page.getByRole("button", { name: "Calculate path", exact: true }),
   ).toBeEnabled();
 });
 

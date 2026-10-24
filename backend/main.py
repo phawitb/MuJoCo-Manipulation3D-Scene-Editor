@@ -33,7 +33,7 @@ async def lifespan(app):
     await app.state.sessions.close()
 
 
-app = FastAPI(title="SO-101 Scene Studio", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="SO-101 Scene Studio", version="3.0.0", lifespan=lifespan)
 LOCAL = ("localhost", "127.0.0.1", "::1", "testserver")
 
 
@@ -78,7 +78,7 @@ def session(request, sid):
 
 @app.get("/api/health")
 def health():
-    return dict(status="ok", engine="MuJoCo", version=mujoco.__version__, apiVersion=2)
+    return dict(status="ok", engine="MuJoCo", version=mujoco.__version__, apiVersion=3)
 
 
 @app.get("/api/assets")

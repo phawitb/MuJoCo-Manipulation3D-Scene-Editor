@@ -9,8 +9,12 @@ test("task workbench exposes cameras and performs spoon to cup", async ({
   ).toBeVisible();
   await expect(page.getByTestId("viewport-wrist")).toBeVisible();
   await expect(page.getByTestId("viewport-front")).toBeVisible();
-  await page.getByRole("button", { name: "Load spoon → cup example" }).click();
+  await page.getByRole("button", { name: "Load task example" }).click();
   await expect(page.getByTestId("object-spoon")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Calculate path", exact: true })
+    .click();
+  await expect(page.getByTestId("plan-status")).toContainText("Path ready");
   await page
     .getByRole("button", { name: "Run simulation", exact: true })
     .click();
@@ -107,7 +111,7 @@ test("pick and destination can be selected directly on the 3D scene", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Load spoon → cup example" }).click();
+  await page.getByRole("button", { name: "Load task example" }).click();
   await expect(page.getByTestId("object-spoon")).toBeVisible();
   const sid = await page
     .getByTestId("session-id")
@@ -120,7 +124,13 @@ test("pick and destination can be selected directly on the 3D scene", async ({
   );
   await page.getByRole("button", { name: "Top view", exact: true }).click();
   await page.getByRole("button", { name: "Choose pick object" }).click();
-  await expect.poll(async () => (await page.getByTestId('viewport-top').locator('canvas').boundingBox())?.width || 0).toBeGreaterThan(600);
+  await expect
+    .poll(
+      async () =>
+        (await page.getByTestId("viewport-top").locator("canvas").boundingBox())
+          ?.width || 0,
+    )
+    .toBeGreaterThan(600);
   const box = (await page
     .getByTestId("viewport-top")
     .locator("canvas")
@@ -136,7 +146,7 @@ test("pick and destination can be selected directly on the 3D scene", async ({
     box.y + box.height / 2 + 0.07 * 320,
   );
   await expect(page.getByTestId("task-instruction")).toContainText(
-    "Pick · spoon",
+    "Pick · KALAS spoon",
   );
   await expect(
     page.getByRole("button", { name: "Choose place object" }),
@@ -146,7 +156,7 @@ test("pick and destination can be selected directly on the 3D scene", async ({
     box.y + box.height / 2 - 0.09 * 320,
   );
   await expect(page.getByTestId("task-instruction")).toContainText(
-    "Place · cup",
+    "Place · KALAS cup",
   );
   const state = await (await page.request.get(`/api/sessions/${sid}`)).json();
   expect(state.scene.task).toEqual({ source: "spoon", target: "cup" });
@@ -167,6 +177,8 @@ test("external API edits are reflected in the browser and pause freezes the task
   await command({ type: "example" });
   await expect(page.getByTestId("object-spoon")).toBeVisible();
   const before = await (await page.request.get(`/api/sessions/${sid}`)).json();
+  await command({ type: "plan" });
+  await expect(page.getByTestId("plan-status")).toContainText("Path ready");
   await command({ type: "run" });
   await expect(
     page.getByRole("button", { name: "Pause", exact: true }),
@@ -209,7 +221,7 @@ test("narrow window keeps task, cameras and object controls usable", async ({
   await page.setViewportSize({ width: 480, height: 840 });
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "Load spoon → cup example" }),
+    page.getByRole("button", { name: "Load task example" }),
   ).toBeVisible();
   await expect(page.getByTestId("viewport-wrist")).toBeVisible();
   expect(

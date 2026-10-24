@@ -70,13 +70,28 @@ def test_session_requires_calculation_and_invalidates_edits():
         s.execute(Command(type="run"))
 
 
-def test_inflight_plan_cannot_resurrect_after_edit_or_deletion():
-    from backend.sessions import Session, Command
+def test_inflight_plan_cannot_resurrect_after_edit_or_deletion(monkeypatch):
+    import threading
+    import backend.sessions as sessions
 
-    s = Session()
-    s.execute(Command(type="example"))
-    s.execute(Command(type="plan"))
-    s.execute(Command(type="object_remove", id="spoon"))
-    time.sleep(0.1)
+    original = sessions.calculate_plan
+    started, release = threading.Event(), threading.Event()
+
+    def blocked(sim, cancel):
+        started.set()
+        assert release.wait(5)
+        return original(sim, cancel)
+
+    monkeypatch.setattr(sessions, "calculate_plan", blocked)
+    s = sessions.Session()
+    s.execute(sessions.Command(type="example"))
+    s.execute(sessions.Command(type="plan"))
+    old = s.plan_future
+    assert started.wait(5)
+    try:
+        s.execute(sessions.Command(type="object_remove", id="spoon"))
+    finally:
+        release.set()
+    old.result(timeout=10)
     assert s.packet()["plan"]["status"] == "idle"
     assert not s.packet()["plan"]["verified"]

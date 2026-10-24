@@ -1,5 +1,5 @@
 import { ArrowRight, Crosshair, FlaskConical, Square, X } from "lucide-react";
-import type { Scene, StatePacket } from "./types";
+import type { Scene, StatePacket, TaskExample } from "./types";
 export type PickMode = "source" | "target" | null;
 export function TaskPanel({
   scene,
@@ -8,6 +8,9 @@ export function TaskPanel({
   picking,
   setPicking,
   example,
+  examples,
+  exampleId,
+  setExampleId,
   stop,
 }: {
   scene: Scene;
@@ -16,6 +19,9 @@ export function TaskPanel({
   picking: PickMode;
   setPicking: (v: PickMode) => void;
   example: () => void;
+  examples: TaskExample[];
+  exampleId: string;
+  setExampleId: (id: string) => void;
   stop: () => void;
 }) {
   const source = scene.objects.find((o) => o.id === scene.task.source);
@@ -25,13 +31,25 @@ export function TaskPanel({
     <section className="task-panel" aria-label="Task instruction">
       <div className="task-title">
         <span className="eyebrow">TASK INSTRUCTION</span>
+        <select
+          aria-label="Task example"
+          value={exampleId}
+          onChange={(e) => setExampleId(e.target.value)}
+          disabled={!editable}
+        >
+          {examples.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.name}
+            </option>
+          ))}
+        </select>
         <button
           className="example-button"
           disabled={!editable}
           onClick={example}
-          aria-label="Load spoon → cup example"
+          aria-label="Load task example"
         >
-          <FlaskConical size={14} /> Spoon → cup example
+          <FlaskConical size={14} /> Load example
         </button>
       </div>
       <div className="task-picks" data-testid="task-instruction">
@@ -85,7 +103,7 @@ export function TaskPanel({
           </span>
           <span data-testid="task-message">
             {task?.status === "idle"
-              ? "Choose two objects, then Run simulation."
+              ? "Choose two objects, calculate a path, then Run simulation."
               : task?.message}
           </span>
           {task?.status === "running" && (
@@ -95,6 +113,26 @@ export function TaskPanel({
             </button>
           )}
         </div>
+      )}
+      <div className={`plan-feedback ${state?.plan?.status || "idle"}`}>
+        <strong data-testid="plan-status">
+          {state?.plan?.status === "ready"
+            ? `Path ready · ${state.plan.duration.toFixed(1)} s`
+            : state?.plan?.status === "calculating"
+              ? "Calculating path…"
+              : state?.plan?.status === "failed"
+                ? "No verified path"
+                : "Path not calculated"}
+        </strong>
+        <span>
+          {state?.plan?.message ||
+            "Calculate first to preview the gripper movement."}
+        </span>
+      </div>
+      {state?.plan?.status === "calculating" && (
+        <button className="cancel-plan" onClick={stop}>
+          Cancel calculation
+        </button>
       )}
       <div className="task-progress">
         <i style={{ width: `${(task?.progress || 0) * 100}%` }} />

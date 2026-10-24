@@ -172,7 +172,7 @@ def visual_mesh(asset):
                 a = base + ring * count + i
                 b = base + ring * count + (i + 1) % count
                 pair = [[a, b, a + count], [b, b + count, a + count]]
-                faces.extend([f[::-1] if side else f for f in pair])
+                faces.extend([f[::-1] if not side else f for f in pair])
     for i in range(count):
         a = offset + rings * count + i
         b = offset + rings * count + (i + 1) % count

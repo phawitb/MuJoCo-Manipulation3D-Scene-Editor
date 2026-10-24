@@ -1,6 +1,15 @@
 export type Vec3 = [number, number, number];
 export type Quat = [number, number, number, number]; // MuJoCo WXYZ
-export type AssetId = "cup" | "plate" | "spoon" | "cube" | "mesh";
+export type AssetId =
+  | "cup"
+  | "plate"
+  | "spoon"
+  | "cube"
+  | "mesh"
+  | "kalas_bowl"
+  | "kalas_cup"
+  | "kalas_spoon"
+  | "kalas_plate";
 export interface SceneObject {
   id: string;
   name: string;
@@ -36,6 +45,8 @@ export interface Asset {
   mass: number;
   color: string;
   description: string;
+  approximate?: boolean;
+  article?: string;
 }
 export interface Pose {
   id: number;
@@ -62,7 +73,21 @@ export interface JointInfo {
   min: number;
   max: number;
 }
+export interface PathPlan {
+  id?: string;
+  status: "idle" | "calculating" | "ready" | "failed";
+  points: Vec3[];
+  duration: number;
+  message: string;
+  verified: boolean;
+}
+export interface TaskExample {
+  id: string;
+  name: string;
+  description: string;
+}
 export interface StatePacket {
+  plan?: PathPlan;
   type: "state" | "snapshot";
   revision: number;
   running: boolean;

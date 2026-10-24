@@ -91,7 +91,7 @@ def add_object(world, obj):
     for i, props in enumerate(shapes):
         attrs = dict(
             name=f"obj_{obj.id}_{i}",
-            mass=str(obj.mass / len(shapes)),
+            mass=str(obj.mass / sum(1 for shape in shapes if shape.get("mass") != "0")),
             rgba=numbers(color),
             friction=numbers(obj.friction),
             contype=str(int(obj.collision)),

@@ -2142,3 +2142,124 @@ p {
     bottom: calc(32% + 40px);
   }
 }
+
+/* Placement and path planning workbench */
+.inspector-object-list {
+  padding: 18px;
+  overflow: auto;
+  flex: 1;
+}
+.inspector-object-list .quiet {
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 12px 0 20px;
+}
+.inspector-object-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 10px;
+  border: 1px solid #34474e;
+  border-radius: 8px;
+  margin: 8px 0;
+  background: #202e34;
+  text-align: left;
+  color: #d6e7e1;
+}
+.inspector-object-row:hover {
+  border-color: #a5d5bb;
+  background: #293d40;
+}
+.inspector-object-row > span:nth-child(2) {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+.inspector-object-row strong {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.inspector-object-row small {
+  font-size: 10px;
+  color: #90a7ad;
+}
+.task-title select {
+  margin-left: auto;
+  max-width: 270px;
+  background: #1c2b31;
+  color: #d5e7df;
+  border: 1px solid #385059;
+  border-radius: 5px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 11px;
+}
+.task-title .example-button {
+  margin-left: 8px;
+}
+.plan-feedback {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 10px;
+  color: #95aeb5;
+  margin: 7px 0;
+}
+.plan-feedback strong {
+  color: #d1dfd9;
+  white-space: nowrap;
+}
+.plan-feedback.ready strong {
+  color: #b4e5c8;
+}
+.plan-feedback.failed {
+  color: #f0ae9a;
+}
+.plan-feedback.calculating strong {
+  color: #eed49b;
+}
+.drop-hint {
+  pointer-events: none;
+}
+@media (max-width: 850px) {
+  .task-title {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .task-title select {
+    max-width: 220px;
+    margin-left: 0;
+  }
+  .task-title .example-button {
+    margin-left: auto;
+  }
+  .plan-feedback {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .task-panel {
+    padding: 10px 12px;
+  }
+  .plan-feedback span {
+    line-height: 1.3;
+  }
+}
+.drop-hint {
+  top: auto;
+  bottom: 42px;
+  left: 18px;
+  transform: none;
+  max-width: calc(100% - 36px);
+  padding: 9px 12px;
+  font-size: 11px;
+  background: #b7dbcbe8;
+}
+.viewport.drop-target {
+  outline: 1px solid #9ed4b5;
+  outline-offset: -2px;
+}

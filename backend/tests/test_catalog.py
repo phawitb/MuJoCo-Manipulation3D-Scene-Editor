@@ -59,3 +59,10 @@ def test_kalas_container_collision_has_open_cavity():
         )
         assert distance > 0.95 - (0.75 + 0.01), (asset, distance)
         assert distance < 0.25
+
+
+def test_visual_shell_does_not_reduce_requested_body_mass():
+    sim = Simulation(
+        Scene(objects=[SceneObject(id="cup", asset="kalas_cup", mass=0.03)])
+    )
+    assert sim.model.body("object_cup").mass[0] == pytest.approx(0.03, abs=1e-10)

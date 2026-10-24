@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -27,8 +27,11 @@ import { Library } from "./Library";
 import { Inspector } from "./Inspector";
 import { Viewport } from "./Viewport";
 import { useSimulation } from "./useSimulation";
+import { nudgePosition, objectDimensions } from "./interaction";
 import { dropPosition, readCameras, validateDocument } from "./math";
 import type {
+  Asset,
+  TaskExample,
   Cameras,
   ObjectPose,
   Quat,
@@ -40,6 +43,32 @@ import type {
 
 export default function App() {
   const sim = useSimulation();
+  const path = useMemo(
+    () => sim.state?.plan?.points || [],
+    [sim.state?.plan?.id],
+  );
+  const [dragAsset, setDragAsset] = useState<Asset | null>(null);
+  const [highlight, setHighlight] = useState<{
+    id: string;
+    token: number;
+  } | null>(null);
+  const [examples, setExamples] = useState<TaskExample[]>([]);
+  const [exampleId, setExampleId] = useState("kalas-cup-front");
+  const nudges = useRef<{ id: string; key: string; fine: boolean }[]>([]);
+  const nudging = useRef(false);
+  useEffect(() => {
+    const abort = new AbortController();
+    fetch("/api/examples", { signal: abort.signal })
+      .then((r) => r.json())
+      .then(setExamples)
+      .catch(() => {});
+    return () => abort.abort();
+  }, []);
+  useEffect(() => {
+    if (!highlight) return;
+    const timer = setTimeout(() => setHighlight(null), 2600);
+    return () => clearTimeout(timer);
+  }, [highlight]);
   const [picking, setPicking] = useState<PickMode>(null);
   const [cameraEdit, setCameraEdit] = useState<ViewKind | null>(null);
   const [importing, setImporting] = useState(false);
@@ -160,6 +189,7 @@ export default function App() {
   };
   const selectObject = (id: string | null) => {
     setSelected(id);
+    setHighlight(id ? { id, token: performance.now() } : null);
     if (
       !picking ||
       !id ||
@@ -250,16 +280,89 @@ export default function App() {
       notify("Scene loaded");
     });
   };
+  const nudge = (key: string, fine: boolean) => {
+    if (
+      !selected ||
+      sim.status !== "connected" ||
+      sim.live.current?.running ||
+      importing ||
+      cameraEdit ||
+      apiHelp ||
+      help
+    )
+      return;
+    if (!sim.snapshot?.scene.objects.some((o) => o.id === selected)) return;
+    if (nudges.current.length < 128)
+      nudges.current.push({ id: selected, key, fine });
+    if (nudging.current) return;
+    nudging.current = true;
+    void safe(async () => {
+      try {
+        while (nudges.current.length) {
+          await sim.waitForPending();
+          if (sim.live.current?.running) {
+            nudges.current = [];
+            break;
+          }
+          const scene = sim.currentScene();
+          const first = nudges.current.shift()!;
+          const object = scene.objects.find((o) => o.id === first.id);
+          if (!object) continue;
+          const dimensions = objectDimensions(object, sim.assets);
+          object.position = nudgePosition(
+            object,
+            dimensions,
+            scene.table,
+            first.key,
+            first.fine,
+          );
+          while (nudges.current[0]?.id === object.id) {
+            const next = nudges.current.shift()!;
+            object.position = nudgePosition(
+              object,
+              dimensions,
+              scene.table,
+              next.key,
+              next.fine,
+            );
+          }
+          await sim.command("object_update", {
+            id: object.id,
+            patch: { position: object.position },
+          });
+        }
+      } finally {
+        nudging.current = false;
+        nudges.current = [];
+      }
+    });
+  };
+  const chooseTask = (mode: PickMode) => {
+    setPicking(mode);
+    const id = mode ? sim.snapshot?.scene.task[mode] : null;
+    if (id) {
+      setSelected(id);
+      setHighlight({ id, token: performance.now() });
+    }
+  };
   const runPause = () =>
     void safe(async () => {
       (document.activeElement as HTMLElement | null)?.blur();
       await sim.waitForPending();
       setPicking(null);
-      await sim.command(sim.live.current?.running ? "pause" : "run");
+      const state = sim.live.current;
+      if (state?.plan?.status === "calculating") return;
+      await sim.command(
+        state?.running
+          ? "pause"
+          : state?.task.status === "running" || state?.plan?.verified
+            ? "run"
+            : "plan",
+      );
     });
   const frame = () => setFrameSignal((x) => x + 1);
-  const handlers = useRef({ save, remove, runPause, frame });
-  handlers.current = { save, remove, runPause, frame };
+  const handlers = useRef({ save, remove, runPause, frame, nudge });
+  handlers.current = { save, remove, runPause, frame, nudge };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
@@ -269,10 +372,15 @@ export default function App() {
       }
       if (
         (e.target as HTMLElement).closest(
-          "input,textarea,select,[contenteditable]",
+          "input,textarea,select,[contenteditable],[role=dialog]",
         )
       )
         return;
+      if (e.key.startsWith("Arrow")) {
+        e.preventDefault();
+        handlers.current.nudge(e.key, e.shiftKey);
+        return;
+      }
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         if (editableRef.current) handlers.current.remove();
@@ -328,6 +436,10 @@ export default function App() {
   const common = snapShot
     ? {
         snapshot: snapShot,
+        assets: sim.assets,
+        dragAsset,
+        highlight,
+        path,
         live: sim.live,
         meshes: sim.meshes,
         selected,
@@ -415,6 +527,7 @@ export default function App() {
         {scene && (
           <Library
             assets={sim.assets}
+            drag={setDragAsset}
             scene={scene}
             selected={selected}
             select={selectObject}
@@ -433,13 +546,16 @@ export default function App() {
               state={sim.state}
               editable={editable}
               picking={picking}
-              setPicking={setPicking}
+              setPicking={chooseTask}
+              examples={examples}
+              exampleId={exampleId}
+              setExampleId={setExampleId}
               example={() =>
                 void safe(async () => {
-                  await sim.command("example");
+                  await sim.command("example", { exampleId });
                   setSelected(null);
                   setPicking(null);
-                  notify("Example ready · press Run simulation");
+                  notify("Example ready · calculate a path first");
                 })
               }
               stop={() => void safe(() => sim.command("stop"))}
@@ -665,7 +781,11 @@ export default function App() {
               </button>
               <button
                 className={sim.state?.running ? "pause-button" : "run-button"}
-                disabled={sim.busy || sim.status !== "connected"}
+                disabled={
+                  sim.busy ||
+                  sim.status !== "connected" ||
+                  sim.state?.plan?.status === "calculating"
+                }
                 onClick={runPause}
               >
                 {sim.state?.running ? (
@@ -673,7 +793,14 @@ export default function App() {
                 ) : (
                   <Play size={15} fill="currentColor" />
                 )}
-                {sim.state?.running ? "Pause" : "Run simulation"}
+                {sim.state?.running
+                  ? "Pause"
+                  : sim.state?.plan?.status === "calculating"
+                    ? "Calculating…"
+                    : sim.state?.task.status === "running" ||
+                        sim.state?.plan?.verified
+                      ? "Run simulation"
+                      : "Calculate path"}
               </button>
               <button
                 aria-label="Step simulation"
@@ -710,6 +837,7 @@ export default function App() {
             remove={remove}
             duplicate={duplicate}
             frame={frame}
+            select={selectObject}
           />
         )}
       </div>
@@ -747,7 +875,7 @@ export default function App() {
           >
             Session {sim.state?.sessionId?.slice(0, 8) || "…"}
           </button>
-          <span className="version">v2.0</span>
+          <span className="version">v3.0</span>
         </span>
       </footer>
       {sim.error && (

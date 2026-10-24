@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
 import {
-  Box,
   Bot,
   ChevronDown,
   Copy,
@@ -161,6 +160,7 @@ interface Props {
   remove: () => void;
   duplicate: () => void;
   frame: () => void;
+  select: (id: string | null) => void;
 }
 export function Inspector(p: Props) {
   const object = p.scene.objects.find((o) => o.id === p.selected);
@@ -194,32 +194,40 @@ export function Inspector(p: Props) {
         <SlidersHorizontal size={14} />
       </div>
       {!p.selected ? (
-        <div className="empty-inspector">
-          <div className="selection-icon">
-            <Box size={30} strokeWidth={1} />
+        <div className="inspector-object-list">
+          <div className="section-label">
+            CURRENT OBJECTS <span>{p.scene.objects.length}</span>
           </div>
-          <h3>A space for possibilities.</h3>
-          <p>
-            Drag an object onto the table to begin. Select anything in the scene
-            to inspect its properties.
+          <p className="quiet">
+            Select an object to edit it. Arrow keys move on the table; Shift
+            makes fine adjustments.
           </p>
-          <div className="quick-guide">
-            <span>01</span>
-            <div>
-              <strong>Build your scene</strong>
-              <p>Place cups, plates and tools.</p>
-            </div>
-            <span>02</span>
-            <div>
-              <strong>Make it precise</strong>
-              <p>Move, rotate and adjust properties.</p>
-            </div>
-            <span>03</span>
-            <div>
-              <strong>Run a task</strong>
-              <p>Choose pick & place objects, then Run.</p>
-            </div>
-          </div>
+          {p.scene.objects.map((o) => (
+            <button
+              key={o.id}
+              data-testid={`inspector-object-${o.id}`}
+              className="inspector-object-row"
+              onClick={() => p.select(o.id)}
+            >
+              <span className="object-dot" style={{ background: o.color }} />
+              <span>
+                <strong>{o.name}</strong>
+                <small>
+                  {o.position.map((v) => v.toFixed(3)).join(" · ")} m
+                </small>
+              </span>
+              <ChevronDown size={14} />
+            </button>
+          ))}
+          {!p.scene.objects.length && (
+            <p className="quiet">Drag an object from the library to begin.</p>
+          )}
+          <button className="tree-row" onClick={() => p.select("robot")}>
+            SO-101 arm
+          </button>
+          <button className="tree-row" onClick={() => p.select("table")}>
+            Table & environment
+          </button>
         </div>
       ) : object && asset ? (
         <>
