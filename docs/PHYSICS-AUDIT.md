@@ -49,7 +49,7 @@ All completed in 17.907 simulated seconds. Example08 used the lower-lift candida
 
 ```sh
 .venv/bin/python scripts/audit_physics.py --output /tmp/contact-audit.json
-.venv/bin/python scripts/audit_physics.py --example kalas-bowl-left --output /tmp/example 06.json --video /tmp/example 06.mp4
+.venv/bin/python scripts/audit_physics.py --example kalas-bowl-left --output /tmp/example06.json --video /tmp/example06.mp4
 bash scripts/check.sh
 (cd frontend && npm run test:e2e)
 ```

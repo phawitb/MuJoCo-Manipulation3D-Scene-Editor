@@ -1,7 +1,9 @@
 """Regression: success must come from physical support, never hidden attachment."""
 
 import mujoco
+import pytest
 from backend.examples import example_scene
+from backend.grasp import jaw_contacts
 from backend.simulation import Simulation
 
 
@@ -35,6 +37,23 @@ def test_opening_elevated_gripper_lets_object_fall_under_gravity():
         sim.step(10)
     assert sim.data.xpos[body, 2] < initial - 0.04
     assert not sim.data.eq_active.any()
+
+
+@pytest.mark.parametrize("stop", ["cancel", "fail"])
+def test_reported_grip_tracks_passive_physics_after_controller_stops(stop):
+    sim = run_to_lift()
+    assert sim.state()["task"]["grip"]["secure"]
+    if stop == "cancel":
+        sim.stop_policy()
+        sim.running = True
+    else:
+        sim.policy.fail("Test interrupted grasp")
+    sim.step(round(1 / sim.model.opt.timestep))
+    measured = jaw_contacts(sim, "spoon")
+    reported = sim.state()["task"]["grip"]
+    assert not measured["secure"]
+    assert measured["leftForce"] == measured["rightForce"] == 0
+    assert reported == measured, "API must report current forces after passive falling"
 
 
 def test_proximity_without_jaw_contact_is_not_a_grasp():

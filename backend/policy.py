@@ -35,7 +35,9 @@ class PickPlacePolicy:
             progress=1.0 if self.success else self.index / 9,
             success=self.success,
             graspAssist=False,
-            grip=self.contact,
+            # Report the completed physics state, including passive motion after
+            # cancellation/failure; controller contact is sampled before a step.
+            grip=jaw_contacts(self.sim, self.source),
             held=self.held,
             source=self.source,
             target=self.target,

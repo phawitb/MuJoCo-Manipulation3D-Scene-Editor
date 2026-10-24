@@ -2,10 +2,10 @@
 
 2026-10-24 · MuJoCo 3.17.0 · macOS Apple Silicon · Python 3.12.
 
-- **88 backend tests passed** in 165.60 seconds. This includes each of the ten original arrangements executed with 1-, 17- and 33-step observation batches, custom yaw angles, a changed robot base, unreachable/blocked scenes, legacy spoon variations, scene import/export, HTTP/WebSocket and real MCP integration.
+- **90 backend tests passed** in 161.57 seconds. This includes each of the ten original arrangements executed with 1-, 17- and 33-step observation batches, custom yaw angles, a changed robot base, unreachable/blocked scenes, legacy spoon variations, scene import/export, HTTP/WebSocket and real MCP integration.
 - **13 frontend unit tests passed**, strict TypeScript and production build passed. The existing large 3D bundle warning remains (~1.24 MB before gzip).
 - **22 browser scenarios passed** in 1.8 minutes. Example06 specifically verifies measured opposing forces in the UI/API, contact-only mode and released completion. Existing placement, arrows, camera, import, persistence and reconnect flows also pass.
-- **123 automated tests total**, plus an independent every-1-ms physical audit of all ten examples. Every case succeeded with 6,602/6,602 secure carrying samples, no active attachment constraint and 0 ms unsupported carrying time.
+- **125 automated tests total**, plus an independent every-1-ms physical audit of all ten examples. Every case succeeded with 6,602/6,602 secure carrying samples, no active attachment constraint and 0 ms unsupported carrying time.
 - Native close-up video and frames were inspected for examples01,06,08 (cup, bowl, plate). See [detailed root cause, measurements, source documentation and video](PHYSICS-AUDIT.md).
 
 ## Regression evidence
@@ -25,4 +25,8 @@ The previous fixed-step-duration tests were updated to retain their original sim
 
 The earlier assisted-mode report is retained as [historical evidence](VERIFICATION-V3-ASSISTED.md), not current physical-grasp validation.
 
-Independent whole-branch review: pending final verdict.
+## Independent review and fixes
+
+One independent whole-branch review found no critical issues and independently passed 41 focused physical tests. It found one important issue: measured grip telemetry stayed cached after cancellation or failure while passive physics moved the object. Both cases were reproduced with failing regressions. Packets now measure the completed physics state regardless of controller status; both regressions and all seven contact regressions pass. The minor video-command quoting issue was also corrected. No review findings were deferred. After these fixes, the complete 90-test backend suite passed again and the example06 browser scenario passed again (23.0 seconds). The first browser rerun encountered the 16-session capacity limit; closing a backed-up empty test session resolved the environment issue without product changes.
+
+The review validated the removal of attachment constraints, selected-source/opposing-jaw contact checks, passive falling and physical destination support. It declined to certify hardware calibration, universal arbitrary-scene success, imported concave meshes or public hosting. These remain the documented scope limits, not claims of this fix. Stop intentionally pauses physics and queues jaw opening for the next Step/Physics command.

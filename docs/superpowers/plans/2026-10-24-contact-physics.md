@@ -33,4 +33,4 @@
 ### Task3: Feedback, visual validation and integration
 - [x] Show measured grip/contact-only status in UI/API and update docs, examples and tests.
 - [x] Capture06 close-up plus other tasks and verify full backend/frontend/browser suites.
-- [ ] Fresh independent review; fix important findings RED→GREEN; push authorized main.
+- [x] Fresh independent review; fix important findings RED→GREEN; push authorized main.
