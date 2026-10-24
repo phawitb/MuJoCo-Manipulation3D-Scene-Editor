@@ -6,10 +6,10 @@ from pathlib import PurePath
 from uuid import uuid4
 import numpy as np
 import trimesh
-from .schema import ImportedMesh, SceneObject
+from .schema import ImportedMesh, SceneObject, MAX_SCENE_BYTES
 
 MAX_UPLOAD = 10_000_000
-MAX_SCENE = 8_000_000
+MAX_SCENE = MAX_SCENE_BYTES
 
 
 def import_object(data: bytes, filename: str, size: float = 0.10) -> SceneObject:

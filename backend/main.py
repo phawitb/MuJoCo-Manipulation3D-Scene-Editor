@@ -265,11 +265,7 @@ async def websocket(ws: WebSocket):
                     request_id = value.get("requestId")
                     cmd = Command.model_validate(value)
                     packet = await asyncio.to_thread(s.execute, cmd)
-                    for other in s.subscribers.copy():
-                        if other is not queue:
-                            if other.full():
-                                other.get_nowait()
-                            other.put_nowait(packet)
+                    s.broadcast(packet, exclude=queue)
                     await ws.send_json({**packet, "requestId": request_id})
                 except (ValueError, TypeError, ValidationError) as exc:
                     await ws.send_json(

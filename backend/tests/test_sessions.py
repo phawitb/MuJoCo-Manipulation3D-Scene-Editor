@@ -83,3 +83,23 @@ def test_idle_browser_sessions_are_reclaimed_at_capacity():
             await registry.close()
 
     asyncio.run(exercise())
+
+
+def test_backpressure_preserves_structure_and_latest_physics_state():
+    import asyncio
+    from backend.sessions import Command, Session
+
+    s = Session()
+    queue = asyncio.Queue(maxsize=3)
+    s.subscribers.add(queue)
+    s.broadcast(s.execute(Command(type="example")))
+    s.broadcast(s.execute(Command(type="physics")))
+    for _ in range(5):
+        s.broadcast(s.tick(1))
+    packets = []
+    while not queue.empty():
+        packets.append(queue.get_nowait())
+    snapshots = [p for p in packets if p["type"] == "snapshot"]
+    assert snapshots and snapshots[-1]["scene"]["task"]["source"] == "spoon"
+    assert packets[-1]["sequence"] == s.sequence
+    assert packets[-1]["revision"] == snapshots[-1]["revision"]

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { readCameras } from "./math";
+import { mergePacket, visiblePacket, type PacketCache } from "./packets";
 import type { Asset, MeshData, Scene, Snapshot, StatePacket } from "./types";
 
 export function useSimulation() {
@@ -29,23 +30,32 @@ export function useSimulation() {
   const serverRevision = useRef<number | undefined>(undefined);
   const recoveryBlocked = useRef(false);
   const busyRef = useRef(false);
+  const packets = useRef<PacketCache>({
+    snapshot: null,
+    latest: null,
+    revision: undefined,
+  });
   const updatePacket = (packet: StatePacket) => {
+    packets.current = mergePacket(packets.current, packet);
+    serverRevision.current = Math.max(
+      serverRevision.current ?? 0,
+      packets.current.revision ?? 0,
+    );
+    const visible = visiblePacket(packets.current);
+    live.current = visible;
+    setState(visible);
     if (
-      live.current?.sessionId === packet.sessionId &&
-      packet.sequence < live.current.sequence
-    )
-      return;
-    live.current = packet;
-    setState(packet);
-    if (packet.type === "snapshot") {
-      snapshotRef.current = packet as Snapshot;
-      setSnapshot(packet as Snapshot);
+      packets.current.snapshot &&
+      packets.current.snapshot !== snapshotRef.current
+    ) {
+      snapshotRef.current = packets.current.snapshot;
+      setSnapshot(packets.current.snapshot);
     }
     const scene = snapshotRef.current?.scene;
     if (scene) {
       const saved = { ...scene, objects: scene.objects.map((o) => ({ ...o })) };
       for (const obj of saved.objects) {
-        const pose = packet.objects.find((x) => x.id === obj.id);
+        const pose = visible?.objects.find((x) => x.id === obj.id);
         if (pose) {
           obj.position = pose.position;
           obj.quaternion = pose.quaternion;
@@ -159,8 +169,12 @@ export function useSimulation() {
           ws.close();
           return;
         }
-        if (p.revision !== undefined) serverRevision.current = p.revision;
         if (p.type === "error") {
+          if (p.revision !== undefined)
+            serverRevision.current = Math.max(
+              serverRevision.current ?? 0,
+              p.revision,
+            );
           setError(p.message);
           if (p.code === "session_missing") sessionId.current = null;
           if (pending.current && pending.current.id === p.requestId) {
@@ -175,6 +189,9 @@ export function useSimulation() {
         if (first) {
           first = false;
           sessionId.current = p.sessionId;
+          // A newly created session starts its own revision counter. Initialize
+          // before restoring retained work or local camera preferences.
+          serverRevision.current = p.revision;
           if (recovery.current && !requestedSession) {
             const restore = recovery.current;
             setStatus("connecting");

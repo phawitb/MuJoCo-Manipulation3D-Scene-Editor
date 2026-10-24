@@ -23,28 +23,28 @@
 ### Task 1: IK policy and camera/task contract
 **Files:** backend/schema.py, simulation.py, new policy.py, examples.py, tests/test_policy.py.
 **Interfaces:** Scene.task {source,target}; Simulation.start_policy(), stop_policy(), state().task, state().cameras; example_scene().
-- [ ] Write/run failing tests for task validation, actual lifted/released spoon success, pause/cancel, wrist movement.
-- [ ] Implement bounded IK, phase controller, proximity-gated grasp constraint, physical success evaluator; scene camera/task defaults.
-- [ ] Run policy tests, verify repeated example success and negative cases. Commit.
+- [x] Write/run failing tests for task validation, actual lifted/released spoon success, pause/cancel, wrist movement.
+- [x] Implement bounded IK, phase controller, proximity-gated grasp constraint, physical success evaluator; scene camera/task defaults.
+- [x] Run policy tests, verify repeated example success and negative cases. Commit.
 
 ### Task 2: Portable object import
 **Files:** backend/importer.py, schema.py, simulation.py, tests/test_import.py.
 **Interfaces:** import_object(data:bytes, filename:str, size:float)->SceneObject; optional mesh vertices/faces embedded in objects; snapshot.meshes for imported compiled geometry.
-- [ ] Write/run tests for real STL/OBJ/GLB conversion, malformed/flat/oversize input and save/load.
-- [ ] Implement bounded file conversion, schema mesh validation, MuJoCo rendering/collision.
-- [ ] Run importer tests and existing simulation tests. Commit.
+- [x] Write/run tests for real STL/OBJ/GLB conversion, malformed/flat/oversize input and save/load.
+- [x] Implement bounded file conversion, schema mesh validation, MuJoCo rendering/collision.
+- [x] Run importer tests and existing simulation tests. Commit.
 
 ### Task 3: Shared REST/WebSocket/MCP control
 **Files:** backend/sessions.py, main.py, mcp_server.py, tests/test_api.py, tests/test_mcp.py.
 **Interfaces:** /api/sessions, /api/sessions/{id}, /api/sessions/{id}/command, /api/import, /ws?session=id. Commands load/reset/example/run/pause/stop/physics/step/snapshot/task/object_add/object_update/object_remove/robot/camera.
-- [ ] Write/run tests for external control on same browser session, revision conflicts, malformed input and MCP tools.
-- [ ] Implement locked session lifecycle/ticking, one command dispatcher, official SDK bridge and connection example.
-- [ ] Run API and real MCP integration tests. Commit.
+- [x] Write/run tests for external control on same browser session, revision conflicts, malformed input and MCP tools.
+- [x] Implement locked session lifecycle/ticking, one command dispatcher, official SDK bridge and connection example.
+- [x] Run API and real MCP integration tests. Commit.
 
 ### Task 4: Workbench UI and end-to-end verification
 **Files:** frontend/src/{App,Viewport,Library,useSimulation,types,math,styles}, new TaskPanel/CameraEditor/ImportDialog, e2e tests, README, docs/API, docs/VERIFICATION.
 **Interfaces:** existing editor plus task/camera/import contract from tasks 1–3.
-- [ ] Write/run browser tests for four views, numeric front camera, example run, source/target clicks, import and reload.
-- [ ] Implement ergonomic task panel, observation views, editable cameras, import dialog and API session panel.
-- [ ] Run all Python, frontend unit, TypeScript/build and browser suites; inspect screenshots and actual task execution.
-- [ ] Independent whole-branch review; resolve important findings with regression tests. Document evidence and limitations; commit.
+- [x] Write/run browser tests for four views, numeric front camera, example run, source/target clicks, import and reload.
+- [x] Implement ergonomic task panel, observation views, editable cameras, import dialog and API session panel.
+- [x] Run all Python, frontend unit, TypeScript/build and browser suites; inspect screenshots and actual task execution.
+- [x] Independent whole-branch review; resolve important findings with regression tests. Document evidence and limitations; commit.

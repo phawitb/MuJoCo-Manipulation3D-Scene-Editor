@@ -162,11 +162,28 @@ class Session:
             self.sequence += 1
             return self.packet()
 
-    def broadcast(self, packet):
+    def broadcast(self, packet, exclude=None):
         for queue in self.subscribers.copy():
-            if queue.full():
-                queue.get_nowait()
-            queue.put_nowait(packet)
+            if queue is exclude:
+                continue
+            # Coalesce replaceable frames, retaining the latest full structure.
+            # A slow viewer needs both that snapshot and the freshest poses.
+            packets = [packet]
+            while not queue.empty():
+                packets.append(queue.get_nowait())
+            closed = next((p for p in packets if p["type"] == "closed"), None)
+            if closed:
+                queue.put_nowait(closed)
+                continue
+            snapshots = [p for p in packets if p["type"] == "snapshot"]
+            latest = max(packets, key=lambda p: p["sequence"])
+            snapshot = (
+                max(snapshots, key=lambda p: p["sequence"]) if snapshots else None
+            )
+            if snapshot:
+                queue.put_nowait(snapshot)
+            if latest is not snapshot:
+                queue.put_nowait(latest)
 
     def tick(self, count):
         with self.lock:

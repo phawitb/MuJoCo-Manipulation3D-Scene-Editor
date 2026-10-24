@@ -3,6 +3,9 @@
 from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, AfterValidator, model_validator
 import math
+import json
+
+MAX_SCENE_BYTES = 8_000_000
 
 
 def finite_vector(v):
@@ -149,6 +152,24 @@ class Scene(StrictModel):
             or top.position[2] <= top.target[2]
         ):
             raise ValueError("Top camera must look vertically down")
+        # Budget the actual formatted portable document, not each individual edit.
+        # Reserve pose/command/camera overhead and JS's longer decimal spelling of
+        # small floats (at most three extra bytes per mesh coordinate).
+        data = self.model_dump()
+        # Physics changes these values without editing. Budget their worst-case
+        # numeric width so a near-limit scene remains loadable after it moves.
+        number_slot = "-0.123456789012345678901234567890"
+        for obj in data["objects"]:
+            obj["position"] = [number_slot] * 3
+            obj["quaternion"] = [number_slot] * 4
+        data["robot"]["joints"] = [number_slot] * 6
+        document = {"version": 1, "scene": data, "cameras": data["cameras"]}
+        size = len(json.dumps(document, indent=2, ensure_ascii=True).encode())
+        size += 64_000 + 3 * sum(len(o.mesh.vertices) for o in self.objects if o.mesh)
+        if size > MAX_SCENE_BYTES:
+            raise ValueError(
+                "Scene exceeds the portable 8 MB size budget. Remove an object or simplify its mesh."
+            )
         return self
 
 
