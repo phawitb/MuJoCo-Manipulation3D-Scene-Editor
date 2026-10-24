@@ -10,7 +10,7 @@ test("empty startup, precise edits, simulation, cameras and scene persistence", 
   await expect(
     page.getByText("Simulation connected", { exact: true }),
   ).toBeVisible();
-  await expect(page.locator("canvas")).toHaveCount(2);
+  await expect(page.locator("canvas")).toHaveCount(4);
   await expect(page.getByTestId("simulation-time")).toHaveText("0.00 s");
   await expect(
     page.getByText("Your tabletop is a blank canvas."),
@@ -32,9 +32,7 @@ test("empty startup, precise edits, simulation, cameras and scene persistence", 
     .getByRole("button", { name: "Step simulation", exact: true })
     .click();
   await expect(page.getByTestId("simulation-time")).toHaveText("0.02 s");
-  await page
-    .getByRole("button", { name: "Run simulation", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Physics only", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Pause", exact: true }),
   ).toBeVisible();
@@ -75,7 +73,7 @@ test("empty startup, precise edits, simulation, cameras and scene persistence", 
   await page
     .getByRole("button", { name: "Toggle dual viewport", exact: true })
     .click();
-  await expect(page.locator("canvas")).toHaveCount(2);
+  await expect(page.locator("canvas")).toHaveCount(4);
   const top = page.getByTestId("viewport-top");
   const box = (await top.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -123,7 +121,7 @@ test("drop placement in top viewport, joint edits, camera independence and keybo
   await expect(
     page.getByText("Simulation connected", { exact: true }),
   ).toBeVisible();
-  await expect(page.locator("canvas")).toHaveCount(2);
+  await expect(page.locator("canvas")).toHaveCount(4);
   const top = page.getByTestId("viewport-top");
   const b = (await top.boundingBox())!;
   const dt = await page.evaluateHandle(() => new DataTransfer());
@@ -183,7 +181,7 @@ test("translate gizmo persists a drag and reconnect restores acknowledged work",
   page,
 }) => {
   let connection: WebSocketRoute | undefined;
-  await page.routeWebSocket("**/ws", (ws) => {
+  await page.routeWebSocket("**/ws*", (ws) => {
     connection = ws;
     ws.connectToServer();
   });
@@ -191,7 +189,7 @@ test("translate gizmo persists a drag and reconnect restores acknowledged work",
   await expect(
     page.getByText("Simulation connected", { exact: true }),
   ).toBeVisible();
-  await expect(page.locator("canvas")).toHaveCount(2);
+  await expect(page.locator("canvas")).toHaveCount(4);
   await page
     .getByRole("button", { name: "Add Plastic cup", exact: true })
     .click();
@@ -255,7 +253,7 @@ test("asset loading recovers from a transient server failure", async ({
     else await route.continue();
   });
   await page.goto("/");
-  await expect(page.locator("canvas")).toHaveCount(2, { timeout: 6000 });
+  await expect(page.locator("canvas")).toHaveCount(4, { timeout: 6000 });
   await expect(
     page.getByRole("button", { name: "Add Plastic cup", exact: true }),
   ).toBeEnabled();
@@ -268,7 +266,7 @@ test("native library drag and rotation gizmo work in the top view", async ({
   await expect(
     page.getByText("Simulation connected", { exact: true }),
   ).toBeVisible();
-  await expect(page.locator("canvas")).toHaveCount(2);
+  await expect(page.locator("canvas")).toHaveCount(4);
   await page.getByRole("button", { name: "Top view", exact: true }).click();
   const viewport = page.getByTestId("viewport-top");
   const canvas = viewport.locator("canvas");
@@ -369,11 +367,23 @@ test("failed reconnect preserves recoverable work and blocks simulation until re
 }) => {
   let session = 0,
     connection: WebSocketRoute | undefined;
-  await page.routeWebSocket("**/ws", (ws) => {
+  await page.routeWebSocket("**/ws*", (ws) => {
     connection = ws;
     const server = ws.connectToServer();
     const number = ++session;
-    if (number > 1)
+    if (number === 2) {
+      server.onMessage(() => {
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            code: "session_missing",
+            message: "Session lost after restart",
+          }),
+        );
+        void ws.close({ code: 1008 });
+      });
+    }
+    if (number > 2)
       ws.onMessage((message) => {
         const command = JSON.parse(String(message));
         if (command.type === "load")
@@ -425,7 +435,7 @@ test("camera actions are not replayed into another view or imported cameras", as
   await expect(
     page.getByRole("button", { name: "Add Plastic cup", exact: true }),
   ).toBeEnabled();
-  await expect(page.locator("canvas")).toHaveCount(2);
+  await expect(page.locator("canvas")).toHaveCount(4);
   await page
     .getByRole("button", { name: "Add Plastic cup", exact: true })
     .click();
@@ -479,5 +489,5 @@ test("camera actions are not replayed into another view or imported cameras", as
     await page.evaluate(
       () => JSON.parse(localStorage.getItem("so101.cameras")!).top,
     ),
-  ).toEqual(doc.cameras.top);
+  ).toMatchObject(doc.cameras.top);
 });

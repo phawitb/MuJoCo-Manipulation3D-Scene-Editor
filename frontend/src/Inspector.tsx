@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Box,
   Bot,
@@ -163,8 +163,29 @@ interface Props {
   frame: () => void;
 }
 export function Inspector(p: Props) {
-  const object = p.scene.objects.find((o) => o.id === p.selected),
-    asset = p.assets.find((a) => a.id === object?.asset);
+  const object = p.scene.objects.find((o) => o.id === p.selected);
+  const importedAsset = useMemo<Asset | undefined>(() => {
+    if (!object?.mesh) return;
+    const dimensions = [0, 1, 2].map((axis) => {
+      let min = Infinity,
+        max = -Infinity;
+      for (let i = axis; i < object.mesh!.vertices.length; i += 3) {
+        min = Math.min(min, object.mesh!.vertices[i]);
+        max = Math.max(max, object.mesh!.vertices[i]);
+      }
+      return max - min;
+    }) as Vec3;
+    return {
+      id: "mesh",
+      name: object.name,
+      category: "Imported",
+      dimensions,
+      mass: object.mass,
+      color: object.color,
+      description: "Imported mesh · convex hull collision",
+    };
+  }, [object?.mesh]);
+  const asset = p.assets.find((a) => a.id === object?.asset) || importedAsset;
   const disabled = !p.editable;
   return (
     <aside className="inspector sidebar">
@@ -195,8 +216,8 @@ export function Inspector(p: Props) {
             </div>
             <span>03</span>
             <div>
-              <strong>Bring in physics</strong>
-              <p>Run a real MuJoCo simulation.</p>
+              <strong>Run a task</strong>
+              <p>Choose pick & place objects, then Run.</p>
             </div>
           </div>
         </div>
@@ -209,7 +230,11 @@ export function Inspector(p: Props) {
             <div>
               <small>RIGID BODY</small>
               <h3>{object.name}</h3>
-              <span>{object.asset} / procedural</span>
+              <span>
+                {object.mesh
+                  ? "Imported / convex hull"
+                  : `${object.asset} / procedural`}
+              </span>
             </div>
           </div>
           <div className="inspector-scroll">

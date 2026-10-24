@@ -1,57 +1,73 @@
 # SO-101 Scene Studio
 
-A functional desktop 3D manipulation scene editor with a real **MuJoCo** physics backend and the **SO-101** robot from MuJoCo Menagerie. React/Three.js renders the compiled MuJoCo geometry; no second physics engine is used.
+A local 3D manipulation workbench with **real MuJoCo physics**, an **SO-101 arm**, four camera views, portable mesh import, a verified **spoon → cup IK policy**, and **MCP / HTTP control** of the scene you see in the browser.
+
+![Successful spoon-to-cup task](docs/screenshots/pick-place-success.png)
 
 ## Start
 
-Requirements: **Node.js 22+**, **Python 3.12**, and either `uv` or `pip`. On macOS/Linux:
+Requires Node.js 22+ and Python 3.12, with `uv` or `pip`. On macOS/Linux:
 
 ```sh
+bash scripts/setup.sh   # install or update pinned dependencies
 bash scripts/start.sh
 ```
 
-The first run installs dependencies. Open **http://127.0.0.1:5173**. Stop both servers with Ctrl+C. Ports 5173 (editor) and 8765 (simulation) must be available; the launcher never kills unrelated applications. To install separately, run `bash scripts/setup.sh`.
+Open **http://127.0.0.1:5173**. First launch installs dependencies automatically if absent. After updating an existing installation, run setup again. Ctrl+C stops both servers. The launcher checks IPv4 ports 5173 / 8765 and never kills another app.
 
-The app opens in Edit Mode with a fixed SO-101 near the left table edge and an empty 0.8 × 0.6 m tabletop, 0.75 m high. The main and orthographic top cameras are available immediately.
+## Try the task
 
-## Use
+1. Click **Spoon → cup example**.
+2. Click **Run simulation**. The arm approaches, closes, lifts, transfers, lowers, releases and retreats.
+3. Watch **Wrist Camera** or expand any view. **Complete** appears only after the spoon has been lifted, released and settled with its bowl inside the upright cup. The default example takes about 16 simulated seconds.
 
-- Drag a cup, plate, spoon or cube from the library onto the table in **either view**. The + button places an asset in a convenient table location.
-- Click an object or its scene-tree entry. **Move (T)** and **Rotate (R)** display transform gizmos. The inspector accepts position in meters and XYZ Euler rotation in degrees. Press Enter or leave an input to apply it.
-- **Snap** enables 1 cm translation and 15° rotation increments. **F** frames the selection in the active view. Delete removes it; the inspector also duplicates objects.
-- Edit uniform scale, mass, sliding/torsional/rolling friction, collision participation and color. Uniform scale rebuilds visual and collision shapes together.
-- Select **SO-101 arm** to edit its six joint targets within the actual model limits and adjust the fixed base pose. Select the table to configure dimensions. Changing table height moves the robot mount by the same amount; existing objects retain their world positions.
-- **Run simulation / Space** starts MuJoCo. Pause to edit, or **Step** advances 20 ms. Editing is disabled while running. Pausing retains simulated object poses. Joint targets are held by the model's position actuators; measured angles may deflect slightly under load.
-- Main view: left-drag orbits, right-drag pans, wheel zooms. Top view: drag pans, wheel zooms; the top-down direction is locked. Click a viewport to make it active. Each viewport has independent frame/reset controls.
-- **Save scene / Cmd-Ctrl+S** downloads JSON containing the current object poses and both cameras. **Open** validates and restores it. Invalid files leave the working scene unchanged. [Example empty scene](examples/empty-scene.json).
-- **Reset scene** restores the empty default scene and pauses physics, preserving cameras. Camera settings also survive page refresh in local storage. Scenes are saved explicitly with Save; refreshing without saving starts a new empty scene.
-- A transient network disconnect reconnects with the last acknowledged scene and pauses physics. Each browser connection has an isolated simulation. If restoration is rejected, the retained scene remains available to save; simulation stays disabled until you open another scene or reset.
+The controller uses numerical IK and position actuators. **Grasp assist is on**: a temporary soft MuJoCo weld is enabled only after the gripper closes within 25 mm of the measured grasp point. No object teleportation is used. The delivery path is replanned from the measured grasp. The weld is removed before opening, and gravity/contact dynamics determine the result. This is a simulation controller, not a validated hardware grasp policy. Pure contact-only grasping, general collision-free motion planning and arbitrary-scene success are not claimed.
 
-## Verification
+## Build your own task
+
+Click **Pick object**, then click the object directly in a viewport or the scene collection. Next click the destination. **Run simulation / Space moves the arm**; Pause freezes execution, Run resumes, Stop releases and cancels. Invalid or unreachable tasks show an actionable error. Cups, plates and solid supports can be destinations; the bundled spoon/cup arrangement is the tested insertion task. Bring objects closer to the arm if IK cannot reach them. Imported hollow vessels use solid collision; use the procedural cup for insertion.
+
+**Physics only** runs passive physics without a manipulation policy. **Step** advances 20 ms while paused. While a task is paused, Step also advances its controller. Editing physical scene properties cancels the current task, recompiles and resets time/velocities.
+
+## Cameras and editing
+
+- **Main**, **Top**, **Front**, **Wrist** tabs expand a view. Multi-view shows all four; narrow windows show front/wrist previews and keep Top available as a tab.
+- Front camera defaults to a front oblique/downward angle. Its settings button edits position, look-at target and field of view. Main/front support orbit/pan/zoom; top is orthographic with locked downward direction. Wrist follows the actual model-mounted `wrist_cam` pose and field of view.
+- Drag cup/plate/spoon/cube cards into a view or use +. **Import object** accepts STL, OBJ and self-contained GLB from your computer, with explicit longest-side sizing. The mesh is centered and embedded in saved scenes, with editable color and **convex hull collision**. Limits: 10 MB upload, 20k vertices/40k triangles; textures and external sidecar files are not imported.
+- Select an object for move/rotate gizmos, exact pose, scale, mass, friction, collision and color. **T/R**, **F**, **Delete**, **Cmd/Ctrl+S** shortcuts are available. Snap uses 1 cm / 15° increments.
+- Select the arm for five arm joint targets plus gripper, or base pose. Select the table to resize it. All coordinates use meters, Z up, WXYZ quaternions; UI angles are degrees.
+- **Save scene** downloads portable JSON including current poses, task and cameras. **Open** validates atomically; malformed files leave the current scene intact. Old version-1 files still load with new defaults. Max scene/message size 8 MB, 64 objects.
+- **Reset scene** empties the table while preserving cameras. Camera preferences also survive refresh in local storage. Refresh opens a new empty session; save your scene explicitly. A transient disconnect reconnects to the same session; its controller may continue while disconnected. If the server restarted, the browser restores its last acknowledged scene paused. Failed restoration leaves a downloadable recovery copy.
+- At narrow widths, **Objects** and **Inspector** toggle side panels.
+
+## AI agents and external programs
+
+Click **AI / API** or the session ID in the footer. Every browser scene has an explicit ID. An agent can list sessions, control that exact scene, read measured state, import meshes, change all object/robot/table/camera settings, execute tasks and obtain **native MuJoCo camera PNGs**. Independent headless sessions are also supported.
+
+```sh
+# Print ready-to-copy MCP client configuration, including absolute paths:
+.venv/bin/python scripts/mcp-config.py
+# MCP stdio entry point (editor service must already be running):
+bash scripts/mcp.sh
+# Run example in a new headless session; add an ID to use an existing scene:
+.venv/bin/python examples/run_task.py
+```
+
+The bridge uses the official MCP Python SDK (v2), not a custom protocol. It connects only to the local service. Full endpoint/tool schemas, session lifecycle, concurrency and example commands: **[docs/API.md](docs/API.md)**. Interactive HTTP documentation: **http://127.0.0.1:8765/docs**.
+
+## Verify
 
 ```sh
 bash scripts/check.sh
-# Browser tests require the running app:
-cd frontend
-npx playwright install chromium
-npm run test:e2e
+# With the app running (uses installed Chrome by default):
+cd frontend && npm run test:e2e
+# Or: npx playwright install chromium && PLAYWRIGHT_CHROMIUM=1 npm run test:e2e
 ```
 
-The browser test configuration uses installed Google Chrome by default. Set `PLAYWRIGHT_CHROMIUM=1` to use Playwright's bundled Chromium. Tests exercise startup, numerical edits, physical settling, real gizmo dragging, drag/drop, camera state, saving/loading, invalid inputs and connection recovery. `test-results` contains verification screenshots/traces.
+See **[docs/VERIFICATION.md](docs/VERIFICATION.md)** for current evidence and limits. Tests cover physical manipulation, repeated/perturbed placements, cancellation, camera poses/images, real STL/OBJ/GLB import, real MCP handshake/tools, shared API/browser control, direct scene clicks, four views, responsive layout and existing editing/recovery workflows.
 
-## Structure
+## Model and system limits
 
-- `backend/schema.py`: bounded/versioned scene schema and asset metadata.
-- `backend/simulation.py`: MJCF composition, isolated models/data, authoritative state and geometry export.
-- `backend/main.py`: FastAPI HTTP and WebSocket API.
-- `frontend/src`: editor, viewport, inspector, library, connection state and coordinate utilities.
-- `assets/so101`: original robot model and meshes, with Apache-2.0 license.
-- `docs/API.md`: protocol, units, frames and synchronization rules.
+Robot model: [MuJoCo Menagerie SO-101 provenance and Apache-2.0 license](assets/PROVENANCE.md). Household assets are procedural approximations. Physics runs at 500 Hz and streams roughly 30 Hz, subject to machine load; highly detailed/high-contact scenes may run slower. WebGL is required for the editor. Agent PNG observations need native OpenGL; if unavailable, the API returns an explicit 503 while browser views remain usable. Native and browser lighting differ.
 
-## Scope and model fidelity
-
-The robot uses its real kinematic structure, inertias, actuator configuration and model collision geometry. Its base has no free joint. Robot collision shapes follow the upstream model's approximations; they are not exact visual-mesh collisions. Household objects are explicitly **procedural approximations**, not IKEA product models: the cup is open, the plate has a shallow rim, and the spoon uses a rounded solid bowl and handle. Their render primitives are their physics primitives. Model source and exact commit: [assets/PROVENANCE.md](assets/PROVENANCE.md).
-
-This is a local single-user editor with per-connection sessions, not a multi-user deployment or autonomous grasping system. There is no trajectory planner, IK, learning policy or hardware control. Physics pauses at the last valid state before an object center leaves the ±5 m workspace, keeping saved scenes reloadable even with collision disabled. Maximum 64 objects per scene; physics advances at 500 Hz and publishes around 30 Hz, subject to machine load. Very large/high-contact scenes may run slower than real time. Arbitrary manual transforms may create overlaps; MuJoCo resolves contacts when simulation begins. No GPU is required for physics; browser WebGL is required for 3D rendering.
-
-The supplied specification was truncated midway through section 7. The implemented scope covers all complete requirements in that attachment and functional drag/drop behavior.
+Local single-user service, no authentication or hardware connection. Bind only to loopback; HTTP and WebSocket origins/hosts are checked. Models are serialized per session. Up to 16 concurrent sessions; inactive browser-only sessions may be reclaimed to make room. Explicit API-created sessions remain until deletion or 30 minutes idle (reclaimed on creation). Exported scenes contain no server filesystem paths. Physics pauses before an object center escapes ±5 m.

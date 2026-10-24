@@ -1,10 +1,11 @@
 export type Vec3 = [number, number, number];
 export type Quat = [number, number, number, number]; // MuJoCo WXYZ
-export type AssetId = "cup" | "plate" | "spoon" | "cube";
+export type AssetId = "cup" | "plate" | "spoon" | "cube" | "mesh";
 export interface SceneObject {
   id: string;
   name: string;
   asset: AssetId;
+  mesh?: { vertices: number[]; faces: number[]; filename: string } | null;
   position: Vec3;
   quaternion: Quat;
   scale: number;
@@ -24,6 +25,8 @@ export interface Scene {
   table: Table;
   robot: { model: "so101"; position: Vec3; quaternion: Quat; joints: number[] };
   objects: SceneObject[];
+  task: { source: string | null; target: string | null };
+  cameras: Record<"main" | "top" | "front", CameraState>;
 }
 export interface Asset {
   id: AssetId;
@@ -69,19 +72,34 @@ export interface StatePacket {
   joints: number[];
   objects: ObjectPose[];
   requestId?: string;
+  sessionId: string;
+  sequence: number;
+  mode: "policy" | "physics";
+  task: {
+    status: "idle" | "running" | "cancelled" | "succeeded" | "failed";
+    phase: string;
+    message: string;
+    progress: number;
+    success: boolean;
+    graspAssist: boolean;
+    held: boolean;
+  };
+  cameras: { wrist: { position: Vec3; quaternion: Quat; fov: number } };
 }
 export interface Snapshot extends StatePacket {
   type: "snapshot";
   scene: Scene;
   geometry: Geometry[];
+  meshes?: MeshData;
   jointInfo: JointInfo[];
 }
 export interface CameraState {
   position: Vec3;
   target: Vec3;
   zoom: number;
+  fov?: number;
 }
-export type ViewKind = "main" | "top";
+export type ViewKind = "main" | "top" | "front" | "wrist";
 export type Cameras = Record<ViewKind, CameraState>;
 export interface SavedDocument {
   version: 1;

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { readCameras } from "./math";
 import type { Asset, MeshData, Scene, Snapshot, StatePacket } from "./types";
 
 export function useSimulation() {
@@ -22,10 +23,18 @@ export function useSimulation() {
     timer: ReturnType<typeof setTimeout>;
   } | null>(null);
   const counter = useRef(0);
+  const sessionId = useRef<string | null>(
+    new URLSearchParams(location.search).get("session"),
+  );
   const serverRevision = useRef<number | undefined>(undefined);
   const recoveryBlocked = useRef(false);
   const busyRef = useRef(false);
   const updatePacket = (packet: StatePacket) => {
+    if (
+      live.current?.sessionId === packet.sessionId &&
+      packet.sequence < live.current.sequence
+    )
+      return;
     live.current = packet;
     setState(packet);
     if (packet.type === "snapshot") {
@@ -34,7 +43,7 @@ export function useSimulation() {
     }
     const scene = snapshotRef.current?.scene;
     if (scene) {
-      const saved = structuredClone(scene);
+      const saved = { ...scene, objects: scene.objects.map((o) => ({ ...o })) };
       for (const obj of saved.objects) {
         const pose = packet.objects.find((x) => x.id === obj.id);
         if (pose) {
@@ -58,7 +67,7 @@ export function useSimulation() {
           return reject(new Error("Simulation server is disconnected"));
         if (busyRef.current)
           return reject(new Error("Wait for the current update to finish"));
-        const id = String(++counter.current);
+        const id = `${crypto.randomUUID()}-${++counter.current}`;
         busyRef.current = true;
         setBusy(true);
         setError("");
@@ -134,17 +143,26 @@ export function useSimulation() {
         });
     void loadAssets();
     const connect = () => {
+      const requestedSession = sessionId.current;
       const ws = new WebSocket(
-        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
+        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws${requestedSession ? `?session=${encodeURIComponent(requestedSession)}` : ""}`,
       );
       socket.current = ws;
-      let first = true;
+      let first = true,
+        explicitlyClosed = false;
       ws.onmessage = (event) => {
         if (cancelled) return;
         const p = JSON.parse(event.data);
-        serverRevision.current = p.revision;
+        if (p.type === "closed") {
+          explicitlyClosed = true;
+          sessionId.current = null;
+          ws.close();
+          return;
+        }
+        if (p.revision !== undefined) serverRevision.current = p.revision;
         if (p.type === "error") {
           setError(p.message);
+          if (p.code === "session_missing") sessionId.current = null;
           if (pending.current && pending.current.id === p.requestId) {
             clearTimeout(pending.current.timer);
             pending.current.reject(new Error(p.message));
@@ -156,7 +174,8 @@ export function useSimulation() {
         }
         if (first) {
           first = false;
-          if (recovery.current) {
+          sessionId.current = p.sessionId;
+          if (recovery.current && !requestedSession) {
             const restore = recovery.current;
             setStatus("connecting");
             recoveryBlocked.current = true;
@@ -169,11 +188,35 @@ export function useSimulation() {
             return;
           }
         }
+        if (
+          !requestedSession &&
+          !snapshotRef.current &&
+          p.type === "snapshot" &&
+          !p.requestId
+        ) {
+          const cameras = readCameras();
+          command("load", {
+            scene: {
+              ...p.scene,
+              cameras: {
+                main: cameras.main,
+                top: cameras.top,
+                front: cameras.front,
+              },
+            },
+          }).catch((e) => {
+            updatePacket(p);
+            setStatus("connected");
+            setError(`Camera preferences could not be restored: ${e.message}`);
+          });
+          return;
+        }
         if (p.type === "snapshot") {
           recoveryBlocked.current = false;
           setStatus("connected");
         }
         updatePacket(p);
+        if (p.warning) setError(p.warning);
         if (pending.current && pending.current.id === p.requestId) {
           clearTimeout(pending.current.timer);
           pending.current.resolve(p);
@@ -198,6 +241,12 @@ export function useSimulation() {
         }
         busyRef.current = false;
         setBusy(false);
+        if (explicitlyClosed) {
+          setError(
+            "This session was closed by an external controller. Save your retained scene, then reload to start a new session.",
+          );
+          return;
+        }
         reconnect = setTimeout(connect, 1500);
       };
       ws.onerror = () => ws.close();
@@ -229,6 +278,10 @@ export function useSimulation() {
     }
     return result;
   }, []);
+  const combinedMeshes = useMemo(
+    () => ({ ...meshes, ...snapshot?.meshes }),
+    [meshes, snapshot?.meshes],
+  );
   return {
     snapshot,
     state,
@@ -238,7 +291,7 @@ export function useSimulation() {
     error,
     setError,
     assets,
-    meshes,
+    meshes: combinedMeshes,
     command,
     waitForPending,
     currentScene,

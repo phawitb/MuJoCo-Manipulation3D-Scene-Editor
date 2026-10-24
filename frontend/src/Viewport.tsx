@@ -19,9 +19,10 @@ import {
   Vector2,
   Vector3,
   MOUSE,
+  PerspectiveCamera,
 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import { Focus, RotateCcw, Maximize2 } from "lucide-react";
+import { Focus, RotateCcw, Maximize2, Settings2 } from "lucide-react";
 import type {
   CameraState,
   Geometry,
@@ -57,6 +58,8 @@ interface Props {
   cameraEpoch: number;
   preview: MutableRefObject<ObjectPose | null>;
   onExpand?: () => void;
+  editCamera?: (kind: ViewKind) => void;
+  picking?: boolean;
 }
 function makeGeometry(g: Geometry, meshes: MeshData) {
   const [x, y, z] = g.size;
@@ -107,6 +110,7 @@ function SimGeom({
 }) {
   const ref = useRef<Mesh>(null);
   const geometry = useMemo(() => makeGeometry(geom, meshes), [geom, meshes]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
   const scratch = useMemo(
     () => ({
       m: new Matrix4(),
@@ -204,7 +208,7 @@ function SelectionGizmo(p: Props) {
   return (
     <>
       <group ref={pivot} position={pos as Vec3} />
-      {p.editable && p.active && (
+      {p.editable && p.active && !p.picking && p.kind !== "wrist" && (
         <TransformControls
           object={pivot as React.RefObject<Group>}
           mode={p.transform}
@@ -253,6 +257,7 @@ function CameraRig(
     camera.position.fromArray(state.position);
     camera.up.set(0, p.kind === "top" ? 1 : 0, p.kind === "top" ? 0 : 1);
     camera.zoom = state.zoom;
+    if (camera instanceof PerspectiveCamera) camera.fov = state.fov || 42;
     camera.updateProjectionMatrix();
     controls.current?.target.fromArray(state.target);
     controls.current?.update();
@@ -263,8 +268,20 @@ function CameraRig(
       position: camera.position.toArray() as Vec3,
       target: controls.current.target.toArray() as Vec3,
       zoom: camera.zoom,
+      fov: (camera as PerspectiveCamera).fov || 50,
     });
   };
+  useFrame(() => {
+    if (p.kind !== "wrist") return;
+    const wrist = p.live.current?.cameras?.wrist;
+    if (!wrist) return;
+    camera.position.fromArray(wrist.position);
+    camera.quaternion.copy(toThreeQuaternion(wrist.quaternion));
+    if (camera instanceof PerspectiveCamera && camera.fov !== wrist.fov) {
+      camera.fov = wrist.fov;
+      camera.updateProjectionMatrix();
+    }
+  });
   useEffect(() => {
     apply(initial.current);
   }, []);
@@ -296,7 +313,7 @@ function CameraRig(
     const objectSelected = p.snapshot.scene.objects.some(
       (o) => o.id === p.selected,
     );
-    if (p.kind === "main") delta.setLength(objectSelected ? 0.35 : 1.25);
+    if (p.kind !== "top") delta.setLength(objectSelected ? 0.35 : 1.25);
     camera.position.copy(new Vector3(...target).add(delta));
     controls.current.target.fromArray(target);
     if (p.kind === "top") camera.zoom = objectSelected ? 1200 : 500;
@@ -336,13 +353,14 @@ function CameraRig(
       p.dropRef.current = null;
     };
   }, [camera, gl]);
+  if (p.kind === "wrist") return null;
   return (
     <OrbitControls
       ref={controls}
       makeDefault
       enableDamping
       dampingFactor={0.12}
-      enableRotate={p.kind === "main"}
+      enableRotate={p.kind !== "top"}
       minDistance={0.12}
       maxDistance={5}
       minZoom={100}
@@ -413,7 +431,7 @@ function Contents(
         position={[1, -1, 3]}
         intensity={2.5}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={p.kind === "main" ? [1024, 1024] : [512, 512]}
         shadow-camera-left={-1}
         shadow-camera-right={1}
         shadow-camera-top={1}
@@ -500,35 +518,61 @@ export function Viewport(p: Props) {
     >
       <div className="viewport-heading">
         <span className="view-dot" />
-        <strong>{p.kind === "main" ? "Main 3D View" : "Top View"}</strong>
+        <strong>
+          {
+            {
+              main: "Main 3D View",
+              top: "Top View",
+              front: "Front Camera",
+              wrist: "Wrist Camera",
+            }[p.kind]
+          }
+        </strong>
         <span className="view-projection">
-          {p.kind === "main" ? "PERSPECTIVE" : "ORTHOGRAPHIC"}
+          {p.kind === "top"
+            ? "ORTHOGRAPHIC"
+            : p.kind === "wrist"
+              ? "LIVE · ARM"
+              : "PERSPECTIVE"}
         </span>
         <div className="view-actions">
-          <button
-            title="Frame selected"
-            aria-label={`Frame ${p.kind} camera`}
-            onClick={() => {
-              p.onActive();
-              setLocalFrame((x) => x + 1);
-            }}
-          >
-            <Focus size={14} />
-          </button>
-          <button
-            title="Reset camera"
-            aria-label={`Reset ${p.kind} camera`}
-            onClick={() => {
-              p.onActive();
-              setLocalReset((x) => x + 1);
-            }}
-          >
-            <RotateCcw size={13} />
-          </button>
+          {p.kind !== "wrist" && (
+            <button
+              title="Edit camera position"
+              aria-label={`Edit ${p.kind} camera`}
+              onClick={() => p.editCamera?.(p.kind)}
+            >
+              <Settings2 size={14} />
+            </button>
+          )}
+          {p.kind !== "wrist" && (
+            <>
+              <button
+                title="Frame selected"
+                aria-label={`Frame ${p.kind} camera`}
+                onClick={() => {
+                  p.onActive();
+                  setLocalFrame((x) => x + 1);
+                }}
+              >
+                <Focus size={14} />
+              </button>
+              <button
+                title="Reset camera"
+                aria-label={`Reset ${p.kind} camera`}
+                onClick={() => {
+                  p.onActive();
+                  setLocalReset((x) => x + 1);
+                }}
+              >
+                <RotateCcw size={13} />
+              </button>
+            </>
+          )}
           {p.onExpand && (
             <button
               title="Toggle expanded view"
-              aria-label="Expand top view"
+              aria-label={`Expand ${p.kind} view`}
               onClick={p.onExpand}
             >
               <Maximize2 size={13} />
@@ -539,14 +583,14 @@ export function Viewport(p: Props) {
       <Canvas
         key={`${p.kind}-${p.cameraEpoch}`}
         shadows
-        dpr={[1, 1.7]}
+        dpr={[1, 1.5]}
         orthographic={p.kind === "top"}
         camera={{
           position: p.cameraState.position,
           up: p.kind === "top" ? [0, 1, 0] : [0, 0, 1],
           near: 0.005,
           far: 20,
-          fov: 42,
+          fov: p.cameraState.fov || 42,
           zoom: p.cameraState.zoom,
         }}
         onPointerMissed={() => p.select(null)}
@@ -559,9 +603,11 @@ export function Viewport(p: Props) {
         />
       </Canvas>
       <div className="viewport-caption">
-        {p.kind === "main"
-          ? "Drag to orbit · Right-drag to pan · Scroll to zoom"
-          : "Drag to pan · Scroll to zoom"}
+        {p.kind === "wrist"
+          ? "Mounted on wrist · follows the arm"
+          : p.kind === "top"
+            ? "Drag to pan · Scroll to zoom"
+            : "Drag to orbit · Right-drag to pan · Scroll to zoom"}
         <span>m · Z ↑</span>
       </div>
       {dragOver && <div className="drop-hint">Drop onto the tabletop</div>}

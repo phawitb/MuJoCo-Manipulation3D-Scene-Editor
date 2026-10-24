@@ -19,10 +19,10 @@ def test_http_metadata_and_websocket_controls():
             initial = receive(ws, "snapshot")
             assert initial["scene"]["objects"] == [] and not initial["running"]
             ws.send_json({"type": "step", "requestId": "s"})
-            stepped = receive(ws, "state")
+            stepped = receive(ws, "snapshot")
             assert stepped["time"] > 0
-            ws.send_json({"type": "run"})
-            assert receive(ws, "state")["running"]
+            ws.send_json({"type": "physics"})
+            assert receive(ws, "snapshot")["running"]
             ws.send_json({"type": "pause"})
             paused = receive(ws, "snapshot")
             assert not paused["running"]
@@ -41,8 +41,8 @@ def test_edit_rejected_during_run_and_revision_conflict():
         snap = receive(ws, "snapshot")
         ws.send_json({"type": "load", "scene": snap["scene"], "revision": 999})
         assert "stale" in receive(ws, "error")["message"].lower()
-        ws.send_json({"type": "run"})
-        receive(ws, "state")
+        ws.send_json({"type": "physics"})
+        receive(ws, "snapshot")
         ws.send_json({"type": "load", "scene": snap["scene"]})
         assert "pause" in receive(ws, "error")["message"].lower()
 
@@ -84,10 +84,12 @@ def test_workspace_boundary_pauses_stream_and_preserves_loadable_scene():
         ]
         ws.send_json({"type": "load", "scene": initial["scene"]})
         receive(ws, "snapshot")
-        ws.send_json({"type": "run"})
+        ws.send_json({"type": "physics"})
         paused = receive(ws, "snapshot")
+        while paused["running"]:
+            paused = receive(ws, "snapshot")
         assert not paused["running"]
         assert paused["scene"]["objects"][0]["position"][2] >= -5
-        assert "workspace" in receive(ws, "error")["message"]
+        assert "workspace" in paused["warning"]
         ws.send_json({"type": "load", "scene": paused["scene"]})
         assert len(receive(ws, "snapshot")["scene"]["objects"]) == 1

@@ -20,6 +20,9 @@ import {
   SkipForward,
   X,
 } from "lucide-react";
+import { TaskPanel, type PickMode } from "./TaskPanel";
+import { CameraEditor } from "./CameraEditor";
+import { ImportDialog } from "./ImportDialog";
 import { Library } from "./Library";
 import { Inspector } from "./Inspector";
 import { Viewport } from "./Viewport";
@@ -37,6 +40,13 @@ import type {
 
 export default function App() {
   const sim = useSimulation();
+  const [picking, setPicking] = useState<PickMode>(null);
+  const [cameraEdit, setCameraEdit] = useState<ViewKind | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [narrowPanel, setNarrowPanel] = useState<
+    "library" | "inspector" | null
+  >(null);
+  const [apiHelp, setApiHelp] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [transform, setTransform] = useState<"translate" | "rotate">(
     "translate",
@@ -77,6 +87,11 @@ export default function App() {
     void safe(async () => {
       const scene = sim.currentScene();
       fn(scene);
+      scene.cameras = {
+        main: cameraRef.current.main,
+        top: cameraRef.current.top,
+        front: cameraRef.current.front,
+      };
       await sim.command("load", { scene });
     });
   };
@@ -115,6 +130,7 @@ export default function App() {
       });
       await sim.command("load", { scene });
       setSelected(id);
+      setNarrowPanel(null);
       notify(`${asset.name} placed`);
     });
   };
@@ -122,6 +138,8 @@ export default function App() {
     if (!selected) return;
     editScene((s) => {
       s.objects = s.objects.filter((o) => o.id !== selected);
+      if (s.task.source === selected) s.task.source = null;
+      if (s.task.target === selected) s.task.target = null;
     });
     setSelected(null);
   };
@@ -140,8 +158,47 @@ export default function App() {
       setSelected(copy.id);
     });
   };
+  const selectObject = (id: string | null) => {
+    setSelected(id);
+    if (
+      !picking ||
+      !id ||
+      !editableRef.current ||
+      !sim.snapshot?.scene.objects.some((o) => o.id === id)
+    )
+      return;
+    const task = sim.snapshot.scene.task;
+    if (
+      (picking === "target" && task.source === id) ||
+      (picking === "source" && task.target === id)
+    ) {
+      notify("Pick and destination must be different objects.");
+      return;
+    }
+    const mode = picking;
+    void safe(async () => {
+      await sim.command("task", { ...task, [mode]: id });
+      setNarrowPanel(null);
+      setPicking(mode === "source" && !task.target ? "target" : null);
+    });
+  };
   const saveCamera = (kind: ViewKind, value: Cameras["main"]) => {
+    if (kind === "wrist") return;
+    const previous = cameraRef.current[kind];
+    if (
+      previous.position.every(
+        (v, i) => Math.abs(v - value.position[i]) < 1e-6,
+      ) &&
+      previous.target.every((v, i) => Math.abs(v - value.target[i]) < 1e-6) &&
+      Math.abs(previous.zoom - value.zoom) < 1e-6 &&
+      Math.abs((previous.fov || 50) - (value.fov || 50)) < 1e-6
+    )
+      return;
     cameraRef.current = { ...cameraRef.current, [kind]: value };
+    void safe(async () => {
+      await sim.waitForPending();
+      await sim.command("camera", { camera: kind, value });
+    });
     try {
       localStorage.setItem("so101.cameras", JSON.stringify(cameraRef.current));
     } catch {
@@ -166,16 +223,22 @@ export default function App() {
       a.download = `${doc.scene.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "scene"}.json`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      notify("Scene and both camera views saved");
+      notify("Scene, task and camera views saved");
     } catch (e) {
       sim.setError(String(e));
     }
   };
   const load = async (file: File) => {
     await safe(async () => {
-      if (file.size > 150000)
-        throw Error("Scene file is too large (maximum 150 KB)");
+      if (file.size > 8_000_000)
+        throw Error("Scene file is too large (maximum 8 MB)");
       const doc = validateDocument(JSON.parse(await file.text()));
+      if (doc.cameras)
+        doc.scene.cameras = {
+          main: doc.cameras.main,
+          top: doc.cameras.top,
+          front: doc.cameras.front,
+        };
       await sim.command("load", { scene: doc.scene });
       if (doc.cameras) {
         cameraRef.current = doc.cameras;
@@ -188,7 +251,12 @@ export default function App() {
     });
   };
   const runPause = () =>
-    void safe(() => sim.command(sim.live.current?.running ? "pause" : "run"));
+    void safe(async () => {
+      (document.activeElement as HTMLElement | null)?.blur();
+      await sim.waitForPending();
+      setPicking(null);
+      await sim.command(sim.live.current?.running ? "pause" : "run");
+    });
   const frame = () => setFrameSignal((x) => x + 1);
   const handlers = useRef({ save, remove, runPause, frame });
   handlers.current = { save, remove, runPause, frame };
@@ -216,17 +284,39 @@ export default function App() {
         e.preventDefault();
         handlers.current.runPause();
       }
-      if (e.key === "Escape") setSelected(null);
+      if (e.key === "Escape") {
+        setSelected(null);
+        setPicking(null);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  useEffect(() => {
+    const incoming = sim.snapshot?.scene.cameras;
+    if (!incoming) return;
+    const next = { ...cameraRef.current, ...incoming };
+    try {
+      localStorage.setItem("so101.cameras", JSON.stringify(next));
+    } catch {
+      /* In-memory cameras remain usable. */
+    }
+    if (JSON.stringify(next) !== JSON.stringify(cameraRef.current)) {
+      cameraRef.current = next;
+      setCameras(next);
+      setCameraEpoch((v) => v + 1);
+    }
+  }, [sim.snapshot?.scene.cameras]);
   const snapShot = sim.snapshot;
   const scene = snapShot?.scene;
   // Paused inspection follows the latest authoritative pose after stepping.
   const displayScene = scene
     ? {
         ...scene,
+        robot: {
+          ...scene.robot,
+          joints: sim.state?.running ? sim.state.joints : scene.robot.joints,
+        },
         objects: scene.objects.map((o) => {
           const pose = sim.state?.objects.find((p) => p.id === o.id);
           return pose
@@ -241,7 +331,9 @@ export default function App() {
         live: sim.live,
         meshes: sim.meshes,
         selected,
-        select: setSelected,
+        select: selectObject,
+        picking: !!picking,
+        editCamera: setCameraEdit,
         editable,
         transform,
         snap,
@@ -280,6 +372,7 @@ export default function App() {
           <span className="local-badge">LOCAL</span>
         </div>
         <div className="header-actions">
+          <button onClick={() => setApiHelp(true)}>AI / API</button>
           <button
             className="icon-button"
             aria-label="Help and shortcuts"
@@ -318,19 +411,60 @@ export default function App() {
           }}
         />
       </header>
-      <div className="workspace-body">
+      <div className={`workspace-body narrow-${narrowPanel || "none"}`}>
         {scene && (
           <Library
             assets={sim.assets}
             scene={scene}
             selected={selected}
-            select={setSelected}
+            select={selectObject}
+            onImport={() => {
+              setImporting(true);
+              setNarrowPanel(null);
+            }}
             add={addObject}
             editable={editable}
           />
         )}
         <main className="main-panel">
+          {scene && (
+            <TaskPanel
+              scene={scene}
+              state={sim.state}
+              editable={editable}
+              picking={picking}
+              setPicking={setPicking}
+              example={() =>
+                void safe(async () => {
+                  await sim.command("example");
+                  setSelected(null);
+                  setPicking(null);
+                  notify("Example ready · press Run simulation");
+                })
+              }
+              stop={() => void safe(() => sim.command("stop"))}
+            />
+          )}
+
           <div className="toolbar">
+            <div className="narrow-tools">
+              <button
+                onClick={() =>
+                  setNarrowPanel((v) => (v === "library" ? null : "library"))
+                }
+              >
+                Objects
+              </button>
+              <button
+                onClick={() =>
+                  setNarrowPanel((v) =>
+                    v === "inspector" ? null : "inspector",
+                  )
+                }
+              >
+                Inspector
+              </button>
+            </div>
             <div className="tool-group">
               <button
                 className={transform === "translate" ? "tool active" : "tool"}
@@ -386,7 +520,7 @@ export default function App() {
                 }}
               >
                 <Columns2 size={16} />
-                <span>Dual view</span>
+                <span>Multi-view</span>
               </button>
               <span className="mode-badge">
                 <span
@@ -400,29 +534,35 @@ export default function App() {
             <div className="workspace-heading">
               <div>
                 <span className="eyebrow">WORKSPACE / 01</span>
-                <h1>Build. Arrange. Simulate.</h1>
+                <h1>See. Pick. Place.</h1>
               </div>
               <div className="view-tabs">
-                <button
-                  className={dual || singleView === "main" ? "selected" : ""}
-                  onClick={() => {
-                    setSingleView("main");
-                    setDual(false);
-                    setActive("main");
-                  }}
-                >
-                  Main 3D
-                </button>
-                <button
-                  className={!dual && singleView === "top" ? "selected" : ""}
-                  onClick={() => {
-                    setSingleView("top");
-                    setDual(false);
-                    setActive("top");
-                  }}
-                >
-                  Top view
-                </button>
+                {(["main", "top", "front", "wrist"] as ViewKind[]).map(
+                  (kind) => (
+                    <button
+                      key={kind}
+                      className={
+                        (dual ? kind === "main" : singleView === kind)
+                          ? "selected"
+                          : ""
+                      }
+                      onClick={() => {
+                        setSingleView(kind);
+                        setDual(false);
+                        setActive(kind);
+                      }}
+                    >
+                      {
+                        {
+                          main: "Main 3D",
+                          top: "Top view",
+                          front: "Front",
+                          wrist: "Wrist",
+                        }[kind]
+                      }
+                    </button>
+                  ),
+                )}
               </div>
             </div>
             {common && Object.keys(sim.meshes).length > 0 ? (
@@ -437,19 +577,23 @@ export default function App() {
                   />
                 </div>
                 {dual && (
-                  <div className="secondary-view">
-                    <Viewport
-                      {...common}
-                      kind="top"
-                      active={active === "top"}
-                      onActive={() => setActive("top")}
-                      cameraState={cameraRef.current.top}
-                      onExpand={() => {
-                        setDual(false);
-                        setSingleView("top");
-                        setActive("top");
-                      }}
-                    />
+                  <div className="observation-strip">
+                    {(["top", "front", "wrist"] as ViewKind[]).map((kind) => (
+                      <div className="observation-view" key={kind}>
+                        <Viewport
+                          {...common}
+                          kind={kind}
+                          active={active === kind}
+                          onActive={() => setActive(kind)}
+                          cameraState={cameraRef.current[kind]}
+                          onExpand={() => {
+                            setDual(false);
+                            setSingleView(kind);
+                            setActive(kind);
+                          }}
+                        />
+                      </div>
+                    ))}
                   </div>
                 )}
                 {scene?.objects.length === 0 && (
@@ -467,7 +611,7 @@ export default function App() {
                 <div className="scene-label">
                   <span className="green-dot" />
                   SO-101
-                  <span className="label-divider" />6 DOF
+                  <span className="label-divider" />5 AXES + GRIPPER
                   <span className="label-divider" />
                   FIXED BASE
                 </div>
@@ -487,12 +631,21 @@ export default function App() {
                 <strong>MuJoCo Physics</strong>
                 <small>
                   {sim.state?.running
-                    ? "Simulation running"
-                    : "Ready when you are"}
+                    ? sim.state.mode === "physics"
+                      ? "Physics only"
+                      : sim.state.task.phase
+                    : "Run moves the robot"}
                 </small>
               </div>
             </div>
             <div className="sim-controls">
+              <button
+                title="Run passive physics without the robot policy"
+                disabled={!editable}
+                onClick={() => void safe(() => sim.command("physics"))}
+              >
+                Physics only
+              </button>
               <button
                 aria-label="Reset scene"
                 title="Reset scene; preserve cameras"
@@ -586,7 +739,15 @@ export default function App() {
           500 Hz physics · Z up · meters
         </span>
         <span>
-          SO-101 Scene Studio<span className="version">v1.0</span>
+          <button
+            data-testid="session-id"
+            data-session-id={sim.state?.sessionId}
+            onClick={() => setApiHelp(true)}
+            title="Connect an AI agent to this scene"
+          >
+            Session {sim.state?.sessionId?.slice(0, 8) || "…"}
+          </button>
+          <span className="version">v2.0</span>
         </span>
       </footer>
       {sim.error && (
@@ -602,6 +763,88 @@ export default function App() {
         <div className="toast" role="status">
           <Check size={16} />
           {toast}
+        </div>
+      )}
+      {cameraEdit && (
+        <CameraEditor
+          kind={cameraEdit}
+          value={cameraRef.current[cameraEdit]}
+          close={() => setCameraEdit(null)}
+          apply={async (value) => {
+            await sim.waitForPending();
+            await sim.command("camera", { camera: cameraEdit, value });
+            cameraRef.current = { ...cameraRef.current, [cameraEdit]: value };
+            setCameras(cameraRef.current);
+            setCameraEpoch((v) => v + 1);
+          }}
+        />
+      )}
+      {importing && (
+        <ImportDialog
+          close={() => setImporting(false)}
+          add={async (obj) => {
+            await sim.waitForPending();
+            const scene = sim.currentScene();
+            const zValues = obj.mesh!.vertices.filter((_, i) => i % 3 === 2);
+            obj.position = [
+              0.06,
+              0,
+              scene.table.height + Math.max(...zValues) + 0.002,
+            ];
+            await sim.command("object_add", { object: obj });
+            setSelected(obj.id);
+            notify("Object imported · convex hull collision");
+          }}
+        />
+      )}
+      {apiHelp && (
+        <div className="modal-backdrop">
+          <div
+            className="workbench-modal"
+            role="dialog"
+            aria-label="AI and API connection"
+          >
+            <button
+              className="close"
+              onClick={() => setApiHelp(false)}
+              aria-label="Close API help"
+            >
+              <X size={18} />
+            </button>
+            <span className="eyebrow">CONNECT YOUR AGENT</span>
+            <h2>One scene. Any controller.</h2>
+            <p>Use this session ID to control exactly what you see here.</p>
+            <code className="session-code">{sim.state?.sessionId}</code>
+            <button
+              className="primary-action"
+              onClick={() => {
+                void navigator.clipboard
+                  .writeText(sim.state?.sessionId || "")
+                  .then(() => notify("Session ID copied"));
+              }}
+            >
+              Copy session ID
+            </button>
+            <h3>MCP</h3>
+            <p>Start the official SDK bridge from the project folder:</p>
+            <pre>bash scripts/mcp.sh</pre>
+            <h3>HTTP API</h3>
+            <p>
+              <a
+                href="http://127.0.0.1:8765/docs"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open interactive API documentation ↗
+              </a>
+            </p>
+            <pre>{`POST /api/sessions/${sim.state?.sessionId}/command\n{ "type": "example" }\n{ "type": "run" }`}</pre>
+            <p className="quiet">
+              Read status to check success. The API and MCP can edit objects,
+              cameras, robot joints, task instructions and complete scenes. See
+              docs/API.md for client configuration.
+            </p>
+          </div>
         </div>
       )}
       {help && (
@@ -648,8 +891,9 @@ export default function App() {
               intact.
             </p>
             <p className="quiet">
-              Cup, plate and spoon are procedural approximations. No autonomous
-              manipulation controller is included.
+              The IK policy drives the arm with proximity-gated grasp
+              assistance. Success is measured after release. Load the spoon →
+              cup example to try it. Imported meshes use solid convex collision.
             </p>
           </div>
         </div>

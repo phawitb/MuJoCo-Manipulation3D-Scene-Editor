@@ -136,12 +136,27 @@ def build_xml(scene):
                 size=numbers([0.016, 0.016, (t.height - 0.036) / 2]),
                 rgba=".18 .22 .25 1",
             )
-    equality = ET.SubElement(root, 'equality')
+    equality = ET.SubElement(root, "equality")
     for obj in scene.objects:
         if obj.mesh:
-            ET.SubElement(root.find('asset'), 'mesh', name=f'imported_{obj.id}', vertex=numbers([x*obj.scale for x in obj.mesh.vertices]), face=' '.join(str(x) for x in obj.mesh.faces))
+            ET.SubElement(
+                root.find("asset"),
+                "mesh",
+                name=f"imported_{obj.id}",
+                vertex=numbers([x * obj.scale for x in obj.mesh.vertices]),
+                face=" ".join(str(x) for x in obj.mesh.faces),
+            )
         add_object(world, obj)
-        ET.SubElement(equality, 'weld', name=f'grasp_{obj.id}', body1='gripper', body2=f'object_{obj.id}', active='false', solref='0.005 1', torquescale='.03')
+        ET.SubElement(
+            equality,
+            "weld",
+            name=f"grasp_{obj.id}",
+            body1="gripper",
+            body2=f"object_{obj.id}",
+            active="false",
+            solref="0.005 1",
+            torquescale=".03",
+        )
     return ET.tostring(root, encoding="unicode")
 
 
@@ -187,6 +202,7 @@ class Simulation:
             o.id: model.body(f"object_{o.id}").id for o in scene.objects
         }
         from .policy import PickPlacePolicy
+
         self.policy = PickPlacePolicy(self)
         self.visible_ids = [
             i for i in range(model.ngeom) if model.geom_group[i] not in (3, 4)
@@ -263,10 +279,16 @@ class Simulation:
         )
 
     def camera_poses(self):
-        camera = self.data.camera('wrist_cam')
+        camera = self.data.camera("wrist_cam")
         q = np.zeros(4)
         mujoco.mju_mat2Quat(q, camera.xmat)
-        return {'wrist': dict(position=camera.xpos.tolist(), quaternion=q.tolist(), fov=float(self.model.cam_fovy[self.model.camera('wrist_cam').id]))}
+        return {
+            "wrist": dict(
+                position=camera.xpos.tolist(),
+                quaternion=q.tolist(),
+                fov=float(self.model.cam_fovy[self.model.camera("wrist_cam").id]),
+            )
+        }
 
     def geometry(self):
         out = []
@@ -313,11 +335,14 @@ class Simulation:
     def imported_meshes(self):
         out = {}
         for i in range(self.model.nmesh):
-            if not (self.model.mesh(i).name or '').startswith('imported_'):
+            if not (self.model.mesh(i).name or "").startswith("imported_"):
                 continue
             va, vn = self.model.mesh_vertadr[i], self.model.mesh_vertnum[i]
             fa, fn = self.model.mesh_faceadr[i], self.model.mesh_facenum[i]
-            out[str(i)] = dict(vertices=self.model.mesh_vert[va:va+vn].reshape(-1).tolist(), faces=self.model.mesh_face[fa:fa+fn].reshape(-1).tolist())
+            out[str(i)] = dict(
+                vertices=self.model.mesh_vert[va : va + vn].reshape(-1).tolist(),
+                faces=self.model.mesh_face[fa : fa + fn].reshape(-1).tolist(),
+            )
         return out
 
     def meshes(self):

@@ -1,54 +1,113 @@
-# Scene Studio API
+# Scene Studio control API (v2)
 
-Local FastAPI backend at `127.0.0.1:8765`, proxied through Vite at `127.0.0.1:5173`. No external service or API key. Browser WebSocket origins are restricted to localhost/loopback; bind only to loopback. This is not an authenticated public service.
+Service: `http://127.0.0.1:8765`; editor/proxy: `http://127.0.0.1:5173`. No key, cloud or hardware access. Local hosts/origins only; do not expose it publicly. All positions/lengths **meters**, world **Z up**, quaternions **[w,x,y,z]**, joint angles **radians**. Joint order: shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper.
 
-## Coordinates
+## Connect to the visible scene
 
-All positions, lengths and dimensions are **meters**, world **Z up**. Quaternions are **[w, x, y, z]**, normalized on input; Three.js converts to [x, y, z, w]. Robot joint positions are radians, in model order. UI Euler fields use intrinsic Three.js XYZ angles in degrees; conversion to quaternion happens on commit. Euler representations may wrap by 360° without changing orientation.
+Read the session ID in **AI / API**, or list sessions and select the intended ID explicitly. To open a known session in a browser, use `http://127.0.0.1:5173/?session=ID`. `POST /api/sessions` creates an independent session. `/ws` without an ID creates a browser session; `/ws?session=ID` joins it. Different sessions remain isolated.
 
-Geometry `size` follows compiled MuJoCo conventions: box half-extents, cylinder radius/half-length, capsule radius/half-length excluding endcaps, sphere radius, ellipsoid radii. Cylinder/capsule local axis is Z. Compiled `mesh_vert` is rendered using the compiled world geom pose; applying the source mesh's extra offsets again would be incorrect. The frontend does not parse URDF or perform its own robot kinematics.
+Commands and physics stepping share a per-session lock. Scene revision guards prevent stale edits when a client supplies `revision`; state `sequence` orders packets. Changes appear in all connected viewers. CPU work runs off the HTTP event loop. A task continues when a viewer disconnects; reconnect resumes observing the same session. The frontend keeps a last-acknowledged recovery copy for backend restart. Deleting a session stops it and disconnects its viewers; the frontend preserves its copy for Save and requires reload to start again.
 
-## HTTP
+Limit 16 sessions. Idle browser-only sessions can be evicted at capacity. API-created sessions are retained until explicitly deleted or 30 minutes idle, with expiry checked at creation. Sessions are in memory; export your scene before restarting the service. A headless physics session can continue until stopped; delete it after use.
 
-- `GET /api/health`: `{status, engine, version}`.
-- `GET /api/default-scene`: validated default `Scene`.
-- `GET /api/assets`: procedural asset metadata (`id, name, category, dimensions, mass, color, description`).
-- `GET /api/meshes`: immutable compiled robot meshes by index (`vertices` flattened XYZ, `faces` flattened triangle indices). Cached one hour. These match mesh IDs in every snapshot.
-- `/docs`: FastAPI API explorer (WebSocket protocol documented here).
+## HTTP endpoints
 
-## WebSocket `/ws`
+| Method / path | Result |
+|---|---|
+| GET `/api/health` | Engine/version/API version |
+| GET `/api/assets` | Primitive library metadata |
+| GET `/api/default-scene` | Full default scene |
+| GET `/api/scene-schema` | Authoritative Scene JSON schema |
+| GET `/api/command-schema` | Authoritative Command JSON schema |
+| GET `/api/meshes` | Immutable compiled robot meshes, cached 1 hour |
+| GET `/api/sessions` | ID, name, running, revision, viewer count |
+| POST `/api/sessions` | New empty session snapshot |
+| GET `/api/sessions/ID` | Snapshot with portable scene and measured state |
+| POST `/api/sessions/ID/command` | Validated command, returns snapshot |
+| DELETE `/api/sessions/ID` | Stop/release/delete session |
+| POST `/api/import?filename=part.stl&size=0.1` | Raw octet-stream upload → portable SceneObject; size is longest side in meters |
+| GET `/api/sessions/ID/image?view=wrist` | 640×480 PNG; `main`, `top`, `front`, `wrist`; headers X-Scene-Revision/X-Simulation-Time |
+| GET `/docs` | Interactive OpenAPI explorer with command schema |
 
-Each connection creates independent `MjModel` and `MjData`. Initial message is a paused `snapshot`. Receive and physics stepping are serialized for that session; CPU compilation/stepping happens in a thread so other sessions remain responsive.
+Errors: 404 unknown session, 409 revision conflict, 413 payload too large, 422 validation/task planning error, 503 native renderer unavailable. Errors are JSON `{detail: ...}`. Rejected scene edits preserve the current model. Import conversion returns an object but does not add it until `object_add` succeeds.
 
-Command example:
+## Commands
 
-```json
-{"type":"load","requestId":"4","revision":2,"scene":{"version":1,"name":"Example","table":{"width":0.8,"depth":0.6,"height":0.75},"robot":{"model":"so101","position":[-0.3,0,0.754],"quaternion":[1,0,0,0],"joints":[0,-0.7,0.7,0.3,0,0.6]},"objects":[]}}
+All commands accept optional unique `requestId`; edits accept optional current `revision`. HTTP responses do not need correlation IDs; WebSocket acknowledgements echo them. Unknown command fields are rejected.
+
+| type | Parameters / behavior |
+|---|---|
+| `snapshot` | Read current state |
+| `load` | `scene`: full Scene; compile atomically while paused |
+| `reset` | Empty default scene, preserve cameras, pause |
+| `example` | Load spoon → cup arrangement/instruction, preserve cameras, paused only |
+| `task` | `source`, `target`: object IDs or null; must exist and differ; paused only |
+| `run` | Start or resume selected IK task; **moves arm**; returns immediately |
+| `pause` | Freeze physics/controller, retaining phase/grasp |
+| `stop` | Cancel controller and release grasp; pause |
+| `physics` | Cancel/release task and run passive physics |
+| `step` | `count`: 1–2500 integration steps (default 10), paused only; advances active policy too |
+| `object_add` | `object`: valid SceneObject |
+| `object_update` | `id`, `patch`: partial object properties (ID immutable) |
+| `object_remove` | `id`; clears task references to the removed object |
+| `robot` | `joints`: six targets and/or `patch` for base position/quaternion/joints |
+| `camera` | `camera`: main/top/front; `value`: position,target,zoom,fov; allowed during execution |
+
+Table dimensions, scene name, entire imported geometry and any other schema field are editable via `load`. Physical edits require pause and recompile, resetting time/velocity and cancelling a paused policy. Camera-only edits do not reset simulation. Top camera must be directly above its target; wrist is model-mounted and not a free camera.
+
+Example:
+
+```python
+import httpx, time
+api = httpx.Client(base_url="http://127.0.0.1:8765", timeout=30)
+sid = api.post("/api/sessions").json()["sessionId"]
+path = f"/api/sessions/{sid}"
+for cmd in ({"type":"example"}, {"type":"run"}):
+    result = api.post(path + "/command", json=cmd)
+    result.raise_for_status()
+while True:
+    state = api.get(path).json()
+    if state["task"]["status"] in ("succeeded", "failed"):
+        print(state["task"])  # inspect success; acceptance is not completion
+        break
+    time.sleep(.25)
+image = api.get(path + "/image?view=wrist")
+image.raise_for_status()
+open("wrist.png", "wb").write(image.content)
+api.delete(path)
 ```
 
-Commands:
+The bounded runnable version is [examples/run_task.py](../examples/run_task.py).
 
-| Type | Action | Reply |
-|---|---|---|
-| `load` | Validate and atomically compile a full scene; allowed only while paused. Optional `revision` must match. | `snapshot` |
-| `run` | Start stepping, preserving current state. | `state`, then streamed states |
-| `pause` | Pause and retain current object poses. | `snapshot` |
-| `step` | Advance 10 steps × 0.002 s while paused. | `state` |
-| `reset` | Restore default empty scene and pause. | `snapshot` |
-| `snapshot` | Read current scene/model and state. | `snapshot` |
+## MCP
 
-Replies echo `requestId`; unsolicited streaming packets have none. Errors are `{type:"error",message,revision,requestId}` and do not replace the current scene. Physics rolls back the last integration batch and pauses before an object center leaves ±5 m; streaming sends a paused snapshot followed by an error. This keeps every exported physics state loadable. Scene revision increments only after successful compilation. The client permits one in-flight command, disables editing during compilation/running, and updates the display on acknowledgement. A command times out after 15 seconds and initiates reconnect with the last acknowledged scene. Edits always start from current simulated object poses. Changing physical properties recompiles/reset velocities and simulation time; run/pause/step do not.
-
-`state` contains `{type, revision, running, time, contacts, poses, joints, objects}`. `poses` are `{id,position,quaternion}` for visible geom IDs; `objects` are body-center poses by object ID. `joints` are measured positions. `snapshot` adds `scene`, `geometry`, and `jointInfo`. `geometry` contains `{id,name,owner,kind,size,color,mesh}`; robot collision proxies (upstream groups 3/4) are hidden from visual rendering but retained in physics. Robot visual materials and mesh geometry come directly from the model. `jointInfo` provides actual named limits.
-
-## JSON scene files
+Official Python SDK v2 stdio server. Start the editor first. Generate a client configuration with `.venv/bin/python scripts/mcp-config.py`; it prints the correct absolute interpreter and project directory. Equivalent shape:
 
 ```json
-{"version":1,"scene":{},"cameras":{"main":{"position":[1.05,-1.25,1.55],"target":[0,0,0.77],"zoom":1},"top":{"position":[0,0,2.6],"target":[0,0,0.75],"zoom":320}}}
+{
+  "mcpServers": {
+    "so101": {
+      "command": "/absolute/project/.venv/bin/python",
+      "args": ["-m", "backend.mcp_server"],
+      "cwd": "/absolute/project",
+      "env": {"SO101_API_URL": "http://127.0.0.1:8765"}
+    }
+  }
+}
 ```
 
-Replace `scene` with the full server schema/example file. `cameras` is optional and frontend-owned. A scene without cameras preserves existing views; a file with cameras intentionally restores them only after server acceptance. Reset scene never alters cameras.
+Tools: `list_sessions`, `create_session`, `get_scene`, `scene_command`, `import_mesh`, `delete_session`, `get_contract`, `camera_image`. `scene_command(session_id, command)` exposes the same typed command schema, so an agent can operate every editor domain. `import_mesh(filename,data_base64,longest_side_m)` returns portable geometry; follow with object_add. `camera_image` returns an MCP image content block. No arbitrary server path reading/execution. Missing sessions or validation errors become MCP tool errors. Native camera rendering runs in a bounded subprocess for macOS GL-context compatibility; it observes a consistent captured state, not a later simulation frame.
 
-Object schema: `id` (unique non-reserved ASCII identifier), `name`, `asset` (`cup|plate|spoon|cube`), `position`, `quaternion`, uniform `scale` (0.25–3), `mass` (0.001–10 kg), `friction` ([sliding,torsional,rolling], each 0–5), `collision`, hex `color`. Max 64 objects, 150 KB command/file limit. Extra fields, non-finite values, duplicate IDs, invalid quaternions, out-of-range joints and unknown assets are rejected. Full defaults and bounds live in `backend/schema.py`.
+Typical agent sequence: list sessions → get_scene → scene_command example/task → run → poll get_scene → inspect success → camera_image. For edits, include the revision from get_scene and handle conflict by rereading.
 
-There is no server filesystem write or shared session persistence. On disconnect, its physics loop stops and model state is released. A failed restoration preserves the retained client scene and blocks run/pause/step; Save, Open and Reset remain available for recovery. Save commits the focused draft and awaits in-flight edits before serializing. A reconnect starts a new session and the client restores its last acknowledged scene in paused mode; velocities/time are intentionally reset.
+## State, geometry and portable files
+
+`state`: type, sessionId, sequence, revision, running, mode, time, contacts, poses, joints, objects, task, cameras. `task` includes status (`idle|running|cancelled|succeeded|failed`), phase, progress, message, held, graspAssist, success. While paused mid-task, status remains running but `running:false`; phase/grasp resume on Run. `cameras.wrist` is the measured position/WXYZ quaternion/fov. `snapshot` additionally contains scene, geometry, jointInfo and imported compiled `meshes`.
+
+Geometry size uses MuJoCo conventions: box half-extents; cylinder/capsule radius and half-length; sphere radius; ellipsoid radii. Mesh vertices/faces come from the compiled model and use compiled geom world transforms. Combine immutable robot meshes with snapshot imported meshes by numeric key; source STL offsets must not be reapplied. Collision proxies (groups 3/4) stay hidden in visuals but remain active in physics. WebSocket unsolicited states have no requestId. A workspace-boundary failure returns a paused snapshot with `warning`, task failure and last valid physics state.
+
+Save wrapper: `{version:1, scene: <Scene>, cameras: <optional legacy camera map>}`. Scene version remains 1 with additive defaults: old primitive-only scenes remain valid. Scene includes `task:{source,target}`, `cameras:{main,top,front}` and object mesh data. Legacy wrapper cameras override scene cameras when opened in the editor. Mesh objects include `asset:"mesh"`, `mesh:{vertices:[...],faces:[...],filename:"part.stl"}`. Bounds: 64 objects, 8 MB scene/message, object centers ±5 m, scale .25–3, mass .001–10 kg, friction 0–5; imported files 10 MB, 20k vertices/40k triangles, longest side .005–1 m. Imported collision is convex: no hollow cavity or texture fidelity is implied.
+
+## Policy limits
+
+The example is verified with ±5 mm source variations. IK uses actual robot kinematics and bounded joints; actuator targets interpolate smoothly. Grasp assist requires closure and measured proximity before enabling a soft weld. Delivery solves for the measured carried spoon bowl/axis, not a guessed fixed grasp transform. Object qpos is never animated by the controller. The weld is removed at release; success requires measured lift, bowl inside the upright cup, low translational speed and no active grasp. Unsupported destinations, disabled collisions, tilted cups or unreachable poses fail explicitly. This is not a general collision-free planner or hardware-ready controller.

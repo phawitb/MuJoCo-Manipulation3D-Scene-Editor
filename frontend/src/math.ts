@@ -32,6 +32,13 @@ export function dropPosition(hit: Vec3, dimensions: Vec3, table: Table): Vec3 {
 }
 export const defaultCameras = (): Cameras => ({
   main: { position: [1.05, -1.25, 1.55], target: [0, 0, 0.77], zoom: 1 },
+  front: {
+    position: [0.65, -0.75, 1.3],
+    target: [-0.04, 0, 0.82],
+    zoom: 1,
+    fov: 50,
+  },
+  wrist: { position: [0, 0, 1], target: [0, 0, 0.75], zoom: 1, fov: 61 },
   top: { position: [0, 0, 2.6], target: [0, 0, 0.75], zoom: 320 },
 });
 const finiteVector = (v: unknown, n: number) =>
@@ -54,12 +61,16 @@ export function validateDocument(input: unknown): SavedDocument {
   )
     throw new Error("Not a supported Scene Studio file (version 1)");
   if (d.cameras)
-    for (const kind of ["main", "top"] as const) {
+    for (const kind of ["main", "top", "front", "wrist"] as const) {
+      if (!d.cameras[kind] && (kind === "front" || kind === "wrist"))
+        d.cameras[kind] = defaultCameras()[kind];
       const c = d.cameras[kind];
       if (
         !c ||
         !finiteVector(c.position, 3) ||
         !finiteVector(c.target, 3) ||
+        (c.fov !== undefined &&
+          (!Number.isFinite(c.fov) || c.fov < 15 || c.fov > 100)) ||
         !Number.isFinite(c.zoom) ||
         c.zoom <= 0 ||
         c.zoom > 10000

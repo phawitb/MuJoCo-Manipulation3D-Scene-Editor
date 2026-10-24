@@ -39,14 +39,14 @@ class ImportedMesh(StrictModel):
     faces: list[int] = Field(min_length=12, max_length=120000)
     filename: str = Field(max_length=120)
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def geometry(self):
-        if len(self.vertices)%3 or len(self.faces)%3:
-            raise ValueError('Mesh arrays must contain triples')
-        if any(not math.isfinite(x) or abs(x)>2 for x in self.vertices):
-            raise ValueError('Mesh vertices must be finite and within 2 m')
-        if any(i<0 or i>=len(self.vertices)//3 for i in self.faces):
-            raise ValueError('Mesh face references missing vertex')
+        if len(self.vertices) % 3 or len(self.faces) % 3:
+            raise ValueError("Mesh arrays must contain triples")
+        if any(not math.isfinite(x) or abs(x) > 2 for x in self.vertices):
+            raise ValueError("Mesh vertices must be finite and within 2 m")
+        if any(i < 0 or i >= len(self.vertices) // 3 for i in self.faces):
+            raise ValueError("Mesh face references missing vertex")
         return self
 
 
@@ -65,8 +65,10 @@ class SceneObject(StrictModel):
 
     @model_validator(mode="after")
     def validate_object(self):
-        if (self.asset == 'mesh') != (self.mesh is not None):
-            raise ValueError('Imported objects require mesh data; primitives cannot contain it')
+        if (self.asset == "mesh") != (self.mesh is not None):
+            raise ValueError(
+                "Imported objects require mesh data; primitives cannot contain it"
+            )
         if any(x < 0 or x > 5 for x in self.friction):
             raise ValueError("Friction must be between 0 and 5")
         if self.id in ("robot", "table", "floor"):
@@ -97,10 +99,10 @@ class Camera(StrictModel):
     zoom: float = Field(default=1, gt=0, le=10000)
     fov: float = Field(default=50, ge=15, le=100)
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def distinct(self):
-        if math.dist(self.position, self.target) < .01:
-            raise ValueError('Camera must be away from its target')
+        if math.dist(self.position, self.target) < 0.01:
+            raise ValueError("Camera must be away from its target")
         return self
 
 
@@ -111,9 +113,9 @@ class Task(StrictModel):
 
 def default_cameras():
     return {
-        'main': Camera(position=[1.05,-1.25,1.55], target=[0,0,.77], fov=42),
-        'top': Camera(position=[0,0,2.6], target=[0,0,.75], zoom=320),
-        'front': Camera(position=[.65,-.75,1.3], target=[-.04,0,.82], fov=50),
+        "main": Camera(position=[1.05, -1.25, 1.55], target=[0, 0, 0.77], fov=42),
+        "top": Camera(position=[0, 0, 2.6], target=[0, 0, 0.75], zoom=320),
+        "front": Camera(position=[0.65, -0.75, 1.3], target=[-0.04, 0, 0.82], fov=50),
     }
 
 
@@ -123,7 +125,9 @@ class Scene(StrictModel):
     table: Table = Field(default_factory=Table)
     robot: Robot = Field(default_factory=Robot)
     task: Task = Field(default_factory=Task)
-    cameras: dict[Literal["main", "top", "front"], Camera] = Field(default_factory=default_cameras)
+    cameras: dict[Literal["main", "top", "front"], Camera] = Field(
+        default_factory=default_cameras
+    )
     objects: list[SceneObject] = Field(default_factory=list, max_length=64)
 
     @model_validator(mode="after")
@@ -132,15 +136,19 @@ class Scene(StrictModel):
             raise ValueError("Object IDs must be unique")
         ids = {o.id for o in self.objects}
         if self.task.source is not None and self.task.source not in ids:
-            raise ValueError('Task source no longer exists')
+            raise ValueError("Task source no longer exists")
         if self.task.target is not None and self.task.target not in ids:
-            raise ValueError('Task target no longer exists')
+            raise ValueError("Task target no longer exists")
         if self.task.source and self.task.source == self.task.target:
-            raise ValueError('Pick and place objects must be different')
+            raise ValueError("Pick and place objects must be different")
         self.cameras = {**default_cameras(), **self.cameras}
-        top = self.cameras['top']
-        if abs(top.position[0]-top.target[0]) > 1e-5 or abs(top.position[1]-top.target[1]) > 1e-5 or top.position[2] <= top.target[2]:
-            raise ValueError('Top camera must look vertically down')
+        top = self.cameras["top"]
+        if (
+            abs(top.position[0] - top.target[0]) > 1e-5
+            or abs(top.position[1] - top.target[1]) > 1e-5
+            or top.position[2] <= top.target[2]
+        ):
+            raise ValueError("Top camera must look vertically down")
         return self
 
 

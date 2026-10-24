@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Search,
+  Upload,
   GripVertical,
   Plus,
   Layers,
@@ -79,6 +80,7 @@ interface Props {
   select: (id: string | null) => void;
   add: (id: string) => void;
   editable: boolean;
+  onImport: () => void;
 }
 export function Library(p: Props) {
   const [query, setQuery] = useState(""),
@@ -131,6 +133,13 @@ export function Library(p: Props) {
       <div className="section-label">
         OBJECTS <span>DRAG TO PLACE</span>
       </div>
+      <button
+        className="import-button"
+        disabled={!p.editable}
+        onClick={p.onImport}
+      >
+        <Upload size={14} /> Import object <span>STL · OBJ · GLB</span>
+      </button>
       <div className="asset-list">
         {filtered.map((a) => (
           <div
