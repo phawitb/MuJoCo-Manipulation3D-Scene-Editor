@@ -1,0 +1,10 @@
+.venv/
+node_modules/
+dist/
+__pycache__/
+.pytest_cache/
+.superpowers/
+*.log
+.DS_Store
+frontend/test-results/
+frontend/playwright-report/
