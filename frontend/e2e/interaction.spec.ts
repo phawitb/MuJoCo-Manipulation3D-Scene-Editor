@@ -84,13 +84,21 @@ test("asset drag shows a ghost before drop and removes it on cancellation", asyn
     .getByTestId("asset-kalas_bowl")
     .dispatchEvent("dragstart", { dataTransfer: transfer });
   const view = page.getByTestId("viewport-top");
+  await expect
+    .poll(async () => (await view.locator("canvas").boundingBox())?.width || 0)
+    .toBeGreaterThan(600);
   const box = await view.locator("canvas").boundingBox();
-  await view.dispatchEvent("dragover", {
-    dataTransfer: transfer,
-    clientX: box!.x + box!.width / 2,
-    clientY: box!.y + box!.height / 2,
-  });
-  await expect(view.getByTestId("placement-preview")).toBeVisible();
+  await expect
+    .poll(async () => {
+      // Native dragging sends repeated dragover events as the viewport renders.
+      await view.dispatchEvent("dragover", {
+        dataTransfer: transfer,
+        clientX: box!.x + box!.width / 2,
+        clientY: box!.y + box!.height / 2,
+      });
+      return view.getByTestId("placement-preview").isVisible();
+    })
+    .toBe(true);
   await expect(view.getByTestId("placement-preview")).toContainText(
     "IKEA KALAS bowl",
   );
@@ -140,7 +148,7 @@ test("ghost coordinates exactly match final drop position", async ({
   await page.getByRole("button", { name: "Top view", exact: true }).click();
   const view = page.getByTestId("viewport-top");
   await expect
-    .poll(async () => (await view.locator("canvas").boundingBox())!.width)
+    .poll(async () => (await view.locator("canvas").boundingBox())?.width || 0)
     .toBeGreaterThan(600);
   const box = (await view.locator("canvas").boundingBox())!;
   const transfer = await page.evaluateHandle(() => new DataTransfer());

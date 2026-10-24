@@ -124,12 +124,8 @@ test("drop placement in top viewport, joint edits, camera independence and keybo
   await expect(page.locator("canvas")).toHaveCount(4);
   const top = page.getByTestId("viewport-top");
   const b = (await top.boundingBox())!;
-  const dt = await page.evaluateHandle(() => new DataTransfer());
-  await dt.evaluate((d) => d.setData("application/so101-asset", "plate"));
-  await top.dispatchEvent("drop", {
-    dataTransfer: dt,
-    clientX: b.x + b.width * 0.6,
-    clientY: b.y + b.height * 0.5,
+  await page.getByTestId("asset-plate").dragTo(top, {
+    targetPosition: { x: b.width * 0.6, y: b.height * 0.5 },
   });
   await expect(page.getByLabel("Object name", { exact: true })).toHaveValue(
     "Plastic plate",

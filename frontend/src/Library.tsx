@@ -166,6 +166,11 @@ export function Library(p: Props) {
             onDragStart={(e) => {
               e.dataTransfer.setData("application/so101-asset", a.id);
               e.dataTransfer.effectAllowed = "copy";
+              // The viewport already previews the object at its drop position.
+              // Suppress the browser's snapshot of the card and its controls.
+              const dragImage = document.createElement("canvas");
+              dragImage.width = dragImage.height = 1;
+              e.dataTransfer.setDragImage(dragImage, 0, 0);
               p.drag(a);
             }}
             onDragEnd={() => p.drag(null)}
