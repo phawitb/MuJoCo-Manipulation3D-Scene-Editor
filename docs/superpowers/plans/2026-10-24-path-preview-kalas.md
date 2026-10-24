@@ -47,5 +47,5 @@
 **Interfaces:** ten named scenes through example_scene(exampleId), example_catalog().
 - [x] Create ten distinct reachable task arrangements and execute each plan and run; record actual success/lift/release/time. Refine controller from failures without weakening verification.
 - [x] Test unreachable/blocked user scenes and changed positions/orientations, update legacy tests for explicit planning.
-- [ ] Full backend/frontend/browser/build checks and visual screenshots. Independent whole-branch review, resolve important findings RED→GREEN.
-- [ ] Document dimensions/limits/results; commit, fast-forward main and push authorized repository.
+- [x] Full backend/frontend/browser/build checks and visual screenshots. Independent whole-branch review, resolve important findings RED→GREEN.
+- [x] Document dimensions/limits/results; commit, fast-forward main and push authorized repository.

@@ -47,3 +47,15 @@ Runnable scene files: [examples/tasks](../examples/tasks). HTTP runner: [example
 Screenshots: [path preview and Inspector](screenshots/path-preview.png), [drag placement preview](screenshots/placement-preview.png), [successful physical execution](screenshots/pick-place-success.png), [narrow window](screenshots/narrow-workbench.png).
 
 A regression also caught visual-only mesh shells inadvertently reducing the requested body mass. Mass now distributes across collision pieces only; the actual compiled body mass matches the Inspector value. All ten tasks were rerun after this correction; the table above uses those results.
+
+## Independent review and final decisions
+
+A fresh-context, read-only whole-branch review covered afad159..c82cf07, the spec/plan and decision ledger. Verdict: **Ready to merge**; no Critical, Important or deferred Minor findings. The reviewer inspected code and tests; the execution results above were run by the implementer. The following boundaries were explicitly reviewed and retained:
+
+- Bounded planning can reject physically possible arrangements. A valid rehearsal is required before Run; comprehensive planning is beyond this implementation. Cost: the user may need to move objects or simplify a scene.
+- Grasp assistance remains disclosed, with measured closure/proximity and release checks. Cost: a successful simulation does not prove hardware or contact-only grasp reliability.
+- Missing manufacturer measurements remain estimates with provenance. Cost: real-world replicas need physical calibration.
+- Imported meshes retain their documented convex collision hull. Cost: an imported hollow vessel cannot be relied on for insertion; use the procedural hollow containers.
+- The app remains a local workbench. Cost: public or multi-user hosting needs a separate authentication/isolation design.
+
+The earlier implementation decisions remain: preserve the existing app checkout on a dedicated feature branch (cost: no second filesystem sandbox); implement coupled changes inline with independent research/review (cost: fewer implementation perspectives); rehearse full physics before showing a runnable path (cost: calculation time and bounded solvability); identify unreported dimensions as estimates (cost: calibration needed). No external third-party models were redistributed. Main is updated by fast-forward, without force push.
