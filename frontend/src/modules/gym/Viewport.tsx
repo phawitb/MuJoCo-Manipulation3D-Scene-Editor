@@ -47,6 +47,7 @@ import type { PlacementCursor } from "./Library";
 
 interface Props {
   kind: ViewKind;
+  renderEnabled?: boolean;
   assets: Asset[];
   dragAsset: Asset | null;
   dragCursor: PlacementCursor | null;
@@ -665,6 +666,7 @@ export function Viewport(p: Props) {
         </div>
       </div>
       <Canvas
+        frameloop={p.renderEnabled === false ? "never" : "always"}
         key={`${p.kind}-${p.cameraEpoch}`}
         shadows
         dpr={[1, 1.5]}

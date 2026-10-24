@@ -36,7 +36,7 @@ def compact(packet):
 
 @mcp.tool()
 async def list_examples() -> list[dict]:
-    """List ten task examples. Load with scene_command example and exampleId; plan before run."""
+    """List available task examples. Load with scene_command example and exampleId; plan before run."""
     return await request("GET", "/api/examples")
 
 
@@ -103,6 +103,8 @@ async def get_contract() -> dict:
         "scene": await request("GET", "/api/scene-schema"),
         "command": await request("GET", "/api/command-schema"),
         "assets": await request("GET", "/api/assets"),
+        "modules": await request("GET", "/api/modules"),
+        "openapi": await request("GET", "/openapi.json"),
     }
 
 
@@ -123,6 +125,17 @@ async def camera_image(
             mime_type="image/png",
         )
 
+
+# Optional module tools share the HTTP service and its ownership/validation guards.
+_enabled = set(os.environ.get("SO101_MODULES", "gym,connection,blender").split(","))
+if "connection" in _enabled:
+    from .modules.connection.mcp import register as register_connection
+
+    register_connection(mcp, request, API)
+if "blender" in _enabled:
+    from .modules.blender.mcp import register as register_blender
+
+    register_blender(mcp, request)
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")

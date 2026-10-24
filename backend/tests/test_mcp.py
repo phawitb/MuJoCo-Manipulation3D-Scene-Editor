@@ -62,7 +62,20 @@ def test_mcp_handshake_tools_and_shared_scene():
                     "get_scene",
                     "scene_command",
                     "import_mesh",
+                    "connection_status",
+                    "connect_robot",
+                    "stop_robot",
+                    "sync_robot",
+                    "calibrate_robot",
+                    "robot_heartbeat",
+                    "scan_physical_cameras",
+                    "assign_physical_cameras",
+                    "physical_camera_image",
+                    "create_object_from_image",
                 } <= {t.name for t in listing.tools}
+                status = await client.call_tool("connection_status", {})
+                assert not status.is_error
+                assert json.loads(status.content[0].text)["connected"] is False
                 result = await client.call_tool("create_session", {})
                 assert not result.is_error
                 payload = json.loads(result.content[0].text)
