@@ -1,0 +1,2 @@
+# Reproducible tested environment; Python 3.12 recommended.
+-r requirements.lock.txt
