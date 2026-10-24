@@ -34,10 +34,27 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
+class ImportedMesh(StrictModel):
+    vertices: list[float] = Field(min_length=12, max_length=60000)
+    faces: list[int] = Field(min_length=12, max_length=120000)
+    filename: str = Field(max_length=120)
+
+    @model_validator(mode='after')
+    def geometry(self):
+        if len(self.vertices)%3 or len(self.faces)%3:
+            raise ValueError('Mesh arrays must contain triples')
+        if any(not math.isfinite(x) or abs(x)>2 for x in self.vertices):
+            raise ValueError('Mesh vertices must be finite and within 2 m')
+        if any(i<0 or i>=len(self.vertices)//3 for i in self.faces):
+            raise ValueError('Mesh face references missing vertex')
+        return self
+
+
 class SceneObject(StrictModel):
     id: str = Field(default="object", pattern=r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
     name: str = Field(default="Plastic cup", min_length=1, max_length=80)
-    asset: Literal["cup", "plate", "spoon", "cube"] = "cup"
+    asset: Literal["cup", "plate", "spoon", "cube", "mesh"] = "cup"
+    mesh: ImportedMesh | None = None
     position: Vec3 = Field(default_factory=lambda: [0, 0.08, 0.802])
     quaternion: Quat = Field(default_factory=lambda: [1, 0, 0, 0])
     scale: float = Field(default=1, ge=0.25, le=3)
@@ -48,6 +65,8 @@ class SceneObject(StrictModel):
 
     @model_validator(mode="after")
     def validate_object(self):
+        if (self.asset == 'mesh') != (self.mesh is not None):
+            raise ValueError('Imported objects require mesh data; primitives cannot contain it')
         if any(x < 0 or x > 5 for x in self.friction):
             raise ValueError("Friction must be between 0 and 5")
         if self.id in ("robot", "table", "floor"):
@@ -72,17 +91,56 @@ class Robot(StrictModel):
     )
 
 
+class Camera(StrictModel):
+    position: Vec3
+    target: Vec3
+    zoom: float = Field(default=1, gt=0, le=10000)
+    fov: float = Field(default=50, ge=15, le=100)
+
+    @model_validator(mode='after')
+    def distinct(self):
+        if math.dist(self.position, self.target) < .01:
+            raise ValueError('Camera must be away from its target')
+        return self
+
+
+class Task(StrictModel):
+    source: str | None = None
+    target: str | None = None
+
+
+def default_cameras():
+    return {
+        'main': Camera(position=[1.05,-1.25,1.55], target=[0,0,.77], fov=42),
+        'top': Camera(position=[0,0,2.6], target=[0,0,.75], zoom=320),
+        'front': Camera(position=[.65,-.75,1.3], target=[-.04,0,.82], fov=50),
+    }
+
+
 class Scene(StrictModel):
     version: Literal[1] = 1
     name: str = Field(default="Untitled workspace", max_length=100)
     table: Table = Field(default_factory=Table)
     robot: Robot = Field(default_factory=Robot)
+    task: Task = Field(default_factory=Task)
+    cameras: dict[Literal["main", "top", "front"], Camera] = Field(default_factory=default_cameras)
     objects: list[SceneObject] = Field(default_factory=list, max_length=64)
 
     @model_validator(mode="after")
     def unique_ids(self):
         if len({obj.id for obj in self.objects}) != len(self.objects):
             raise ValueError("Object IDs must be unique")
+        ids = {o.id for o in self.objects}
+        if self.task.source is not None and self.task.source not in ids:
+            raise ValueError('Task source no longer exists')
+        if self.task.target is not None and self.task.target not in ids:
+            raise ValueError('Task target no longer exists')
+        if self.task.source and self.task.source == self.task.target:
+            raise ValueError('Pick and place objects must be different')
+        self.cameras = {**default_cameras(), **self.cameras}
+        top = self.cameras['top']
+        if abs(top.position[0]-top.target[0]) > 1e-5 or abs(top.position[1]-top.target[1]) > 1e-5 or top.position[2] <= top.target[2]:
+            raise ValueError('Top camera must look vertically down')
         return self
 
 

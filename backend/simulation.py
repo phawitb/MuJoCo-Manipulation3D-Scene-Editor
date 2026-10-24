@@ -41,7 +41,9 @@ def add_object(world, obj):
             )
         )
 
-    if obj.asset == "cup":
+    if obj.asset == "mesh":
+        shapes.append(dict(type="mesh", mesh=f"imported_{obj.id}"))
+    elif obj.asset == "cup":
         shape("cylinder", [0.033, 0.002], [0, 0, -0.048])
         for i in range(20):
             a = 2 * math.pi * i / 20
@@ -134,8 +136,12 @@ def build_xml(scene):
                 size=numbers([0.016, 0.016, (t.height - 0.036) / 2]),
                 rgba=".18 .22 .25 1",
             )
+    equality = ET.SubElement(root, 'equality')
     for obj in scene.objects:
+        if obj.mesh:
+            ET.SubElement(root.find('asset'), 'mesh', name=f'imported_{obj.id}', vertex=numbers([x*obj.scale for x in obj.mesh.vertices]), face=' '.join(str(x) for x in obj.mesh.faces))
         add_object(world, obj)
+        ET.SubElement(equality, 'weld', name=f'grasp_{obj.id}', body1='gripper', body2=f'object_{obj.id}', active='false', solref='0.005 1', torquescale='.03')
     return ET.tostring(root, encoding="unicode")
 
 
@@ -180,6 +186,8 @@ class Simulation:
         self.object_bodies = {
             o.id: model.body(f"object_{o.id}").id for o in scene.objects
         }
+        from .policy import PickPlacePolicy
+        self.policy = PickPlacePolicy(self)
         self.visible_ids = [
             i for i in range(model.ngeom) if model.geom_group[i] not in (3, 4)
         ]
@@ -189,7 +197,9 @@ class Simulation:
         state_type = mujoco.mjtState.mjSTATE_INTEGRATION
         previous = np.empty(mujoco.mj_stateSize(self.model, state_type))
         mujoco.mj_getState(self.model, self.data, previous, state_type)
-        mujoco.mj_step(self.model, self.data, nstep=count)
+        for _ in range(count):
+            self.policy.update()
+            mujoco.mj_step(self.model, self.data)
         mujoco.mj_forward(self.model, self.data)
         escaped = not np.isfinite(self.data.qpos).all() or any(
             np.any(np.abs(self.data.xpos[bid]) > 5)
@@ -203,13 +213,21 @@ class Simulation:
                 "Object reached the 5 m workspace boundary. Physics paused at the last valid state; enable collision, reposition the object, or reset."
             )
 
+    def start_policy(self):
+        self.policy.start()
+        self.running = True
+
+    def stop_policy(self):
+        self.policy.cancel()
+        self.running = False
+
     def export_scene(self):
         scene = self.scene.model_copy(deep=True)
         for obj in scene.objects:
             bid = self.object_bodies[obj.id]
             obj.position = self.data.xpos[bid].tolist()
             obj.quaternion = self.data.xquat[bid].tolist()
-        # Preserve commanded joint positions, not slightly deflected measured angles.
+        scene.robot.joints = self.data.ctrl[:6].tolist()
         return scene
 
     def state(self):
@@ -230,6 +248,8 @@ class Simulation:
             running=self.running,
             time=float(self.data.time),
             contacts=int(self.data.ncon),
+            task=self.policy.packet(),
+            cameras=self.camera_poses(),
             poses=poses,
             joints=self.data.qpos[:6].tolist(),
             objects=[
@@ -241,6 +261,12 @@ class Simulation:
                 for o in self.scene.objects
             ],
         )
+
+    def camera_poses(self):
+        camera = self.data.camera('wrist_cam')
+        q = np.zeros(4)
+        mujoco.mju_mat2Quat(q, camera.xmat)
+        return {'wrist': dict(position=camera.xpos.tolist(), quaternion=q.tolist(), fov=float(self.model.cam_fovy[self.model.camera('wrist_cam').id]))}
 
     def geometry(self):
         out = []
@@ -273,6 +299,7 @@ class Simulation:
             **{**self.state(), "type": "snapshot"},
             scene=self.export_scene().model_dump(),
             geometry=self.geometry(),
+            meshes=self.imported_meshes(),
             jointInfo=[
                 dict(
                     name=self.model.joint(i).name,
@@ -282,6 +309,16 @@ class Simulation:
                 for i in range(6)
             ],
         )
+
+    def imported_meshes(self):
+        out = {}
+        for i in range(self.model.nmesh):
+            if not (self.model.mesh(i).name or '').startswith('imported_'):
+                continue
+            va, vn = self.model.mesh_vertadr[i], self.model.mesh_vertnum[i]
+            fa, fn = self.model.mesh_faceadr[i], self.model.mesh_facenum[i]
+            out[str(i)] = dict(vertices=self.model.mesh_vert[va:va+vn].reshape(-1).tolist(), faces=self.model.mesh_face[fa:fa+fn].reshape(-1).tolist())
+        return out
 
     def meshes(self):
         return compiled_meshes()
