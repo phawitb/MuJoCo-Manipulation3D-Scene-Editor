@@ -468,7 +468,7 @@ export default function App() {
         ...scene,
         robot: {
           ...scene.robot,
-          joints: sim.state?.running ? sim.state.joints : scene.robot.joints,
+          joints: sim.state?.joints || scene.robot.joints,
         },
         objects: scene.objects.map((o) => {
           const pose = sim.state?.objects.find((p) => p.id === o.id);

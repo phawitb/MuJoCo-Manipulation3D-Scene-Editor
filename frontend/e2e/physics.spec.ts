@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 for (const { example, reset } of [
   { example: "kalas-bowl-left", reset: false },
@@ -8,6 +9,7 @@ for (const { example, reset } of [
   test(`${example}${reset ? " from saved downward wrist" : ""} displays measured physical grip and completes after release`, async ({
     page,
   }) => {
+    test.setTimeout(120000);
     await page.goto("/");
     await expect(page.getByTestId("grip-physics")).toContainText(
       "Contact physics",
@@ -91,5 +93,46 @@ for (const { example, reset } of [
     const done = await (await page.request.get(`/api/sessions/${sid}`)).json();
     expect(done.task.held).toBe(false);
     expect(done.task.success).toBe(true);
+    expect(done.scene.robot.joints).toEqual(done.joints);
+    if (example === "kalas-cup-to-plate" && !reset) {
+      const change = await page.request.post(`/api/sessions/${sid}/command`, {
+        data: { type: "task", source: "spoon", target: "source_cup" },
+      });
+      expect(change.ok()).toBeTruthy();
+      const changed = await (
+        await page.request.get(`/api/sessions/${sid}`)
+      ).json();
+      expect(changed.joints).toEqual(done.joints);
+      expect(changed.objects).toEqual(done.objects);
+      expect(changed.time).toEqual(done.time);
+      const downloading = page.waitForEvent("download");
+      await page
+        .getByRole("button", { name: "Save scene", exact: true })
+        .click();
+      const file = await downloading;
+      const saved = JSON.parse(await readFile((await file.path())!, "utf8"));
+      expect(saved.scene.robot.joints).toEqual(done.scene.robot.joints);
+      await page
+        .getByRole("button", { name: "Calculate path", exact: true })
+        .click();
+      await expect(page.getByTestId("plan-status")).toContainText(
+        "Path ready",
+        { timeout: 45000 },
+      );
+      await page
+        .getByRole("button", { name: "Run simulation", exact: true })
+        .click();
+      await expect(page.getByTestId("task-status")).toContainText("Complete", {
+        timeout: 30000,
+      });
+      const returned = await (
+        await page.request.get(`/api/sessions/${sid}`)
+      ).json();
+      expect(returned.task.success).toBe(true);
+      expect(returned.task.target).toBe("source_cup");
+      await page.screenshot({
+        path: "../docs/screenshots/example11-roundtrip.png",
+      });
+    }
   });
 }

@@ -20,17 +20,17 @@ Open **http://127.0.0.1:5173**. First launch installs dependencies automatically
 1. Choose a task from the **10-example menu** and click **Load example**.
 2. Click **Calculate path**. The app rehearses the task in an isolated MuJoCo copy; your live scene stays still.
 3. Inspect the **rainbow gripper path**, then click **Run simulation**. The arm approaches, closes, lifts, transfers, lowers, releases and retreats.
-4. **Complete** appears after measured lift, release and settling. Examples take about 16 simulated seconds. Pause/Run resumes the active task; physical edits require a new calculation.
+4. **Complete** appears after measured lift, release and settling. Examples take about 18 simulated seconds. Pause/Run resumes the active task; physical edits require a new calculation.
 
 Calculation also works with user-arranged objects. Tests include moved destinations and spoon rotations of 0°, 45°, 90° and 270°. Unreachable or obstructed arrangements show a failure instead of enabling Run. This is a bounded rehearsal search, not a guarantee for every placement. Calculation can be cancelled; camera changes preserve a valid plan.
 
-The controller uses numerical IK and **physical jaw contact/friction only**. There is no grasp weld, hidden attachment or object teleportation. Both jaws must sustain opposing forces before lifting; contact loss fails the task and lets gravity act. The UI shows measured left/right grip forces. Delivery is recalculated after lifting, and success requires release, actual destination support and settling. All ten examples were audited at every 1 ms step; see the [physics audit and example 06 video](docs/PHYSICS-AUDIT.md). This is not hardware-calibrated contact dynamics or a guarantee for arbitrary scenes.
+The controller uses numerical IK and **physical jaw contact/friction only**. There is no grasp weld, hidden attachment or object teleportation. Both jaws must sustain opposing forces before lifting; contact loss fails the task and lets gravity act. The UI shows measured left/right grip forces. Delivery is recalculated after lifting, and success requires release, actual destination support and settling. All eleven examples were audited at every 1 ms step; see the [whole-arm safety audit](docs/physics/WHOLE-ARM-SAFETY.md) and [example 06 contact audit/video](docs/PHYSICS-AUDIT.md). This is not hardware-calibrated contact dynamics or a guarantee for arbitrary scenes.
 
 ## Build your own task
 
-Click **Pick object**, then click the object directly in a viewport or the scene collection. Next click the destination. **Calculate path first, then Run simulation / Space moves the arm**; Pause freezes execution, Run resumes, Stop releases and cancels. Invalid or unreachable tasks show an actionable error. Cups, bowls, plates and solid supports can be destinations; the ten bundled arrangements cover cup insertion, bowl/plate placement and surrounding objects. Bring objects closer to the arm if IK cannot reach them. Imported hollow vessels use solid collision; use the procedural cup for insertion.
+Click **Pick object**, then click the object directly in a viewport or the scene collection. Next click the destination. **Calculate path first, then Run simulation / Space moves the arm**; Pause freezes execution, Run resumes, Stop releases and cancels. Invalid or unreachable tasks show an actionable error. Cups, bowls, plates and solid supports can be destinations; the eleven bundled arrangements cover cup insertion, bowl/plate placement and surrounding objects. Bring objects closer to the arm if IK cannot reach them. Imported hollow vessels use solid collision; use the procedural cup for insertion.
 
-**Physics only** runs physics without a pick/place policy and opens the gripper. **Step** advances 20 ms while paused. While a task is paused, Step also advances its controller. Editing physical scene properties cancels the current task, recompiles and resets time/velocities.
+**Physics only** runs physics without a pick/place policy and opens the gripper. **Step** advances 20 ms while paused. While a task is paused, Step also advances its controller. Editing physical scene properties cancels the current task, recompiles and resets time/velocities. Changing only pick/place instructions preserves the measured physical state. Saved poses use measured joints, not unreachable actuator targets.
 
 ## Cameras and editing
 
@@ -87,7 +87,7 @@ Local single-user service, no authentication or hardware connection. Bind only t
 
 The object library now offers the four IKEA KALAS reconstructions and a cube; old saved scenes still load their legacy asset definitions. Placement uses pointer capture, so only the translucent object appears on the tabletop—no browser drag-card image. Escape, cancellation or release outside a viewport cancels placement.
 
-Example **11 · Spoon from cup onto plate** starts with a physically resting spoon in a cup. The controller grasps its exposed handle, clears the cup rim, and places it on a separate plate. [Contact audit](docs/physics/example11-extraction.json) · [native video](docs/screenshots/example11-extraction.mp4).
+Example **11 · Spoon from cup onto plate** starts with a physically resting spoon in a cup. The controller grasps its exposed handle, clears the cup rim, and places it on a separate plate. It is also tested with a consecutive return task, picking that settled spoon back into the original cup. Whole-arm checks include the wrist camera, self-contact, table/objects, joint limits, waypoint tracking and the complete retreat. [Contact audit](docs/physics/example11-extraction.json) · [native video](docs/screenshots/example11-extraction.mp4).
 
 ### Robot reset position
 

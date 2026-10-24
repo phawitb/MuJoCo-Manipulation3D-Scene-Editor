@@ -1,4 +1,4 @@
-import type { Snapshot, StatePacket } from "./types";
+import type { JointInfo, Snapshot, StatePacket } from "./types";
 
 export interface PacketCache {
   snapshot: Snapshot | null;
@@ -34,4 +34,15 @@ export function visiblePacket(cache: PacketCache): StatePacket | null {
   return cache.latest?.revision === cache.snapshot?.revision
     ? cache.latest
     : cache.snapshot;
+}
+
+// MuJoCo joint limits are compliant; serialized scenes require bounded angles.
+// Keep the measured pose, allowing only boundary overshoot to be normalized.
+export function persistedJoints(
+  joints: number[],
+  limits: JointInfo[],
+): number[] {
+  return joints.map((angle, index) =>
+    Math.max(limits[index].min, Math.min(limits[index].max, angle)),
+  );
 }

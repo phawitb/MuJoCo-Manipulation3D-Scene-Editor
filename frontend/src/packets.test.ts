@@ -1,5 +1,10 @@
 import { expect, it } from "vitest";
-import { mergePacket, visiblePacket, type PacketCache } from "./packets";
+import {
+  mergePacket,
+  visiblePacket,
+  persistedJoints,
+  type PacketCache,
+} from "./packets";
 import type { Snapshot, StatePacket } from "./types";
 const empty: PacketCache = {
   snapshot: null,
@@ -41,4 +46,17 @@ it("a new session resets its sequence and revision without retaining old geometr
   expect(cache.revision).toBe(1);
   expect(cache.snapshot).toBeNull();
   expect(visiblePacket(cache)).toBeNull();
+});
+
+it("persists measured joints while bounding compliant limit overshoot", () => {
+  const measured = [0.42, 1.745355215093783, -0.17454];
+  const limits = [
+    { name: "arm", min: -2, max: 2 },
+    { name: "upper", min: -0.174533, max: 1.7453292 },
+    { name: "lower", min: -0.174533, max: 1.7453292 },
+  ];
+  expect(persistedJoints(measured, limits)).toEqual([
+    0.42, 1.7453292, -0.174533,
+  ]);
+  expect(measured).toEqual([0.42, 1.745355215093783, -0.17454]);
 });

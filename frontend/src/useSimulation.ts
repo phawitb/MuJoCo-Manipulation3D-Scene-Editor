@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { readCameras } from "./math";
 import { readResetJoints } from "./robotPreferences";
-import { mergePacket, visiblePacket, type PacketCache } from "./packets";
+import {
+  mergePacket,
+  visiblePacket,
+  persistedJoints,
+  type PacketCache,
+} from "./packets";
 import type { Asset, MeshData, Scene, Snapshot, StatePacket } from "./types";
 
 export function useSimulation() {
@@ -62,6 +67,14 @@ export function useSimulation() {
           obj.quaternion = pose.quaternion;
         }
       }
+      if (visible?.joints)
+        saved.robot = {
+          ...scene.robot,
+          joints: persistedJoints(
+            visible.joints,
+            snapshotRef.current!.jointInfo,
+          ),
+        };
       recovery.current = saved;
     }
   };
@@ -298,6 +311,11 @@ export function useSimulation() {
   const currentScene = useCallback(() => {
     if (!snapshotRef.current) throw Error("Scene is still loading");
     const result = structuredClone(snapshotRef.current.scene);
+    if (live.current?.joints)
+      result.robot.joints = persistedJoints(
+        live.current.joints,
+        snapshotRef.current.jointInfo,
+      );
     for (const obj of result.objects) {
       const p = live.current?.objects.find((x) => x.id === obj.id);
       if (p) {

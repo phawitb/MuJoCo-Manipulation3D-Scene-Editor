@@ -6,6 +6,7 @@ from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation
 from .catalog import profile
 from .grasp import jaw_contacts
+from .safety import collision_issue, swept_collision
 
 
 class PickPlacePolicy:
@@ -43,7 +44,7 @@ class PickPlacePolicy:
             target=self.target,
         )
 
-    def ik(self, position, rotation, seed, pinch=None):
+    def ik(self, position, rotation, seed, pinch=None, opening=0.65):
         m = self.sim.model
         d = mujoco.MjData(m)
         d.qpos[:] = self.sim.data.qpos
@@ -81,6 +82,12 @@ class PickPlacePolicy:
                 xtol=1e-9,
                 gtol=1e-9,
             )
+            d.qpos[:6] = np.r_[fit.x, opening]
+            mujoco.mj_forward(m, d)
+            if collision_issue(
+                self.sim, d, kinematic=True, ignore_source=True
+            ) or swept_collision(self.sim, seed, np.r_[fit.x, opening], d):
+                continue
             if best is None or np.linalg.norm(fit.fun) < np.linalg.norm(best.fun):
                 best = fit
             if (
@@ -88,6 +95,10 @@ class PickPlacePolicy:
                 and np.linalg.norm(fit.fun[3:]) < 0.005
             ):
                 break
+        if best is None:
+            raise ValueError(
+                "No collision-free grasp pose within reach. Reposition the task."
+            )
         if np.linalg.norm(best.fun[:3]) > 0.008 or np.linalg.norm(best.fun[3:]) > 0.018:
             raise ValueError(
                 f"Target outside comfortable reach (IK error {np.linalg.norm(best.fun[:3]) * 1000:.0f} mm). Move objects closer to the arm or load the example."
@@ -135,7 +146,12 @@ class PickPlacePolicy:
         grip = source.xpos.copy()
         if sp["family"] == "spoon":
             grip += source.xmat.reshape(3, 3) @ np.array(
-                [sp["grasp"] * src.scale, 0, 0]
+                [
+                    (sp["grasp"] + self.configuration.get("grasp_along_offset", 0))
+                    * src.scale,
+                    0,
+                    0,
+                ]
             )
         self.grip_point = grip
         # Close across the handle, not along an arbitrary radial direction.
@@ -191,9 +207,9 @@ class PickPlacePolicy:
         def move(label, pos, rot, opening=opening, duration=1.8):
             nonlocal seed
             seed = (
-                self.ik(np.array(pos), rot, seed, pinch=pinch)
+                self.ik(np.array(pos), rot, seed, pinch=pinch, opening=opening)
                 if upright
-                else self.ik(np.array(pos) + rot @ offset, rot, seed)
+                else self.ik(np.array(pos) + rot @ offset, rot, seed, opening=opening)
             )
             seed[5] = opening
             plans.append((label, seed.copy(), duration))
@@ -236,7 +252,10 @@ class PickPlacePolicy:
         bowl = a.xpos + a.xmat.reshape(3, 3) @ np.array(
             [sp.get("bowl", 0) * src.scale if sp["family"] == "spoon" else 0, 0, 0]
         )
-        point = r.T @ (bowl - b.xpos)
+        # Center the utensil on a plate. Aiming its bowl at the plate center
+        # pulls the hand back toward the robot base and can fold it into itself.
+        placement_point = a.xpos if dp["family"] == "plate" else bowl
+        point = r.T @ (placement_point - b.xpos)
         inserting = sp["family"] == "spoon" and dp["family"] == "cup"
         axis_index = 0 if sp["family"] == "spoon" else 2
         world_axis = a.xmat.reshape(3, 3)[:, axis_index]
@@ -288,8 +307,20 @@ class PickPlacePolicy:
                     bounds=(lo, hi),
                     max_nfev=200,
                 )
+                scratch.qpos[:6] = np.r_[fit.x, 0.8 if label == "Retreat" else -0.17]
+                mujoco.mj_forward(m, scratch)
+                if collision_issue(
+                    s, scratch, kinematic=True, ignore_source=True
+                ) or swept_collision(
+                    s, seed, np.r_[fit.x, 0.8 if label == "Retreat" else -0.17], scratch
+                ):
+                    continue
                 if best is None or np.linalg.norm(fit.fun) < np.linalg.norm(best.fun):
                     best = fit
+            if best is None:
+                raise ValueError(
+                    f"No collision-free {label.lower()} pose within reach. Reposition the destination."
+                )
             if (
                 np.linalg.norm(best.fun[:3]) > 0.008
                 or np.linalg.norm(best.fun[3:]) > 0.018
@@ -349,6 +380,7 @@ class PickPlacePolicy:
 
     def fail(self, message):
         self.release()
+        self.success = False
         self.status = "failed"
         self.phase = "Needs attention"
         self.message = message
@@ -459,6 +491,13 @@ class PickPlacePolicy:
         blend = t * t * (3 - 2 * t)
         s.data.ctrl[:] = self.start_q + (q - self.start_q) * blend
         if elapsed < duration:
+            return
+        # Closing fingers intentionally stop against the object, but the five
+        # arm joints must actually reach each waypoint before advancing.
+        if np.max(np.abs(s.data.qpos[:5] - q[:5])) > 0.03:
+            self.fail(
+                "Arm did not reach the commanded pose. Motion stopped; check obstacles and joint limits."
+            )
             return
         if label == "Settle":
             try:

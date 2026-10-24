@@ -1,0 +1,114 @@
+[
+  {
+    "example": "kalas-cup-front",
+    "success": true,
+    "steps": 17907,
+    "selfPenetrationMm": 0,
+    "otherArmPenetrationMm": 0.08525614334127915,
+    "graspPenetrationMm": 0.5133455692518226,
+    "finalArmErrorRad": 0.00047101519418402127,
+    "configuration": {}
+  },
+  {
+    "example": "kalas-cup-left",
+    "success": true,
+    "steps": 17907,
+    "selfPenetrationMm": 0,
+    "otherArmPenetrationMm": 0.011510475304776438,
+    "graspPenetrationMm": 0.5172277471949293,
+    "finalArmErrorRad": 0.00042888515440397956,
+    "configuration": {}
+  },
+  {
+    "example": "kalas-cup-right",
+    "success": true,
+    "steps": 17907,
+    "selfPenetrationMm": 0,
+    "otherArmPenetrationMm": 0.01767097746151872,
+    "graspPenetrationMm": 0.6597981883248,
+    "finalArmErrorRad": 0.0004827929544163334,
+    "configuration": {}
+  },
+  {
+    "example": "kalas-cup-near",
+    "success": true,
+    "steps": 17907,
+    "selfPenetrationMm": 0,
+    "otherArmPenetrationMm": 0.017053233987005634,
+    "graspPenetrationMm": 0.49239557768195724,
+    "finalArmErrorRad": 0.00038570265180692953,
+    "configuration": {}
+  },
+  {
+    "example": "kalas-bowl-front",
+    "success": true,
+    "steps": 17907,
+    "selfPenetrationMm": 0,
+    "otherArmPenetrationMm": 0.01462821186779557,
+    "graspPenetrationMm": 0.5008844128299272,
+    "finalArmErrorRad": 0.00044604943185411194,
+    "configuration": {}
+  },
+  {
+    "example": "kalas-bowl-left",
+    "success": true,
+    "steps": 17907,
+    "selfPenetrationMm": 0,
+    "otherArmPenetrationMm": 0.012718581256807639,
+    "graspPenetrationMm": 0.5052900145243696,
+    "finalArmErrorRad": 0.0004179987621402148,
+    "configuration": {}
+  },
+  {
+    "example": "kalas-plate-front",
+    "success": true,
+    "steps": 17907,
+    "selfPenetrationMm": 0,
+    "otherArmPenetrationMm": 0.013618239108852381,
+    "graspPenetrationMm": 0.5058326894968738,
+    "finalArmErrorRad": 0.000470855752408017,
+    "configuration": {}
+  },
+  {
+    "example": "kalas-plate-angle",
+    "success": true,
+    "steps": 17907,
+    "selfPenetrationMm": 0,
+    "otherArmPenetrationMm": 0.009962642437661429,
+    "graspPenetrationMm": 0.5024345116201205,
+    "finalArmErrorRad": 0.0004599249286545426,
+    "configuration": {}
+  },
+  {
+    "example": "kalas-cup-clutter",
+    "success": true,
+    "steps": 17907,
+    "selfPenetrationMm": 0,
+    "otherArmPenetrationMm": 0.051536915633238374,
+    "graspPenetrationMm": 0.5133455792654289,
+    "finalArmErrorRad": 0.0004710154695128921,
+    "configuration": {}
+  },
+  {
+    "example": "kalas-bowl-clutter",
+    "success": true,
+    "steps": 17907,
+    "selfPenetrationMm": 0,
+    "otherArmPenetrationMm": 0.01462821186779557,
+    "graspPenetrationMm": 0.5003624187040467,
+    "finalArmErrorRad": 0.000460504163529718,
+    "configuration": {}
+  },
+  {
+    "example": "kalas-cup-to-plate",
+    "success": true,
+    "steps": 17907,
+    "selfPenetrationMm": 0,
+    "otherArmPenetrationMm": 0,
+    "graspPenetrationMm": 0.5197435072114125,
+    "finalArmErrorRad": 0.00044543468243563034,
+    "configuration": {
+      "reverse_grasp": true
+    }
+  }
+]

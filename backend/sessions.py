@@ -218,9 +218,15 @@ class Session:
                 self.invalidate_plan()
                 s.step(cmd.count)
             elif kind == "task":
-                scene = s.export_scene()
+                scene = s.scene.model_copy(deep=True)
                 scene.task = Task(source=cmd.source, target=cmd.target)
-                s.load(Scene.model_validate(scene.model_dump()))
+                scene = Scene.model_validate(scene.model_dump())
+                # Instruction edits do not alter positions, velocities or targets.
+                from .policy import PickPlacePolicy
+
+                s.scene.task = scene.task
+                s.policy = PickPlacePolicy(s)
+                s.revision += 1
             elif kind in ("object_add", "object_update", "object_remove", "robot"):
                 scene = s.export_scene()
                 if kind == "object_add":

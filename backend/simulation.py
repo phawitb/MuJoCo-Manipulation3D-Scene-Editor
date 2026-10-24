@@ -231,8 +231,22 @@ class Simulation:
         previous = np.empty(mujoco.mj_stateSize(self.model, state_type))
         mujoco.mj_getState(self.model, self.data, previous, state_type)
         for _ in range(count):
+            active = self.policy.status == "running"
             self.policy.update()
             mujoco.mj_step(self.model, self.data)
+            mujoco.mj_forward(self.model, self.data)
+            if active:
+                from .safety import collision_issue, joint_issue
+
+                issue = collision_issue(self) or joint_issue(self)
+                if issue:
+                    self.policy.fail(
+                        issue + " Motion stopped; adjust the scene and calculate again."
+                    )
+                # Pause at the exact terminal state that was checked, rather
+                # than executing unchecked substeps left in the UI batch.
+                if not self.running:
+                    break
         mujoco.mj_forward(self.model, self.data)
         escaped = not np.isfinite(self.data.qpos).all() or any(
             np.any(np.abs(self.data.xpos[bid]) > 5)
@@ -260,7 +274,9 @@ class Simulation:
             bid = self.object_bodies[obj.id]
             obj.position = self.data.xpos[bid].tolist()
             obj.quaternion = self.data.xquat[bid].tolist()
-        scene.robot.joints = self.data.ctrl[:6].tolist()
+        scene.robot.joints = np.clip(
+            self.data.qpos[:6], self.model.jnt_range[:6, 0], self.model.jnt_range[:6, 1]
+        ).tolist()
         return scene
 
     def state(self):

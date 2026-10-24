@@ -47,46 +47,24 @@ def physics_fingerprint(sim):
 
 
 def unwanted_contact(sim):
-    objects = sim.object_bodies
-    source = objects.get(sim.policy.source)
-    target = objects.get(sim.policy.target)
-    other = set(objects.values()) - {source, target}
-    robot = set(range(1, sim.model.nbody)) - set(objects.values())
-    for contact in sim.data.contact:
-        if contact.dist > -0.004:
-            continue
-        a, b = (int(sim.model.geom_bodyid[g]) for g in contact.geom)
-        if (a in other and (b in robot or (b == source and sim.policy.held))) or (
-            b in other and (a in robot or (a == source and sim.policy.held))
-        ):
-            return "Path meets another object. Move the obstruction or reposition the task."
-        if (a in robot and b == 0) or (b in robot and a == 0):
-            return "Arm path intersects the table. Move the task closer or adjust its position."
-    return None
+    from .safety import collision_issue, joint_issue
+
+    return collision_issue(sim) or joint_issue(sim)
 
 
 def initial_overlap(sim):
     """A path cannot repair solids that already overlap at its starting state."""
-    objects = {sim.object_bodies[obj.id]: obj.name for obj in sim.scene.objects}
-    robot = set(range(1, sim.model.nbody)) - objects.keys()
-    contacts = sorted(sim.data.contact, key=lambda contact: contact.dist)
-    for contact in contacts:
-        if contact.dist > -0.004:
-            break
-        bodies = [int(sim.model.geom_bodyid[g]) for g in contact.geom]
-        if not any(body in robot for body in bodies):
-            continue
+    from .safety import collision_issue, joint_issue
 
-        def label(body, geom):
-            if body in objects:
-                return objects[body]
-            name = sim.model.body(body).name if body else sim.model.geom(geom).name
-            return "wrist camera" if name == "camera_mount" else name.replace("_", " ")
-
-        a, b = [label(body, geom) for body, geom in zip(bodies, contact.geom)]
+    joint = joint_issue(sim)
+    if joint:
+        return joint
+    issue = collision_issue(sim)
+    if issue:
         return (
-            f"Starting pose overlaps: {a} / {b} ({-contact.dist * 1000:.1f} mm). "
-            "Move the object or adjust SO-101 Joint positions before calculating. "
+            "Starting pose overlaps: "
+            + issue.split(": ", 1)[-1]
+            + " Move the object or adjust SO-101 Joint positions before calculating. "
             "Save the corrected reset pose if needed."
         )
     return None
@@ -113,6 +91,8 @@ def calculate_plan(sim, cancel=None):
         {"lift": 0.12, "transfer_clearance": 0.15},
         {"reverse_grasp": True},
         {"reverse_grasp": True, "lift": 0.08, "transfer_clearance": 0.10},
+        {"grasp_along_offset": 0.03},
+        {"grasp_along_offset": 0.03, "reverse_grasp": True},
     ]
     failures = []
     for configuration in configurations:
