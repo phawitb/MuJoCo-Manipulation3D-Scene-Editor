@@ -151,12 +151,17 @@ class Session:
             if kind == "load":
                 s.load(Scene.model_validate(cmd.scene))
             elif kind == "reset":
-                s.load(Scene(cameras=s.scene.cameras))
+                scene = Scene(cameras=s.scene.cameras)
+                scene.robot.reset_joints = list(s.scene.robot.reset_joints)
+                scene.robot.joints = list(scene.robot.reset_joints)
+                s.load(scene)
             elif kind == "example":
                 scene = (
                     example_scene(cmd.exampleId) if cmd.exampleId else example_scene()
                 )
                 scene.cameras = s.scene.cameras
+                scene.robot.reset_joints = list(s.scene.robot.reset_joints)
+                scene.robot.joints = list(scene.robot.reset_joints)
                 s.load(scene)
             elif kind == "plan":
                 if s.policy.status == "running":

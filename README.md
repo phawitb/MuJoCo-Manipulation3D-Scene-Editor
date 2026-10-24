@@ -88,3 +88,9 @@ Local single-user service, no authentication or hardware connection. Bind only t
 The object library now offers the four IKEA KALAS reconstructions and a cube; old saved scenes still load their legacy asset definitions. Placement uses pointer capture, so only the translucent object appears on the tabletop—no browser drag-card image. Escape, cancellation or release outside a viewport cancels placement.
 
 Example **11 · Spoon from cup onto plate** starts with a physically resting spoon in a cup. The controller grasps its exposed handle, clears the cup rim, and places it on a separate plate. [Contact audit](docs/physics/example11-extraction.json) · [native video](docs/screenshots/example11-extraction.mp4).
+
+### Robot reset position
+
+Select **SCENE COLLECTION → SO-101 arm**, adjust **Joint positions**, then click **Save current pose as reset**. **Reset scene** and **Load example** start from that saved pose. **Apply saved pose** previews it in the current scene; **Use folded default** restores and saves the compact folded pose. The saved angles travel with scene files and are remembered for new workspaces in the same browser profile. Existing sessions and imported scenes keep their own settings.
+
+Front and Back cameras have only their setup editor and expand control; their Reset camera buttons have been removed. Main and Top retain their reset controls.

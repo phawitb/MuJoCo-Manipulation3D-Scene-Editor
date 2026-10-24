@@ -75,3 +75,16 @@ The camera-lock regression first reproduced Front moving after drag/wheel/F, the
 One independent review found the native Top azimuth reversed relative to the browser. A PNG-based regression reproduced the robot above center, then passed after correcting azimuth to 0. The corrected native screenshot was inspected. The minor hardcoded Chrome test option was changed to honor PLAYWRIGHT_CHROMIUM. No findings remain deferred. Browser storage denial remains an in-memory fallback; persistence is scoped to the same browser profile/origin. Physics/material calibration is unchanged.
 
 Verification: **96 backend tests passed** (182.16 s), then both native-render checks passed (3.02 s), covering **97 distinct backend cases**. **30 browser scenarios passed** in 2.4 minutes; **13 frontend unit tests**, TypeScript, production build and focused lint passed. **140 distinct automated cases** total. Nine live scenes were backed up/restored and their object positions and camera values verified unchanged. The existing large-bundle warning remains.
+
+## Saved reset position and fixed-camera controls (2026-10-24)
+
+The SO-101 inspector now saves a six-joint reset pose, applies the saved pose, or restores the compact folded default. Reset scene and all eleven example loaders use the saved angles. The scene schema validates both current and reset joints against the actual model ranges before swapping state. Legacy files preserve their current pose and receive the folded reset default. Explicit saves persist in browser storage after the server acknowledges them; existing scenes take precedence over browser preferences.
+
+- Backend: **101 tests passed** (206.10 s), including all eleven examples at 1/17/33-step batches, physical grip/release checks, saved-pose reset/example/serialization tests, atomic rejection and legacy migration.
+- Frontend unit tests: **13 passed**. Production build passed; the existing large-bundle warning remains. Python E/F checks excluding line length passed. The unrestricted lint profile also reports existing import-order/style findings; that broader style cleanup is outside this change.
+- The folded default `[0, -1.5, 1.5, -1.5, 0, 0]` stays contact-free over two simulated seconds, with joint drift under 0.002 rad. An additional every-1-ms audit of the first four seconds of all eleven example policies found **zero robot self-contact penetration** while unfolding.
+- Browser suite: **31 scenarios passed** (2.5 minutes); **145 automated tests total**. The new browser regression verifies save, reset, example loading, scene reconnect with a conflicting browser preference, a fresh browser context, and restoring the folded default. The final expanded regression also passed independently (8.4 seconds). Front/Back no longer expose Reset camera. Existing Main/Top controls remain.
+- Independent read-only review found no actionable defects. Its suggested conflicting-preference regression was added and passed.
+- The local service was updated after backing up all eleven open sessions. Restored object data, camera settings and current joint targets matched the backups exactly; the additive reset setting uses the folded default. Backups remain ignored and are not published.
+
+![Robot reset position controls](screenshots/robot-reset-position.png)

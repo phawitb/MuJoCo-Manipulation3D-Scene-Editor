@@ -201,12 +201,13 @@ class Simulation:
         """Compile before swapping live state; a failed edit never destroys work."""
         scene = Scene.model_validate(scene.model_dump())
         model = mujoco.MjModel.from_xml_string(build_xml(scene))
-        for i, value in enumerate(scene.robot.joints):
-            lo, hi = model.jnt_range[i]
-            if not math.isfinite(value) or not lo <= value <= hi:
-                raise ValueError(
-                    f"{model.joint(i).name} must be between {lo:.3f} and {hi:.3f} rad"
-                )
+        for field in ("joints", "reset_joints"):
+            for i, value in enumerate(getattr(scene.robot, field)):
+                lo, hi = model.jnt_range[i]
+                if not math.isfinite(value) or not lo <= value <= hi:
+                    raise ValueError(
+                        f"{field}: {model.joint(i).name} must be between {lo:.3f} and {hi:.3f} rad"
+                    )
         data = mujoco.MjData(model)
         data.qpos[:6] = scene.robot.joints
         data.ctrl[:] = scene.robot.joints

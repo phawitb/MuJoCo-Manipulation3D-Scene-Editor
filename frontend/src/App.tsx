@@ -25,6 +25,7 @@ import { CameraEditor } from "./CameraEditor";
 import { ImportDialog } from "./ImportDialog";
 import { Library, type PlacementCursor } from "./Library";
 import { Inspector } from "./Inspector";
+import { rememberResetJoints } from "./robotPreferences";
 import { Viewport } from "./Viewport";
 import { useSimulation } from "./useSimulation";
 import { nudgePosition, objectDimensions } from "./interaction";
@@ -144,6 +145,22 @@ export default function App() {
         back: cameraRef.current.back,
       };
       await sim.command("load", { scene });
+    });
+  };
+  const saveResetPose = (joints: number[], apply = false) => {
+    if (!editableRef.current) return;
+    void safe(async () => {
+      await sim.command("robot", {
+        patch: { reset_joints: joints, ...(apply ? { joints } : {}) },
+      });
+      try {
+        rememberResetJoints(joints);
+        notify("Reset position saved");
+      } catch {
+        notify(
+          "Reset position saved in this scene. Browser storage is unavailable; save the scene file to keep it.",
+        );
+      }
     });
   };
   const patchObject = (id: string, patch: Partial<SceneObject>) =>
@@ -787,7 +804,7 @@ export default function App() {
               </button>
               <button
                 aria-label="Reset scene"
-                title="Reset scene; preserve cameras"
+                title="Reset scene to saved robot pose; preserve cameras"
                 disabled={
                   sim.busy ||
                   !["connected", "recovery-error"].includes(sim.status)
@@ -796,7 +813,7 @@ export default function App() {
                   void safe(async () => {
                     await sim.command("reset");
                     setSelected(null);
-                    notify("Scene reset · camera views preserved");
+                    notify("Scene reset · saved robot pose applied");
                   })
                 }
               >
@@ -863,6 +880,7 @@ export default function App() {
             editable={editable}
             patchObject={patchObject}
             editScene={editScene}
+            saveResetPose={saveResetPose}
             remove={remove}
             duplicate={duplicate}
             frame={frame}

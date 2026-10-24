@@ -2235,3 +2235,51 @@ p {
 .sim-controls {
   margin-inline: auto;
 }
+
+.reset-position > p {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+.reset-joint-values {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.reset-joint-values > span {
+  background: #ffffff05;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 6px;
+  font-size: 11px;
+}
+.reset-joint-values small {
+  color: var(--muted);
+  margin-right: 7px;
+}
+.reset-position button {
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  font-size: 11px;
+}
+.reset-position .save-reset-pose {
+  width: 100%;
+  background: var(--mint);
+  color: #203b32;
+  font-weight: 600;
+}
+.reset-pose-actions {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+.reset-pose-actions button {
+  flex: 1;
+}
+.reset-position .reset-pose-hint {
+  font-size: 10px;
+  margin: 0;
+}

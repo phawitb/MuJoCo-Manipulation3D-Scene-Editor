@@ -33,7 +33,13 @@ export interface Scene {
   version: 1;
   name: string;
   table: Table;
-  robot: { model: "so101"; position: Vec3; quaternion: Quat; joints: number[] };
+  robot: {
+    model: "so101";
+    position: Vec3;
+    quaternion: Quat;
+    joints: number[];
+    reset_joints?: number[];
+  };
   objects: SceneObject[];
   task: { source: string | null; target: string | null };
   cameras: Record<"main" | "top" | "front" | "back", CameraState>;

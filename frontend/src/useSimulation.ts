@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { readCameras } from "./math";
+import { readResetJoints } from "./robotPreferences";
 import { mergePacket, visiblePacket, type PacketCache } from "./packets";
 import type { Asset, MeshData, Scene, Snapshot, StatePacket } from "./types";
 
@@ -212,9 +213,17 @@ export function useSimulation() {
           !p.requestId
         ) {
           const cameras = readCameras();
+          const resetJoints = readResetJoints(p.jointInfo);
           command("load", {
             scene: {
               ...p.scene,
+              robot: resetJoints
+                ? {
+                    ...p.scene.robot,
+                    joints: resetJoints,
+                    reset_joints: resetJoints,
+                  }
+                : p.scene.robot,
               cameras: {
                 main: cameras.main,
                 top: cameras.top,
@@ -225,7 +234,9 @@ export function useSimulation() {
           }).catch((e) => {
             updatePacket(p);
             setStatus("connected");
-            setError(`Camera preferences could not be restored: ${e.message}`);
+            setError(
+              `Workspace preferences could not be restored: ${e.message}`,
+            );
           });
           return;
         }

@@ -40,8 +40,8 @@ All commands accept optional unique `requestId`; edits accept optional current `
 |---|---|
 | `snapshot` | Read current state |
 | `load` | `scene`: full Scene; compile atomically while paused |
-| `reset` | Empty default scene, preserve cameras, pause |
-| `example` | Optional `exampleId` from /api/examples; load arrangement/instruction, preserve cameras, paused only. Omitted ID retains the legacy example. |
+| `reset` | Empty scene, preserve cameras and `robot.reset_joints`, initialize joints from the saved reset pose, pause |
+| `example` | Optional `exampleId` from /api/examples; load arrangement/instruction, preserve cameras and `robot.reset_joints`, initialize joints from the saved reset pose, paused only. Omitted ID retains the legacy example. |
 | `plan` | Rehearse asynchronously without moving live physics; poll plan.status, inspect points, require verified:true before run |
 | `task` | `source`, `target`: object IDs or null; must exist and differ; paused only |
 | `run` | Start an unchanged verified plan or resume a paused active task; **moves arm**; rejects missing/stale/failed plans |
@@ -52,7 +52,7 @@ All commands accept optional unique `requestId`; edits accept optional current `
 | `object_add` | `object`: valid SceneObject |
 | `object_update` | `id`, `patch`: partial object properties (ID immutable) |
 | `object_remove` | `id`; clears task references to the removed object |
-| `robot` | `joints`: six targets and/or `patch` for base position/quaternion/joints |
+| `robot` | `joints`: six targets and/or `patch` for base position/quaternion/joints/reset_joints |
 | `camera` | `camera`: main/top/front/back; `value`: position,target,zoom,fov; allowed during execution |
 
 Table dimensions, scene name, entire imported geometry and any other schema field are editable via `load`. Physical edits require pause and recompile, resetting time/velocity and cancelling a paused policy. Camera-only edits do not reset simulation. Top camera must be directly above its target; wrist is model-mounted and not a free camera.
@@ -139,3 +139,9 @@ All ten examples are rehearsed and independently executed with contact-only dyna
 Back camera defaults to position `[-0.30, 0, 1.65]`, look-at target `[0, 0, 0.80]` and 55° field of view: above the default robot base, looking obliquely down onto the table. Missing back-camera records in older scenes are filled automatically. `camera_image` accepts `view: "back"`; camera edits use `camera: "back"`.
 
 Editor navigation: Main allows orbit/pan/zoom; Top allows zoom only and uses +X as screen-up (the default robot base at -X is below the center). Front/Back use their saved setup, and Wrist follows its robot mount. Native Top images use the same orientation. `scene.table.color` accepts a six-digit hex color, default `#b8c2bf`; older scenes receive this default automatically. Table geometry, contacts and dimensions are unchanged by color. Explicit Apply/Reset camera setup persists in the browser profile for new workspaces; existing sessions and opened scene files retain their own authoritative camera settings.
+
+### Robot reset position
+
+`scene.robot.reset_joints` contains six joint targets in radians, ordered shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper. Both current and reset joints are checked against the model limits before replacing the scene. The default compact folded pose is `[0, -1.5, 1.5, -1.5, 0, 0]`; older files keep their current joints and receive this reset default. `reset` and `example` preserve the saved reset joints and use them as the initial joint positions. Base transforms continue to follow the new scene/example's setup.
+
+To save a reset pose through HTTP or MCP, send `{"type":"robot","patch":{"reset_joints":[0,-1.5,1.5,-1.5,0,0]}}`. Include `joints` in that patch to apply the pose immediately as an editor change. This setting is serialized in scene files. The browser's explicit Save current pose / Use folded default actions additionally remember it in local storage for new workspaces; opening an existing session or scene file respects that scene's setting. These are paused editing actions, not animated policy motions.

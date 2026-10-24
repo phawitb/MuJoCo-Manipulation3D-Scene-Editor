@@ -12,6 +12,7 @@ import {
 import type { Asset, JointInfo, Scene, SceneObject, Vec3 } from "./types";
 import { fromDegrees, rotationDegrees } from "./math";
 import { AssetArt } from "./Library";
+import { foldedJoints } from "./robotPreferences";
 
 function NumberField({
   value,
@@ -157,6 +158,7 @@ interface Props {
   editable: boolean;
   patchObject: (id: string, patch: Partial<SceneObject>) => void;
   editScene: (fn: (s: Scene) => void) => void;
+  saveResetPose: (joints: number[], apply?: boolean) => void;
   remove: () => void;
   duplicate: () => void;
   frame: () => void;
@@ -430,6 +432,57 @@ export function Inspector(p: Props) {
                   }
                 />
               ))}
+            </section>
+            <section className="inspector-section reset-position">
+              <h4>
+                Reset position <span>SAVED POSE</span>
+              </h4>
+              <p>
+                Adjust the joint sliders above, then save. Reset scene and Load
+                example start from this pose.
+              </p>
+              <div
+                className="reset-joint-values"
+                aria-label="Saved reset joint angles"
+              >
+                {(p.scene.robot.reset_joints || foldedJoints()).map((v, i) => (
+                  <span key={i} title={p.joints[i]?.name.replaceAll("_", " ")}>
+                    <small>J{i + 1}</small>
+                    {((v * 180) / Math.PI).toFixed(1)}°
+                  </span>
+                ))}
+              </div>
+              <button
+                className="save-reset-pose"
+                disabled={disabled}
+                onClick={() => p.saveResetPose([...p.scene.robot.joints])}
+              >
+                Save current pose as reset
+              </button>
+              <div className="reset-pose-actions">
+                <button
+                  disabled={disabled}
+                  onClick={() =>
+                    p.editScene((s) => {
+                      s.robot.joints = [
+                        ...(s.robot.reset_joints || foldedJoints()),
+                      ];
+                    })
+                  }
+                >
+                  Apply saved pose
+                </button>
+                <button
+                  disabled={disabled}
+                  onClick={() => p.saveResetPose(foldedJoints(), true)}
+                >
+                  Use folded default
+                </button>
+              </div>
+              <p className="reset-pose-hint">
+                Kept in scene files and remembered for new workspaces on this
+                browser.
+              </p>
             </section>
             <section className="inspector-section">
               <h4>Base transform</h4>

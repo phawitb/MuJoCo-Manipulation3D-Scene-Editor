@@ -99,12 +99,19 @@ class Table(StrictModel):
     height: float = Field(default=0.75, ge=0.4, le=1.2)
 
 
+# Compact, contact-free folded pose; radians in actuator order.
+FOLDED_JOINTS = (0, -1.5, 1.5, -1.5, 0, 0)
+
+
 class Robot(StrictModel):
     model: Literal["so101"] = "so101"
     position: Vec3 = Field(default_factory=lambda: [-0.30, 0, 0.754])
     quaternion: Quat = Field(default_factory=lambda: [1, 0, 0, 0])
     joints: list[float] = Field(
-        default_factory=lambda: [0, -0.7, 0.7, 0.3, 0, 0.6], min_length=6, max_length=6
+        default_factory=lambda: list(FOLDED_JOINTS), min_length=6, max_length=6
+    )
+    reset_joints: list[float] = Field(
+        default_factory=lambda: list(FOLDED_JOINTS), min_length=6, max_length=6
     )
 
 

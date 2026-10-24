@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("back camera edits, persists, renders and resets; legacy scenes still open", async ({
+test("back camera edits, persists, renders without a reset button; legacy scenes still open", async ({
   page,
   request,
 }) => {
@@ -33,14 +33,9 @@ test("back camera edits, persists, renders and resets; legacy scenes still open"
     expect((await image.body()).subarray(0, 8)).toEqual(
       Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     );
-    await page.getByRole("button", { name: "Reset back camera" }).click();
-    await expect
-      .poll(
-        async () =>
-          (await (await request.get("/api/sessions/" + sid)).json()).scene
-            .cameras.back.position[2],
-      )
-      .toBeCloseTo(1.65, 8);
+    await expect(
+      page.getByRole("button", { name: "Reset back camera" }),
+    ).toHaveCount(0);
     await page.setViewportSize({ width: 800, height: 900 });
     await expect(
       page.getByRole("button", { name: "Back", exact: true }),
@@ -53,13 +48,11 @@ test("back camera edits, persists, renders and resets; legacy scenes still open"
     delete cameras.back;
     delete state.scene.cameras.back;
     const file = JSON.stringify({ version: 1, scene: state.scene, cameras });
-    await page
-      .getByTestId("scene-file")
-      .setInputFiles({
-        name: "legacy.json",
-        mimeType: "application/json",
-        buffer: Buffer.from(file),
-      });
+    await page.getByTestId("scene-file").setInputFiles({
+      name: "legacy.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(file),
+    });
     await expect(page.getByText("Scene loaded", { exact: true })).toBeVisible();
     await page
       .getByRole("button", { name: "Edit back camera", exact: true })

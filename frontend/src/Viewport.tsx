@@ -627,7 +627,7 @@ export function Viewport(p: Props) {
               <Settings2 size={14} />
             </button>
           )}
-          {p.kind !== "wrist" && (
+          {(p.kind === "main" || p.kind === "top") && (
             <>
               {p.kind === "main" && (
                 <button
