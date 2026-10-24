@@ -65,8 +65,47 @@ def unwanted_contact(sim):
     return None
 
 
+def initial_overlap(sim):
+    """A path cannot repair solids that already overlap at its starting state."""
+    objects = {sim.object_bodies[obj.id]: obj.name for obj in sim.scene.objects}
+    robot = set(range(1, sim.model.nbody)) - objects.keys()
+    contacts = sorted(sim.data.contact, key=lambda contact: contact.dist)
+    for contact in contacts:
+        if contact.dist > -0.004:
+            break
+        bodies = [int(sim.model.geom_bodyid[g]) for g in contact.geom]
+        if not any(body in robot for body in bodies):
+            continue
+
+        def label(body, geom):
+            if body in objects:
+                return objects[body]
+            name = sim.model.body(body).name if body else sim.model.geom(geom).name
+            return "wrist camera" if name == "camera_mount" else name.replace("_", " ")
+
+        a, b = [label(body, geom) for body, geom in zip(bodies, contact.geom)]
+        return (
+            f"Starting pose overlaps: {a} / {b} ({-contact.dist * 1000:.1f} mm). "
+            "Move the object or adjust SO-101 Joint positions before calculating. "
+            "Save the corrected reset pose if needed."
+        )
+    return None
+
+
 def calculate_plan(sim, cancel=None):
     cancel = cancel or threading.Event()
+    if cancel.is_set():
+        return idle_plan("Calculation cancelled.")
+    overlap = initial_overlap(sim)
+    if overlap:
+        return dict(
+            status="failed",
+            points=[],
+            duration=0.0,
+            message=overlap,
+            verified=False,
+            attempts=0,
+        )
     started = time.monotonic()
     configurations = [
         {},

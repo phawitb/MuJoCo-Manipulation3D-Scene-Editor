@@ -185,7 +185,9 @@ def example_scene(example_id=None):
     ]
     if example_id == "kalas-cup-to-plate":
         # Resting pose measured after a contact-only cup placement, not an attachment.
-        objects[0].position = [-0.09978705, 0.10469775, 0.82612671]
+        # Translate cup and resting spoon together to leave room for a downward
+        # wrist camera at the user's saved reset pose, before any motion starts.
+        objects[0].position = [-0.09978705, 0.13469775, 0.82612671]
         objects[0].quaternion = [
             -0.539318277375,
             0.219028808934,
@@ -197,7 +199,7 @@ def example_scene(example_id=None):
                 id="source_cup",
                 name="Source · KALAS cup",
                 asset="kalas_cup",
-                position=[-0.12, 0.09, 0.79044761],
+                position=[-0.12, 0.12, 0.79044761],
                 mass=0.030,
                 color="#eca895",
             )

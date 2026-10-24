@@ -42,6 +42,10 @@ test("scene selection sets task and front camera is editable", async ({
     .click();
   await page.getByRole("button", { name: "Choose pick object" }).click();
   await page.locator('[data-testid^="object-kalas_spoon_"]').click();
+  // Destination picking starts after the source selection is acknowledged.
+  await expect(
+    page.getByRole("button", { name: "Choose place object" }),
+  ).toHaveClass(/choosing/);
   await page.locator('[data-testid^="object-kalas_cup_"]').click();
   await expect(page.getByTestId("task-instruction")).toContainText(
     "IKEA KALAS spoon",

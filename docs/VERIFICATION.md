@@ -88,3 +88,23 @@ The SO-101 inspector now saves a six-joint reset pose, applies the saved pose, o
 - The local service was updated after backing up all eleven open sessions. Restored object data, camera settings and current joint targets matched the backups exactly; the additive reset setting uses the folded default. Backups remain ignored and are not published.
 
 ![Robot reset position controls](screenshots/robot-reset-position.png)
+
+## Example 11 with a downward-wrist reset pose (2026-10-24)
+
+The reported failure was reproduced from the actual failing session, which used saved joints `[0, -1.5, 1.5, 0.985937, 0, 0]`. At the original example coordinates, the wrist camera collision geometry already overlapped the source cup by **10.62 mm** before motion. All five rehearsal candidates failed during Settle at 0.01 s. Earlier default-pose tests did not cover this saved-pose combination.
+
+The Example 11 preset now translates the source cup and its resting spoon together **30 mm along +Y**, preserving their relative resting transform. The saved robot pose, destination plate, collision shapes, friction, solver and contact-only grasp remain unchanged. Existing scene files keep their coordinates. A new preflight rejects deep initial robot overlaps before rehearsal and identifies the part, object and overlap depth, instead of reporting a generic path obstruction after five retries.
+
+Four regressions were observed failing before the fix, then passed: physical extraction with the reported wrist angle and nearby 0.8/1.1 rad variants, plus non-mutating rejection of the original overlapping arrangement. Each successful run verifies the source cup ends within 5 mm of its initial position. Folded and legacy extended starting poses were also rehearsed successfully. The browser now includes a saved-downward-wrist Example 11 scenario, with measured opposing forces and released completion; its focused run passed in 25.4 s.
+
+An independent every-1-ms execution audit of the reported reset pose completed in **17.907 simulated seconds**. All **6,602/6,602 carrying samples** had secure opposing contact; minimum opposing jaw force was **3.583 N**, unsupported carrying time **0 ms**, robot/source-cup penetration **0 mm**, maximum cup displacement **3.593 mm**, and active/model attachment constraints **zero**.
+
+Read-only review found no actionable defects and independently verified that all eleven default presets pass the new overlap preflight. Arbitrary saved poses can still be invalid; the fix does not bypass collision rejection or promise success for every arrangement.
+
+![Example 11 physical grasp from the saved downward-wrist pose](screenshots/contact-grip-kalas-cup-to-plate-custom-reset.png)
+
+Verification for this fix: the full backend suite passed **105 tests** in 235.32 s; frontend unit tests passed **13**, and the production build and Python E/F checks passed. The expanded browser reproduction also checks the old-scene diagnostic before loading the corrected example and physically completing it (30.2 s). An initial full browser pass exposed an existing test race in `scene selection sets task and front camera is editable`: it clicked the destination before the source acknowledgement changed picking mode. The test now waits for the visible destination-selection state before its second click.
+
+The service update preserved all fourteen open scenes exactly. The identified failed session was then corrected by translating only its cup/spoon pair 30 mm along +Y, after verifying its objects and robot settings still matched the captured failure. Its existing saved reset pose and cameras were retained; a live rehearsal now reports **Path ready**. The other sessions were not rearranged.
+
+The final complete browser rerun passed **32/32 scenarios** in 3.0 minutes, including the old-overlap diagnostic followed by successful physical execution from the custom reset pose. Combined with 105 backend and 13 frontend unit tests, **150 automated tests passed** for the final implementation.
