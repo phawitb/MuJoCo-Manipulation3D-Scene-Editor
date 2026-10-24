@@ -7,7 +7,7 @@ if [[ ! -x .venv/bin/python || ! -d frontend/node_modules ]]; then
 fi
 # Do not stop other applications that happen to use these ports.
 for port in 8765 5173; do
-  if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+  if lsof -nP -i4TCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
     echo "Port $port is already in use. Close the existing Scene Studio instance or free this port."
     exit 1
   fi
