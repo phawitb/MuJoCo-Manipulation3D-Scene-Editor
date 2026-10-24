@@ -108,6 +108,13 @@ def command_schema():
     return Command.model_json_schema()
 
 
+@app.get("/api/examples")
+def examples():
+    from .examples import example_catalog
+
+    return example_catalog()
+
+
 @app.get("/api/sessions")
 def list_sessions(request: Request):
     return [

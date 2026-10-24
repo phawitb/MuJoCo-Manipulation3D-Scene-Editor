@@ -9,6 +9,14 @@ from typing import Literal, Any
 from .schema import Scene, SceneObject, Task, Camera
 from .simulation import Simulation
 from .examples import example_scene
+from .planning import (
+    EXECUTOR,
+    PLANNING_SLOTS,
+    idle_plan,
+    clone_simulation,
+    calculate_plan,
+    physics_fingerprint,
+)
 
 
 class Conflict(ValueError):
@@ -22,6 +30,7 @@ class Command(BaseModel):
         "reset",
         "example",
         "run",
+        "plan",
         "pause",
         "stop",
         "physics",
@@ -46,6 +55,7 @@ class Command(BaseModel):
     camera: Literal["main", "top", "front"] | None = None
     value: dict | None = None
     count: int = Field(default=10, ge=1, le=2500)
+    exampleId: str | None = Field(default=None, max_length=80)
 
 
 class Session:
@@ -60,11 +70,49 @@ class Session:
         self.mode = "policy"
         self.closed = False
         self.runner = None
+        self.plan = idle_plan()
+        self.plan_future = None
+        self.plan_cancel = threading.Event()
+        self.plan_dirty = False
+
+    def invalidate_plan(self):
+        self.plan_cancel.set()
+        if self.plan_future:
+            self.plan_future.cancel()
+        self.plan_future = None
+        self.plan = idle_plan("Scene changed. Calculate a new path before running.")
+
+    def collect_plan(self):
+        if self.plan_future and self.plan_future.done():
+            future, self.plan_future = self.plan_future, None
+            try:
+                result = future.result()
+                if result.get("fingerprint") and result[
+                    "fingerprint"
+                ] != physics_fingerprint(self.sim):
+                    self.invalidate_plan()
+                else:
+                    self.plan = result
+            except Exception:
+                self.plan = {
+                    **idle_plan(
+                        "Calculation failed. Simplify the scene and try again."
+                    ),
+                    "status": "failed",
+                }
+            self.sequence += 1
+            self.plan_dirty = True
 
     def packet(self, snapshot=True):
         with self.lock:
+            self.collect_plan()
             p = self.sim.snapshot() if snapshot else self.sim.state()
             p.update(sessionId=self.id, sequence=self.sequence, mode=self.mode)
+            p["plan"] = {
+                k: v
+                for k, v in self.plan.items()
+                if k not in ("configuration", "fingerprint")
+            }
             return p
 
     def execute(self, cmd: Command):
@@ -72,6 +120,7 @@ class Session:
             self.touched = time.monotonic()
             s = self.sim
             kind = cmd.type
+            self.collect_plan()
             editing = kind in (
                 "load",
                 "example",
@@ -80,6 +129,7 @@ class Session:
                 "object_update",
                 "object_remove",
                 "robot",
+                "plan",
             )
             if editing and s.running:
                 raise ValueError("Pause simulation before editing")
@@ -103,23 +153,64 @@ class Session:
             elif kind == "reset":
                 s.load(Scene(cameras=s.scene.cameras))
             elif kind == "example":
-                scene = example_scene()
+                scene = (
+                    example_scene(cmd.exampleId) if cmd.exampleId else example_scene()
+                )
                 scene.cameras = s.scene.cameras
                 s.load(scene)
+            elif kind == "plan":
+                if s.policy.status == "running":
+                    raise ValueError(
+                        "Stop the paused task before calculating a new path."
+                    )
+                if self.plan_future:
+                    return self.packet()
+                if not PLANNING_SLOTS.acquire(blocking=False):
+                    raise ValueError(
+                        "Planner is busy. Wait for another calculation to finish, then try again."
+                    )
+                self.plan_cancel = threading.Event()
+                try:
+                    captured = clone_simulation(s)
+                    self.plan = {
+                        **idle_plan("Rehearsing the task in an isolated simulation…"),
+                        "status": "calculating",
+                    }
+                    self.plan_future = EXECUTOR.submit(
+                        calculate_plan, captured, self.plan_cancel
+                    )
+                    self.plan_future.add_done_callback(
+                        lambda _: PLANNING_SLOTS.release()
+                    )
+                except Exception:
+                    PLANNING_SLOTS.release()
+                    raise
             elif kind == "run":
+                if s.policy.status != "running":
+                    if not self.plan.get("verified") or self.plan.get(
+                        "fingerprint"
+                    ) != physics_fingerprint(s):
+                        self.invalidate_plan()
+                        raise ValueError(
+                            "Calculate a successful path for this scene before running."
+                        )
+                    s.policy.configuration = self.plan["configuration"]
                 s.start_policy()
                 self.mode = "policy"
             elif kind == "pause":
                 s.running = False
             elif kind == "stop":
+                self.invalidate_plan()
                 s.stop_policy()
             elif kind == "physics":
+                self.invalidate_plan()
                 s.stop_policy()
                 s.running = True
                 self.mode = "physics"
             elif kind == "step":
                 if s.running:
                     raise ValueError("Pause before stepping")
+                self.invalidate_plan()
                 s.step(cmd.count)
             elif kind == "task":
                 scene = s.export_scene()
@@ -159,6 +250,8 @@ class Session:
                 scene = Scene.model_validate(scene.model_dump())
                 s.scene.cameras = scene.cameras
                 s.revision += 1
+            if editing and kind != "plan" or kind == "reset":
+                self.invalidate_plan()
             self.sequence += 1
             return self.packet()
 
@@ -191,6 +284,12 @@ class Session:
                 return None
             try:
                 self.sim.step(count)
+                if not self.sim.running:
+                    self.plan.update(
+                        status="idle",
+                        verified=False,
+                        message="Task finished. Calculate again before a new run.",
+                    )
                 self.sequence += 1
                 return self.packet(snapshot=not self.sim.running)
             except ValueError as exc:
@@ -207,6 +306,11 @@ class Session:
         while not self.closed:
             await asyncio.sleep(1 / 30)
             now = time.monotonic()
+            with self.lock:
+                self.collect_plan()
+                if self.plan_dirty:
+                    self.plan_dirty = False
+                    self.broadcast(self.packet())
             if self.sim.running:
                 accum += min(now - last, 0.1)
                 count = min(int(accum / 0.002), 50)
@@ -265,6 +369,8 @@ class Registry:
     async def delete(self, sid):
         s = self.get(sid)
         s.closed = True
+        with s.lock:
+            s.invalidate_plan()
         s.runner.cancel()
         await asyncio.gather(s.runner, return_exceptions=True)
         await asyncio.to_thread(s.sim.stop_policy)

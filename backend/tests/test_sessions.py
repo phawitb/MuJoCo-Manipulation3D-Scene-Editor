@@ -23,6 +23,15 @@ def test_shared_http_and_websocket_session_and_revision_guard():
                 },
             )
             assert r.status_code == 409
+            import time
+
+            c.post(f"/api/sessions/{sid}/command", json={"type": "plan"})
+            deadline = time.monotonic() + 30
+            while (
+                c.get(f"/api/sessions/{sid}").json()["plan"]["status"] == "calculating"
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.02)
             r = c.post(f"/api/sessions/{sid}/command", json={"type": "run"})
             assert r.json()["running"] and r.json()["task"]["status"] == "running"
             r = c.post(f"/api/sessions/{sid}/command", json={"type": "pause"})

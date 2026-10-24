@@ -73,6 +73,22 @@ def test_mcp_handshake_tools_and_shared_scene():
                 assert not result.is_error
                 state = httpx.get(url + "/api/sessions/" + sid).json()
                 assert state["scene"]["task"] == {"source": "spoon", "target": "cup"}
+                examples = await client.call_tool("list_examples", {})
+                assert not examples.is_error
+                result = await client.call_tool(
+                    "scene_command", {"session_id": sid, "command": {"type": "plan"}}
+                )
+                assert not result.is_error
+                deadline = time.monotonic() + 30
+                while time.monotonic() < deadline:
+                    result = await client.call_tool("get_scene", {"session_id": sid})
+                    if (
+                        json.loads(result.content[0].text)["plan"]["status"]
+                        != "calculating"
+                    ):
+                        break
+                    await asyncio.sleep(0.03)
+                assert json.loads(result.content[0].text)["plan"]["verified"]
                 result = await client.call_tool(
                     "scene_command", {"session_id": sid, "command": {"type": "run"}}
                 )

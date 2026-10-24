@@ -14,7 +14,7 @@ if urlparse(API).hostname not in ("localhost", "127.0.0.1", "::1"):
     raise ValueError("SO101_API_URL must address the local editor service")
 mcp = MCPServer(
     "SO-101 Scene Studio",
-    instructions="Start the editor service first. Call list_sessions and use the explicit sessionId shown in the browser to control that same scene. Create a session for independent headless work. SI meters, Z up, WXYZ quaternions. Read scene and revision before editing. Run executes the selected IK task with disclosed grasp assistance; physics only is a separate command. Poll get_scene to observe completion; never assume command acceptance means task success.",
+    instructions="Start the editor service first. Call list_sessions and use the explicit sessionId shown in the browser to control that same scene. Create a session for independent headless work. SI meters, Z up, WXYZ quaternions. Read scene and revision before editing. Calculate with plan, poll plan.status until ready, inspect its points, then run. Run executes the selected IK task with disclosed grasp assistance; physics only is a separate command. Poll get_scene to observe completion; never assume command acceptance means task success.",
 )
 
 
@@ -32,6 +32,12 @@ async def request(method, path, **kwargs):
 
 def compact(packet):
     return {k: v for k, v in packet.items() if k not in ("geometry", "meshes", "poses")}
+
+
+@mcp.tool()
+async def list_examples() -> list[dict]:
+    """List ten task examples. Load with scene_command example and exampleId; plan before run."""
+    return await request("GET", "/api/examples")
 
 
 @mcp.tool()

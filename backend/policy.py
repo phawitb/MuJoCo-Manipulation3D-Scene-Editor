@@ -9,6 +9,7 @@ import mujoco
 import numpy as np
 from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation
+from .catalog import profile
 
 
 class PickPlacePolicy:
@@ -24,6 +25,7 @@ class PickPlacePolicy:
         self.elapsed = 0.0
         self.source = None
         self.target = None
+        self.configuration = {}
 
     def packet(self):
         return dict(
@@ -97,19 +99,24 @@ class PickPlacePolicy:
         dst = next(o for o in s.scene.objects if o.id == self.target)
         if not src.collision or not dst.collision:
             raise ValueError("Enable collision on both task objects.")
-        if dst.asset not in ("cup", "plate", "cube", "mesh"):
+        sp, dp = profile(src), profile(dst)
+        if dp["family"] not in ("cup", "bowl", "plate", "cube", "mesh"):
             raise ValueError("Choose a cup, plate or solid support as the destination.")
         source = s.data.body(f"object_{src.id}")
         target = s.data.body(f"object_{dst.id}")
         if target.xmat.reshape(3, 3)[2, 2] < 0.95:
             raise ValueError("Place the destination upright before running.")
         grip = source.xpos.copy()
-        if src.asset == "spoon":
-            grip += source.xmat.reshape(3, 3) @ np.array([-0.04 * src.scale, 0, 0])
+        if sp["family"] == "spoon":
+            grip += source.xmat.reshape(3, 3) @ np.array(
+                [sp["grasp"] * src.scale, 0, 0]
+            )
         self.grip_point = grip
         # Arm pitch plane is radial; gripper's local Z points away from fingers.
         shoulder = s.data.body("shoulder").xpos
-        yaw = math.atan2(grip[1] - shoulder[1], grip[0] - shoulder[0])
+        yaw = math.atan2(
+            grip[1] - shoulder[1], grip[0] - shoulder[0]
+        ) + self.configuration.get("yaw_offset", 0)
         radial = np.array([math.cos(yaw), math.sin(yaw), 0.0])
         tangent = np.array([-math.sin(yaw), math.cos(yaw), 0.0])
         down = np.column_stack([radial, tangent, [0, 0, 1]])
@@ -122,12 +129,13 @@ class PickPlacePolicy:
             seed[5] = opening
             plans.append((label, seed.copy(), duration))
 
-        move("Approach", grip + [0, 0, 0.10], down)
+        lift = self.configuration.get("lift", 0.10)
+        move("Approach", grip + [0, 0, lift], down)
         move("Descend", grip + [0, 0, 0.003], down, duration=1.5)
         closed = seed.copy()
         closed[5] = -0.03
         plans.append(("Grasp", closed, 0.8))
-        move("Lift", grip + [0, 0, 0.10], down, -0.03)
+        move("Lift", grip + [0, 0, lift], down, -0.03)
         # The remaining path is planned from the measured grasp transform,
         # after closing. Thin objects can rotate slightly while being grasped.
         self.steps = plans
@@ -149,8 +157,10 @@ class PickPlacePolicy:
         b2 = s.object_bodies[self.source]
         obj = next(o for o in s.scene.objects if o.id == self.source)
         actual = d.xpos[b2].copy()
-        if obj.asset == "spoon":
-            actual += d.xmat[b2].reshape(3, 3) @ np.array([-0.04 * obj.scale, 0, 0])
+        if profile(obj)["family"] == "spoon":
+            actual += d.xmat[b2].reshape(3, 3) @ np.array(
+                [profile(obj)["grasp"] * obj.scale, 0, 0]
+            )
         distance = np.linalg.norm(d.site("gripperframe").xpos - actual)
         if distance > 0.025 or d.qpos[5] > 0.25:
             self.fail(
@@ -171,15 +181,29 @@ class PickPlacePolicy:
         m, d = s.model, s.data
         src = next(o for o in s.scene.objects if o.id == self.source)
         dst = next(o for o in s.scene.objects if o.id == self.target)
+        sp, dp = profile(src), profile(dst)
         b = d.body("gripper")
         a = d.body(f"object_{self.source}")
         target = d.body(f"object_{self.target}")
         r = b.xmat.reshape(3, 3)
         bowl = a.xpos + a.xmat.reshape(3, 3) @ np.array(
-            [0.05 * src.scale if src.asset == "spoon" else 0, 0, 0]
+            [sp.get("bowl", 0) * src.scale if sp["family"] == "spoon" else 0, 0, 0]
         )
         point = r.T @ (bowl - b.xpos)
-        axis = r.T @ a.xmat.reshape(3, 3)[:, 0]
+        inserting = sp["family"] == "spoon" and dp["family"] == "cup"
+        axis_index = 0 if sp["family"] == "spoon" else 2
+        world_axis = a.xmat.reshape(3, 3)[:, axis_index]
+        axis = r.T @ world_axis
+        desired_axis = (
+            np.array([0, 0, -1])
+            if inserting
+            else (
+                np.array([world_axis[0], world_axis[1], 0])
+                if sp["family"] == "spoon"
+                else np.array([0, 0, 1])
+            )
+        )
+        desired_axis = desired_axis / np.linalg.norm(desired_axis)
         seed = self.steps[-1][1].copy()
         scratch = mujoco.MjData(m)
         scratch.qpos[:] = d.qpos
@@ -193,9 +217,16 @@ class PickPlacePolicy:
                 mujoco.mj_kinematics(m, scratch)
                 hand = scratch.body("gripper")
                 rotation = hand.xmat.reshape(3, 3)
+                orientation = rotation @ axis
+                # For shallow receivers keep the spoon level but let its yaw
+                # follow the arm's reachable plane instead of overconstraining it.
+                angle_error = (
+                    np.array([orientation[2]])
+                    if sp["family"] == "spoon" and not inserting
+                    else orientation - desired_axis
+                )
                 return np.r_[
-                    hand.xpos + rotation @ point - position,
-                    0.06 * (rotation @ axis - np.array([0, 0, -1])),
+                    hand.xpos + rotation @ point - position, 0.06 * angle_error
                 ]
 
             best = None
@@ -222,28 +253,31 @@ class PickPlacePolicy:
             seed = np.r_[best.x, -0.03]
             self.steps.append((label, seed.copy(), duration))
 
-        if src.asset == "spoon" and dst.asset == "cup":
-            carry("Transfer", target.xpos + [0, 0, 0.13 * dst.scale], 2.8)
-            carry("Place", target.xpos + [0, 0, 0.012 * dst.scale], 2.0)
+        height = dp["dimensions"][2] * dst.scale
+        clearance = self.configuration.get("transfer_clearance", 0.13)
+        if inserting:
+            carry(
+                "Transfer", target.xpos + [0, 0, max(clearance, height / 2 + 0.06)], 2.8
+            )
+            carry(
+                "Place",
+                target.xpos + [0, 0, min(0.012 * dst.scale, height * 0.15)],
+                2.0,
+            )
         else:
-            # Generic center-over-support placement; imported hulls use bounds.
-            position = target.xpos.copy()
-            top = {"cup": 0.05, "plate": 0.006, "cube": 0.02}.get(
-                dst.asset, 0.05
-            ) * dst.scale
-            position[2] += top + 0.035 * src.scale
-            current = mujoco.MjData(m)
-            current.qpos[:] = d.qpos
-            current.qpos[:6] = seed
-            mujoco.mj_forward(m, current)
-            rotation = current.body("gripper").xmat.reshape(3, 3).copy()
-            for label, p in [
-                ("Transfer", position + [0, 0, 0.08]),
-                ("Place", position),
-            ]:
-                seed = self.ik(p, rotation, seed)
-                seed[5] = -0.03
-                self.steps.append((label, seed.copy(), 2.0))
+            # Place the measured carried point over the receiving surface.
+            z = (
+                -height / 2 + dp.get("thickness", 0.004) * dst.scale
+                if dp["family"] in ("bowl", "plate")
+                else height / 2
+            )
+            position = target.xpos + [
+                0,
+                0,
+                z + sp["dimensions"][2] * src.scale / 2 + 0.014,
+            ]
+            carry("Transfer", position + [0, 0, clearance], 2.8)
+            carry("Place", position, 2.0)
         opened = seed.copy()
         opened[5] = 0.8
         self.steps.append(("Release", opened, 0.8))
@@ -282,22 +316,29 @@ class PickPlacePolicy:
         dst = next(o for o in s.scene.objects if o.id == self.target)
         a = d.body(f"object_{src.id}")
         b = d.body(f"object_{dst.id}")
+        sp, dp = profile(src), profile(dst)
         relative = b.xmat.reshape(3, 3).T @ (a.xpos - b.xpos)
-        if src.asset == "spoon" and dst.asset == "cup":
-            bowl = a.xpos + a.xmat.reshape(3, 3) @ np.array([0.05 * src.scale, 0, 0])
+        if sp["family"] == "spoon":
+            bowl = a.xpos + a.xmat.reshape(3, 3) @ np.array(
+                [sp["bowl"] * src.scale, 0, 0]
+            )
             rel = b.xmat.reshape(3, 3).T @ (bowl - b.xpos)
             inside = (
-                np.linalg.norm(rel[:2]) < 0.030 * dst.scale
-                and -0.052 * dst.scale < rel[2] < 0.044 * dst.scale
+                np.linalg.norm(rel[:2])
+                < (dp.get("rim", dp["dimensions"][0] / 2) - 0.005) * dst.scale
+                and -dp["dimensions"][2] / 2 * dst.scale - 0.003
+                < rel[2]
+                < dp["dimensions"][2] / 2 * dst.scale + 0.006
             )
         else:
-            radius = {"cup": 0.03, "plate": 0.065, "cube": 0.02}.get(
-                dst.asset, 0.04
-            ) * dst.scale
+            radius = (dp.get("rim", min(dp["dimensions"][:2]) / 2) - 0.003) * dst.scale
             inside = (
                 np.linalg.norm(relative[:2]) < radius
-                and relative[2] > 0
-                and relative[2] < 0.15
+                and relative[2] > -dp["dimensions"][2] * dst.scale / 2
+                and relative[2]
+                < dp["dimensions"][2] * dst.scale / 2
+                + sp["dimensions"][2] * src.scale
+                + 0.015
             )
         adr = mujoco.mj_name2id(
             s.model, mujoco.mjtObj.mjOBJ_BODY, f"object_{self.source}"
