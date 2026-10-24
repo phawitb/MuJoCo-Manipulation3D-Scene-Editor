@@ -113,6 +113,14 @@ def calculate_plan(sim, cancel=None):
             break
         trial = clone_simulation(sim)
         trial.policy.configuration = configuration
+        # Reserve another 2 mm for position uncertainty during rehearsal. This
+        # changes acceptance only, not the trajectory; execution still enforces
+        # the physical 4 mm pre-closing clearance on the measured state.
+        from .grasp import CUP_MIN_CLEARANCE, CUP_POSITION_RESERVE
+
+        trial.policy.minimum_approach_clearance = (
+            CUP_MIN_CLEARANCE + CUP_POSITION_RESERVE
+        )
         points = [trial.data.site("gripperframe").xpos.tolist()]
         start = float(trial.data.time)
         max_z = (

@@ -5,7 +5,7 @@ import numpy as np
 from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation
 from .catalog import profile
-from .grasp import jaw_contacts
+from .grasp import jaw_contacts, cup_approach_clearance, CUP_MIN_CLEARANCE
 from .contents import find_contents, contents_issue
 from .safety import collision_issue, swept_collision
 
@@ -25,6 +25,7 @@ class PickPlacePolicy:
         self.target = None
         self.configuration = {}
         self.contents = []
+        self.minimum_approach_clearance = CUP_MIN_CLEARANCE
         self.contact = jaw_contacts(sim, None)
         self.contact_since = None
         self.lost_since = None
@@ -229,14 +230,28 @@ class PickPlacePolicy:
         )
         pinch[2] += self.configuration.get("grasp_depth_offset", 0)
         offset = s.model.site_pos[s.model.site("gripperframe").id] - pinch
-        opening = float(np.clip((width + 0.005 - 0.016) / 0.078, -0.08, 0.7))
+        # Centre a generous approach gap around a cup rim. This is an asymmetric
+        # gripper: opening the moving jaw alone leaves the fixed finger tight
+        # against the wall. Re-centre the open pose, then return to the pinch
+        # pose as the fingers close, coordinating arm motion with the moving jaw.
+        clearance = 0.020 if rim_grasp else 0.005
+        opening = float(np.clip((width + clearance - 0.016) / 0.078, -0.08, 0.7))
+        approach_pinch = pinch.copy()
+        if rim_grasp:
+            approach_pinch[0] += clearance / 2
         seed = s.data.qpos[:6].copy()
         plans = []
 
         def move(label, pos, rot, opening=opening, duration=1.8):
             nonlocal seed
             seed = (
-                self.ik(np.array(pos), rot, seed, pinch=pinch, opening=opening)
+                self.ik(
+                    np.array(pos),
+                    rot,
+                    seed,
+                    pinch=approach_pinch if rim_grasp and opening > 0 else pinch,
+                    opening=opening,
+                )
                 if upright or rim_grasp
                 else self.ik(np.array(pos) + rot @ offset, rot, seed, opening=opening)
             )
@@ -250,9 +265,15 @@ class PickPlacePolicy:
             down,
         )
         move("Descend", grip, down, duration=1.5)
-        closed = seed.copy()
+        closed = (
+            self.ik(grip, down, seed, pinch=pinch, opening=-0.17)
+            if rim_grasp
+            else seed.copy()
+        )
         closed[5] = -0.17
         plans.append(("Grasp", closed, 2.5))
+        if rim_grasp:
+            seed = closed.copy()
         move("Lift", grip + [0, 0, lift], down, -0.17)
         # The remaining path is planned from the measured grasp transform,
         # after closing. Thin objects can rotate slightly while being grasped.
@@ -559,6 +580,17 @@ class PickPlacePolicy:
                 "Arm did not reach the commanded pose. Motion stopped; check obstacles and joint limits."
             )
             return
+        if label == "Descend":
+            source = next(o for o in s.scene.objects if o.id == self.source)
+            if profile(source)["family"] == "cup":
+                clearance = cup_approach_clearance(s, self.source)
+                if clearance < self.minimum_approach_clearance:
+                    self.fail(
+                        f"Cup approach clearance is only {clearance * 1000:.1f} mm; "
+                        f"at least {self.minimum_approach_clearance * 1000:g} mm is required on both sides before closing. "
+                        "Try another rim direction or reposition the cup."
+                    )
+                    return
         if label == "Settle":
             try:
                 self.plan_pick()

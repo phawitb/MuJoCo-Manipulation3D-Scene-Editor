@@ -8,12 +8,12 @@
     "configuration": {
       "rim_angle": -1.5707963267948966
     },
-    "lift": 0.07394365604431308,
+    "lift": 0.07356394922163012,
     "heldSteps": 6602,
     "secureSteps": 6602,
     "maxUnsupportedSeconds": 0.0,
-    "maxJawPenetration": 0.00015367933558049643,
-    "minimumJawForce": 5.733599030369635,
+    "maxJawPenetration": 0.00016343768004826553,
+    "minimumJawForce": 5.513767555464513,
     "phases": [
       {
         "phase": "Settle",
@@ -63,44 +63,44 @@
         "phase": "Lift",
         "time": 6.30300000000044,
         "grip": {
-          "leftForce": 5.844566057940107,
-          "rightForce": 5.733599030369635,
+          "leftForce": 5.64561667932678,
+          "rightForce": 5.513767555464513,
           "opposing": true,
           "secure": true,
-          "maxPenetration": 0.00015306918538981226
+          "maxPenetration": 0.0001628609200171906
         }
       },
       {
         "phase": "Transfer",
         "time": 8.103000000000948,
         "grip": {
-          "leftForce": 6.481282273845916,
-          "rightForce": 6.408320375305389,
+          "leftForce": 6.4832762766953245,
+          "rightForce": 6.411043415511445,
           "opposing": true,
           "secure": true,
-          "maxPenetration": 0.0001246026799537755
+          "maxPenetration": 0.00012964850347127205
         }
       },
       {
         "phase": "Place",
         "time": 10.903999999999396,
         "grip": {
-          "leftForce": 6.478229708014149,
-          "rightForce": 6.475748764233854,
+          "leftForce": 6.474134611908181,
+          "rightForce": 6.473753765613046,
           "opposing": true,
           "secure": true,
-          "maxPenetration": 0.00013498451173184233
+          "maxPenetration": 0.00014011285923859885
         }
       },
       {
         "phase": "Release",
         "time": 12.904999999998287,
         "grip": {
-          "leftForce": 6.4572853736221125,
-          "rightForce": 6.417406489152866,
+          "leftForce": 6.456241928824242,
+          "rightForce": 6.417306030306901,
           "opposing": true,
           "secure": true,
-          "maxPenetration": 0.0001290265290727416
+          "maxPenetration": 0.00013339787160215758
         }
       },
       {

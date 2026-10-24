@@ -8,12 +8,12 @@
     "configuration": {
       "rim_angle": -1.5707963267948966
     },
-    "lift": 0.07294110558346589,
+    "lift": 0.07301007991965713,
     "heldSteps": 6602,
     "secureSteps": 6602,
     "maxUnsupportedSeconds": 0.0,
-    "maxJawPenetration": 0.00016926278329489975,
-    "minimumJawForce": 5.359230544661246,
+    "maxJawPenetration": 0.0001742636153671481,
+    "minimumJawForce": 5.73445967053422,
     "phases": [
       {
         "phase": "Settle",
@@ -52,55 +52,55 @@
         "phase": "Grasp",
         "time": 3.802999999999692,
         "grip": {
-          "leftForce": 0.13638157266262135,
+          "leftForce": 0.0,
           "rightForce": 0.0,
           "opposing": false,
           "secure": false,
-          "maxPenetration": 6.297591301750562e-06
+          "maxPenetration": 0.0
         }
       },
       {
         "phase": "Lift",
         "time": 6.30300000000044,
         "grip": {
-          "leftForce": 5.54469768565379,
-          "rightForce": 5.359230544661246,
+          "leftForce": 5.893458215867485,
+          "rightForce": 5.73445967053422,
           "opposing": true,
           "secure": true,
-          "maxPenetration": 0.00016897201993464864
+          "maxPenetration": 0.00015220108913336283
         }
       },
       {
         "phase": "Transfer",
         "time": 8.103000000000948,
         "grip": {
-          "leftForce": 6.540820761228437,
-          "rightForce": 6.4669520756403225,
+          "leftForce": 6.548988848720651,
+          "rightForce": 6.486533150321848,
           "opposing": true,
           "secure": true,
-          "maxPenetration": 0.00014073957535648703
+          "maxPenetration": 0.00014601063645329026
         }
       },
       {
         "phase": "Place",
         "time": 10.903999999999396,
         "grip": {
-          "leftForce": 6.473740290187127,
-          "rightForce": 6.483212402308116,
+          "leftForce": 6.4773124276955,
+          "rightForce": 6.486239476988853,
           "opposing": true,
           "secure": true,
-          "maxPenetration": 0.00015941185690342662
+          "maxPenetration": 0.00016086078659578176
         }
       },
       {
         "phase": "Release",
         "time": 12.904999999998287,
         "grip": {
-          "leftForce": 6.452108089027513,
-          "rightForce": 6.411619317847493,
+          "leftForce": 6.4552442979829685,
+          "rightForce": 6.413989441522998,
           "opposing": true,
           "secure": true,
-          "maxPenetration": 0.0001531248135610433
+          "maxPenetration": 0.00015460866585677448
         }
       },
       {
