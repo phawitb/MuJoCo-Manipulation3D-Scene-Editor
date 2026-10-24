@@ -7,6 +7,7 @@ from functools import lru_cache
 import mujoco
 import numpy as np
 from .schema import Scene
+from .catalog import KALAS, visual_mesh, collision_shapes
 
 MODEL_DIR = Path(__file__).resolve().parents[1] / "assets" / "so101"
 KINDS = {
@@ -41,7 +42,20 @@ def add_object(world, obj):
             )
         )
 
-    if obj.asset == "mesh":
+    if obj.asset in KALAS:
+        shapes.append(
+            dict(
+                type="mesh",
+                mesh=f"catalog_{obj.id}",
+                group="2",
+                contype="0",
+                conaffinity="0",
+                mass="0",
+            )
+        )
+        for kind, size, pos, kw in collision_shapes(obj.asset):
+            shape(kind, size, pos, group="3", **kw)
+    elif obj.asset == "mesh":
         shapes.append(dict(type="mesh", mesh=f"imported_{obj.id}"))
     elif obj.asset == "cup":
         shape("cylinder", [0.033, 0.002], [0, 0, -0.048])
@@ -75,9 +89,7 @@ def add_object(world, obj):
         shape("box", [0.02, 0.02, 0.02])
     color = [int(obj.color[i : i + 2], 16) / 255 for i in (1, 3, 5)] + [1]
     for i, props in enumerate(shapes):
-        ET.SubElement(
-            body,
-            "geom",
+        attrs = dict(
             name=f"obj_{obj.id}_{i}",
             mass=str(obj.mass / len(shapes)),
             rgba=numbers(color),
@@ -86,8 +98,9 @@ def add_object(world, obj):
             conaffinity=str(int(obj.collision)),
             solref="0.01 1",
             condim="6",
-            **props,
         )
+        attrs.update(props)
+        ET.SubElement(body, "geom", **attrs)
 
 
 def build_xml(scene):
@@ -138,6 +151,15 @@ def build_xml(scene):
             )
     equality = ET.SubElement(root, "equality")
     for obj in scene.objects:
+        if obj.asset in KALAS:
+            vertices, faces = visual_mesh(obj.asset)
+            ET.SubElement(
+                root.find("asset"),
+                "mesh",
+                name=f"catalog_{obj.id}",
+                vertex=numbers(vertices.reshape(-1) * obj.scale),
+                face=" ".join(str(int(i)) for i in faces.reshape(-1)),
+            )
         if obj.mesh:
             ET.SubElement(
                 root.find("asset"),
@@ -335,7 +357,9 @@ class Simulation:
     def imported_meshes(self):
         out = {}
         for i in range(self.model.nmesh):
-            if not (self.model.mesh(i).name or "").startswith("imported_"):
+            if not (self.model.mesh(i).name or "").startswith(
+                ("imported_", "catalog_")
+            ):
                 continue
             va, vn = self.model.mesh_vertadr[i], self.model.mesh_vertnum[i]
             fa, fn = self.model.mesh_faceadr[i], self.model.mesh_facenum[i]

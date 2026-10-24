@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, AfterValidator, model_validator
 import math
 import json
+from .catalog import KALAS_ASSETS
 
 MAX_SCENE_BYTES = 8_000_000
 
@@ -56,7 +57,17 @@ class ImportedMesh(StrictModel):
 class SceneObject(StrictModel):
     id: str = Field(default="object", pattern=r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
     name: str = Field(default="Plastic cup", min_length=1, max_length=80)
-    asset: Literal["cup", "plate", "spoon", "cube", "mesh"] = "cup"
+    asset: Literal[
+        "cup",
+        "plate",
+        "spoon",
+        "cube",
+        "mesh",
+        "kalas_bowl",
+        "kalas_cup",
+        "kalas_spoon",
+        "kalas_plate",
+    ] = "cup"
     mesh: ImportedMesh | None = None
     position: Vec3 = Field(default_factory=lambda: [0, 0.08, 0.802])
     quaternion: Quat = Field(default_factory=lambda: [1, 0, 0, 0])
@@ -173,7 +184,7 @@ class Scene(StrictModel):
         return self
 
 
-ASSETS = [
+ASSETS = KALAS_ASSETS + [
     dict(
         id="cup",
         name="Plastic cup",
