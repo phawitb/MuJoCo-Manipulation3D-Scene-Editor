@@ -38,3 +38,18 @@ The review validated the removal of attachment constraints, selected-source/oppo
 Three new browser regressions first failed and then passed: complete card contents at 1512 × 800 and 1280 × 720, and a real native mouse drag that supplies no visible drag image and still places the selected object. The complete browser run passed 22 cases and exposed three pre-existing synthetic-event/render-readiness races; those tests now wait for canvas layout, tolerate an initially absent canvas, use a real mouse drop or repeat dragover as native dragging does. All three then passed together (6.4 s), covering all 25 browser scenarios across these runs. Frontend unit tests (13), TypeScript and production build passed; the existing bundle-size warning remains. Backend physics was unchanged.
 
 Browser checks used isolated ports 5174/8766 because the user's live server was at its session limit. Live scenes were not reset. [Inspected library screenshot](screenshots/library-complete.png).
+
+## v3.2 — Pointer-only placement and cup extraction
+
+The previous transparent native drag image was insufficient on the user's browser. Library gestures now use pointer capture and explicitly disable native drag start; there is no native drag image to snapshot. Only the translucent object is rendered over the table, with no drag label/card. Escape, pointer cancellation, window blur, outside/control release and disabled editing cancel placement. The library and counters show four IKEA KALAS assets plus cube; legacy assets remain available to old scenes and API clients.
+
+- **94 backend tests passed** in 188.68 s, including all eleven examples rehearsed then independently executed at 1/17/33-step observation batches.
+- **25 browser scenarios passed**: full 24-case suite (1.7 min), plus example11 through Calculate path/Run/release (25.3 s). Additional pointer cancellation/control regressions passed.
+- **13 frontend unit tests**, strict TypeScript and production build passed. Existing bundle-size warning remains.
+- Total: **132 distinct automated cases**. Tests use isolated servers; user scenes are preserved.
+
+Example11 starts from a measured resting spoon pose inside the cup. Upright-handle IK constrains position and pinch direction while allowing wrist tilt, rather than overconstraining the five-axis arm. Physical opposing contact remains mandatory. Regression checks verify initial spoon/cup contact, spoon clearance above the rim before Transfer, cup displacement below 2 cm and cup uprightness, then released destination support. The original ten tasks retain their full-pose grasp method.
+
+The independent 1 ms audit of example11 succeeded in 17.907 simulated seconds, with 6,602/6,602 secure carrying samples, zero unsupported time, minimum jaw force 3.56 N and maximum jaw overlap 0.347 mm. No attachment constraint is present. Native initial/grasp/lift/release frames were inspected. [Raw audit](physics/example11-extraction.json) · [video](screenshots/example11-extraction.mp4) · [initial scene](screenshots/example11-initial.png) · [pointer placement](screenshots/pointer-only-placement.png).
+
+Implementation decision: keep legacy asset definitions/API entries for saved-scene compatibility; curate only the editor library. These remain approximate rigid-body materials/geometry, and bounded IK can reject arbitrary arrangements. Independent final review pending.

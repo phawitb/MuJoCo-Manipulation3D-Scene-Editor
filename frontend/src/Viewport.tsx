@@ -43,10 +43,13 @@ import {
   toThreeQuaternion,
 } from "./math";
 
+import type { PlacementCursor } from "./Library";
+
 interface Props {
   kind: ViewKind;
   assets: Asset[];
   dragAsset: Asset | null;
+  dragCursor: PlacementCursor | null;
   highlight: { id: string; token: number } | null;
   path: Vec3[];
   snapshot: Snapshot;
@@ -519,10 +522,58 @@ export function Viewport(p: Props) {
       setDragOver(false);
     }
   }, [p.dragAsset]);
+  const section = useRef<HTMLElement>(null);
+  const committed = useRef<PlacementCursor | null>(null);
+  useEffect(() => {
+    const cursor = p.dragCursor;
+    const rect = section.current?.getBoundingClientRect();
+    const inside =
+      cursor &&
+      rect &&
+      rect.width > 0 &&
+      rect.height > 0 &&
+      cursor.x >= rect.left &&
+      cursor.x < rect.right &&
+      cursor.y >= rect.top &&
+      cursor.y < rect.bottom;
+    const overControl =
+      cursor &&
+      document
+        .elementFromPoint(cursor.x, cursor.y)
+        ?.closest("button, input, select, textarea, [role=dialog]");
+    const hit =
+      inside && !overControl && p.editable && p.dragAsset
+        ? dropRef.current?.(cursor.x, cursor.y)
+        : null;
+    if (!cursor || !p.dragAsset || !hit) {
+      setGhost(null);
+      setDragOver(false);
+      return;
+    }
+    if (cursor.drop) {
+      setGhost(null);
+      setDragOver(false);
+      if (committed.current !== cursor) {
+        committed.current = cursor;
+        p.onDrop(p.dragAsset.id, hit);
+      }
+    } else {
+      try {
+        setGhost(
+          dropPosition(hit, p.dragAsset.dimensions, p.snapshot.scene.table),
+        );
+        setDragOver(true);
+      } catch {
+        setGhost(null);
+        setDragOver(false);
+      }
+    }
+  }, [p.dragCursor, p.dragAsset, p.editable]);
   const [localFrame, setLocalFrame] = useState(0),
     [localReset, setLocalReset] = useState(0);
   return (
     <section
+      ref={section}
       data-testid={`viewport-${p.kind}`}
       data-highlight={p.highlight?.id || ""}
       data-path-visible={p.path.length > 1 ? "true" : "false"}
@@ -540,43 +591,6 @@ export function Viewport(p: Props) {
           ) > 4
         )
           e.stopPropagation();
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = p.editable ? "copy" : "none";
-        const hit = dropRef.current?.(e.clientX, e.clientY);
-        if (p.editable && p.dragAsset && hit) {
-          try {
-            setGhost(
-              dropPosition(hit, p.dragAsset.dimensions, p.snapshot.scene.table),
-            );
-            setDragOver(true);
-          } catch {
-            setGhost(null);
-            setDragOver(false);
-          }
-        } else {
-          setGhost(null);
-          setDragOver(false);
-        }
-      }}
-      onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-          setDragOver(false);
-          setGhost(null);
-        }
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        setGhost(null);
-        if (!p.editable) return;
-        const asset = e.dataTransfer.getData("application/so101-asset");
-        const hit = dropRef.current?.(e.clientX, e.clientY);
-        if (hit && asset) {
-          p.onActive();
-          p.onDrop(asset, hit);
-        }
       }}
     >
       <div className="viewport-heading">
@@ -674,12 +688,6 @@ export function Viewport(p: Props) {
             : "Drag to orbit · Right-drag to pan · Scroll to zoom"}
         <span>m · Z ↑</span>
       </div>
-      {dragOver && ghost && (
-        <div className="drop-hint" data-testid="placement-preview">
-          {p.dragAsset?.name} · {ghost[0].toFixed(3)}, {ghost[1].toFixed(3)} m ·
-          release to place
-        </div>
-      )}
     </section>
   );
 }

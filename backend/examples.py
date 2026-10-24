@@ -131,6 +131,16 @@ EXAMPLES = [
         180,
         True,
     ),
+    (
+        "kalas-cup-to-plate",
+        "11 · Spoon from cup onto plate",
+        "Extract the exposed handle, clear the cup rim, then place on the plate",
+        "kalas_plate",
+        [-0.06023458, 0.07527993],
+        [-0.06, -0.11],
+        180,
+        False,
+    ),
 ]
 
 
@@ -173,6 +183,25 @@ def example_scene(example_id=None):
             color=p["color"],
         ),
     ]
+    if example_id == "kalas-cup-to-plate":
+        # Resting pose measured after a contact-only cup placement, not an attachment.
+        objects[0].position = [-0.09978705, 0.10469775, 0.82612671]
+        objects[0].quaternion = [
+            -0.539318277375,
+            0.219028808934,
+            -0.799645616108,
+            -0.147407819283,
+        ]
+        objects.append(
+            SceneObject(
+                id="source_cup",
+                name="Source · KALAS cup",
+                asset="kalas_cup",
+                position=[-0.12, 0.09, 0.79044761],
+                mass=0.030,
+                color="#eca895",
+            )
+        )
     if clutter:
         objects.extend(
             [

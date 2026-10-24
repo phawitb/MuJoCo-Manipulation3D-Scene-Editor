@@ -33,7 +33,7 @@ async def lifespan(app):
     await app.state.sessions.close()
 
 
-app = FastAPI(title="SO-101 Scene Studio", version="3.1.0", lifespan=lifespan)
+app = FastAPI(title="SO-101 Scene Studio", version="3.2.0", lifespan=lifespan)
 LOCAL = ("localhost", "127.0.0.1", "::1", "testserver")
 
 

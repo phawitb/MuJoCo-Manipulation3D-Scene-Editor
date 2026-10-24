@@ -16,7 +16,7 @@ Limit 16 sessions. Idle browser-only sessions can be evicted at capacity. API-cr
 |---|---|
 | GET `/api/health` | Engine/version/API version |
 | GET `/api/assets` | KALAS and legacy library metadata, dimensions and approximation labels |
-| GET `/api/examples` | Ten named example IDs, names and descriptions |
+| GET `/api/examples` | Eleven named example IDs, names and descriptions |
 | GET `/api/default-scene` | Full default scene |
 | GET `/api/scene-schema` | Authoritative Scene JSON schema |
 | GET `/api/command-schema` | Authoritative Command JSON schema |
@@ -133,3 +133,5 @@ KALAS IDs: `kalas_bowl`, `kalas_cup`, `kalas_spoon`, `kalas_plate`. They compile
 ## Policy limits
 
 All ten examples are rehearsed and independently executed with contact-only dynamics, including source rotations and legacy spoon variations. IK uses measured robot kinematics and bounded actuators. A grasp requires sustained opposing jaw contacts; no equality weld or object-pose animation is used. Delivery solves from the carried spoon pose after lift. Released placement must have actual destination support and no jaw support, correct containment, low linear/angular speed and measured lift. Unsupported or missed grasps fail explicitly. See [contact physics audit](PHYSICS-AUDIT.md) for the force thresholds, numerical settings, results and limitations.
+
+`kalas-cup-to-plate` starts with spoon `spoon` supported by `source_cup` and uses `cup` (a KALAS plate) as the task destination. Upright utensils use position plus pinch-axis IK constraints, with remaining wrist tilt selected by the five-axis arm. The API retains legacy asset entries for existing scenes; the editor library displays only KALAS assets and cube.

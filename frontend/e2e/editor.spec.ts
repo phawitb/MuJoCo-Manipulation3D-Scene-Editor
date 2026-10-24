@@ -17,10 +17,10 @@ test("empty startup, precise edits, simulation, cameras and scene persistence", 
   ).toBeVisible();
   await page.screenshot({ path: "test-results/startup.png" });
   await page
-    .getByRole("button", { name: "Add Plastic cup", exact: true })
+    .getByRole("button", { name: "Add IKEA KALAS cup", exact: true })
     .click();
   await expect(page.getByLabel("Object name", { exact: true })).toHaveValue(
-    "Plastic cup",
+    "IKEA KALAS cup",
   );
   await page.getByLabel("Position Z", { exact: true }).fill("1.1");
   await page.getByLabel("Position Z", { exact: true }).press("Enter");
@@ -50,7 +50,7 @@ test("empty startup, precise edits, simulation, cameras and scene persistence", 
   await page.getByLabel("Uniform scale", { exact: true }).fill("1.4");
   await page.getByLabel("Uniform scale", { exact: true }).press("Enter");
   await expect(
-    page.getByText("101 × 101 × 140 mm", { exact: true }),
+    page.getByText("112 × 112 × 113 mm", { exact: true }),
   ).toBeVisible();
   await page.getByLabel("Mass (kg)", { exact: true }).fill("0.06");
   await page.getByLabel("Mass (kg)", { exact: true }).press("Enter");
@@ -59,12 +59,12 @@ test("empty startup, precise edits, simulation, cameras and scene persistence", 
     .getByRole("button", { name: "Duplicate object", exact: true })
     .click();
   await expect(page.getByLabel("Object name", { exact: true })).toHaveValue(
-    "Plastic cup copy",
+    "IKEA KALAS cup copy",
   );
   await page
     .getByRole("button", { name: "Delete object", exact: true })
     .click();
-  await expect(page.getByText("1 objects · 8 assets")).toBeVisible();
+  await expect(page.getByText("1 objects · 5 assets")).toBeVisible();
   await page.getByRole("button", { name: "Top view", exact: true }).click();
   await expect(page.locator("canvas")).toHaveCount(1);
   await page
@@ -103,14 +103,14 @@ test("empty startup, precise edits, simulation, cameras and scene persistence", 
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify(doc)),
   });
-  await expect(page.getByText("1 objects · 8 assets")).toBeVisible();
+  await expect(page.getByText("1 objects · 5 assets")).toBeVisible();
   await page.getByTestId("scene-file").setInputFiles({
     name: "bad.json",
     mimeType: "application/json",
     buffer: Buffer.from('{"version":99}'),
   });
   await expect(page.getByRole("alert")).toContainText("Not a supported");
-  await expect(page.getByText("1 objects · 8 assets")).toBeVisible();
+  await expect(page.getByText("1 objects · 5 assets")).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -124,11 +124,11 @@ test("drop placement in top viewport, joint edits, camera independence and keybo
   await expect(page.locator("canvas")).toHaveCount(4);
   const top = page.getByTestId("viewport-top");
   const b = (await top.boundingBox())!;
-  await page.getByTestId("asset-plate").dragTo(top, {
+  await page.getByTestId("asset-kalas_plate").dragTo(top, {
     targetPosition: { x: b.width * 0.6, y: b.height * 0.5 },
   });
   await expect(page.getByLabel("Object name", { exact: true })).toHaveValue(
-    "Plastic plate",
+    "IKEA KALAS plate",
   );
   const x = Number(
     await page.getByLabel("Position X", { exact: true }).inputValue(),
@@ -187,10 +187,10 @@ test("translate gizmo persists a drag and reconnect restores acknowledged work",
   ).toBeVisible();
   await expect(page.locator("canvas")).toHaveCount(4);
   await page
-    .getByRole("button", { name: "Add Plastic cup", exact: true })
+    .getByRole("button", { name: "Add IKEA KALAS cup", exact: true })
     .click();
   await expect(page.getByLabel("Object name", { exact: true })).toHaveValue(
-    "Plastic cup",
+    "IKEA KALAS cup",
   );
   await page.getByRole("button", { name: "Top view", exact: true }).click();
   const canvas = page.getByTestId("viewport-top").locator("canvas");
@@ -251,11 +251,11 @@ test("asset loading recovers from a transient server failure", async ({
   await page.goto("/");
   await expect(page.locator("canvas")).toHaveCount(4, { timeout: 6000 });
   await expect(
-    page.getByRole("button", { name: "Add Plastic cup", exact: true }),
+    page.getByRole("button", { name: "Add IKEA KALAS cup", exact: true }),
   ).toBeEnabled();
 });
 
-test("native library drag and rotation gizmo work in the top view", async ({
+test("pointer library drag and rotation gizmo work in the top view", async ({
   page,
 }) => {
   await page.goto("/");
@@ -270,11 +270,11 @@ test("native library drag and rotation gizmo work in the top view", async ({
     .poll(async () => (await canvas.boundingBox())?.width || 0)
     .toBeGreaterThan(600);
   const b = (await canvas.boundingBox())!;
-  await page.getByTestId("asset-spoon").dragTo(viewport, {
+  await page.getByTestId("asset-kalas_spoon").dragTo(viewport, {
     targetPosition: { x: b.width / 2 + 65, y: b.height / 2 + 45 },
   });
   await expect(page.getByLabel("Object name", { exact: true })).toHaveValue(
-    "Plastic spoon",
+    "IKEA KALAS spoon",
   );
   const x = Number(
     await page.getByLabel("Position X", { exact: true }).inputValue(),
@@ -315,10 +315,10 @@ test("Save commits a focused draft and waits for server acknowledgement", async 
 }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "Add Plastic cup", exact: true }),
+    page.getByRole("button", { name: "Add IKEA KALAS cup", exact: true }),
   ).toBeEnabled();
   await page
-    .getByRole("button", { name: "Add Plastic cup", exact: true })
+    .getByRole("button", { name: "Add IKEA KALAS cup", exact: true })
     .click();
   const x = page.getByLabel("Position X", { exact: true });
   await expect(x).toBeEnabled();
@@ -345,10 +345,10 @@ test("rejected numeric edit restores authoritative inspector value", async ({
 }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "Add Plastic cup", exact: true }),
+    page.getByRole("button", { name: "Add IKEA KALAS cup", exact: true }),
   ).toBeEnabled();
   await page
-    .getByRole("button", { name: "Add Plastic cup", exact: true })
+    .getByRole("button", { name: "Add IKEA KALAS cup", exact: true })
     .click();
   const x = page.getByLabel("Position X", { exact: true });
   await expect(x).toBeEnabled();
@@ -396,13 +396,13 @@ test("failed reconnect preserves recoverable work and blocks simulation until re
   });
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "Add Plastic cup", exact: true }),
+    page.getByRole("button", { name: "Add IKEA KALAS cup", exact: true }),
   ).toBeEnabled();
   await page
-    .getByRole("button", { name: "Add Plastic cup", exact: true })
+    .getByRole("button", { name: "Add IKEA KALAS cup", exact: true })
     .click();
   await expect(page.getByLabel("Object name", { exact: true })).toHaveValue(
-    "Plastic cup",
+    "IKEA KALAS cup",
   );
   await connection!.close({ code: 1001 });
   await expect(page.getByRole("alert")).toContainText("restore");
@@ -429,14 +429,14 @@ test("camera actions are not replayed into another view or imported cameras", as
 }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "Add Plastic cup", exact: true }),
+    page.getByRole("button", { name: "Add IKEA KALAS cup", exact: true }),
   ).toBeEnabled();
   await expect(page.locator("canvas")).toHaveCount(4);
   await page
-    .getByRole("button", { name: "Add Plastic cup", exact: true })
+    .getByRole("button", { name: "Add IKEA KALAS cup", exact: true })
     .click();
   await expect(page.getByLabel("Object name", { exact: true })).toHaveValue(
-    "Plastic cup",
+    "IKEA KALAS cup",
   );
   await page
     .getByRole("button", { name: "Reset top camera", exact: true })

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Search,
   Upload,
@@ -87,6 +87,11 @@ export function AssetArt({ id, color }: { id: string; color: string }) {
     </svg>
   );
 }
+export interface PlacementCursor {
+  x: number;
+  y: number;
+  drop: boolean;
+}
 interface Props {
   assets: Asset[];
   scene: Scene;
@@ -95,11 +100,33 @@ interface Props {
   add: (id: string) => void;
   editable: boolean;
   onImport: () => void;
-  drag: (asset: Asset | null) => void;
+  drag: (asset: Asset | null, cursor?: PlacementCursor) => void;
 }
 export function Library(p: Props) {
   const [query, setQuery] = useState(""),
     [category, setCategory] = useState("All assets");
+  const gesture = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    active: boolean;
+  } | null>(null);
+  useEffect(() => {
+    const cancel = () => {
+      gesture.current = null;
+      p.drag(null);
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cancel();
+    };
+    window.addEventListener("keydown", key);
+    window.addEventListener("blur", cancel);
+    if (!p.editable) cancel();
+    return () => {
+      window.removeEventListener("keydown", key);
+      window.removeEventListener("blur", cancel);
+    };
+  }, [p.editable, p.drag]);
   const cats = [
     ["All assets", Layers],
     ["Cups", CircleDot],
@@ -161,19 +188,51 @@ export function Library(p: Props) {
           <div
             key={a.id}
             className={`asset-card ${!p.editable ? "disabled" : ""}`}
-            draggable={p.editable}
+            draggable={false}
             data-testid={`asset-${a.id}`}
-            onDragStart={(e) => {
-              e.dataTransfer.setData("application/so101-asset", a.id);
-              e.dataTransfer.effectAllowed = "copy";
-              // The viewport already previews the object at its drop position.
-              // Suppress the browser's snapshot of the card and its controls.
-              const dragImage = document.createElement("canvas");
-              dragImage.width = dragImage.height = 1;
-              e.dataTransfer.setDragImage(dragImage, 0, 0);
-              p.drag(a);
+            onDragStart={(e) => e.preventDefault()}
+            onPointerDown={(e) => {
+              if (
+                !p.editable ||
+                e.button !== 0 ||
+                (e.target as HTMLElement).closest("button")
+              )
+                return;
+              e.preventDefault();
+              e.currentTarget.setPointerCapture(e.pointerId);
+              gesture.current = {
+                id: e.pointerId,
+                x: e.clientX,
+                y: e.clientY,
+                active: false,
+              };
             }}
-            onDragEnd={() => p.drag(null)}
+            onPointerMove={(e) => {
+              const g = gesture.current;
+              if (!g || g.id !== e.pointerId) return;
+              if (Math.hypot(e.clientX - g.x, e.clientY - g.y) < 5 && !g.active)
+                return;
+              g.active = true;
+              p.drag(a, { x: e.clientX, y: e.clientY, drop: false });
+            }}
+            onPointerUp={(e) => {
+              const g = gesture.current;
+              if (!g || g.id !== e.pointerId) return;
+              gesture.current = null;
+              if (g.active)
+                p.drag(a, { x: e.clientX, y: e.clientY, drop: true });
+              else p.drag(null);
+            }}
+            onPointerCancel={() => {
+              gesture.current = null;
+              p.drag(null);
+            }}
+            onLostPointerCapture={() => {
+              if (gesture.current) {
+                gesture.current = null;
+                p.drag(null);
+              }
+            }}
           >
             <div className="asset-visual">
               <AssetArt id={a.id} color={a.color} />

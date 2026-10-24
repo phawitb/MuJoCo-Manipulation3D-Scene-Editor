@@ -313,6 +313,8 @@ p {
   min-height: 160px;
 }
 .asset-card {
+  touch-action: none;
+  user-select: none;
   background: #222d33;
   border: 1px solid #344148;
   border-radius: 7px;

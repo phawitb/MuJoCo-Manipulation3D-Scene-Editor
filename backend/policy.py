@@ -43,7 +43,7 @@ class PickPlacePolicy:
             target=self.target,
         )
 
-    def ik(self, position, rotation, seed):
+    def ik(self, position, rotation, seed, pinch=None):
         m = self.sim.model
         d = mujoco.MjData(m)
         d.qpos[:] = self.sim.data.qpos
@@ -55,6 +55,12 @@ class PickPlacePolicy:
             d.qpos[:5] = q
             mujoco.mj_kinematics(m, d)
             r = d.xmat[bid].reshape(3, 3)
+            if pinch is not None:
+                return np.r_[
+                    d.xpos[bid] + r @ pinch - position,
+                    0.07 * (r[:, 0] - rotation[:, 0]),
+                    0.002 * (r[:, 2] - rotation[:, 2]),
+                ]
             return np.r_[
                 d.site_xpos[sid] - position,
                 0.07 * Rotation.from_matrix(rotation @ r.T).as_rotvec(),
@@ -134,15 +140,26 @@ class PickPlacePolicy:
         self.grip_point = grip
         # Close across the handle, not along an arbitrary radial direction.
         long_axis = source.xmat.reshape(3, 3)[:, 0]
-        across = np.array([-long_axis[1], long_axis[0], 0.0])
+        # An exposed upright handle needs a pinch-axis constraint, not a full
+        # six-dimensional pose that this five-axis arm cannot generally reach.
+        upright = sp["family"] == "spoon" and abs(long_axis[2]) > 0.7
+        across = (
+            source.xmat.reshape(3, 3)[:, 1].copy()
+            if upright
+            else np.array([-long_axis[1], long_axis[0], 0.0])
+        )
+
         if np.linalg.norm(across) < 0.2:
             raise ValueError(
                 "This grasp requires the utensil lying flat. Reposition it before calculating."
             )
+        if upright:
+            across[2] = 0
         across /= np.linalg.norm(across)
         if self.configuration.get("reverse_grasp", False):
             across *= -1
-        down = np.column_stack([across, np.cross([0, 0, 1], across), [0, 0, 1]])
+        up = np.array([0, 0, 1])
+        down = np.column_stack([across, np.cross(up, across), up])
         width = (
             0.014
             if src.asset == "kalas_spoon"
@@ -173,12 +190,16 @@ class PickPlacePolicy:
 
         def move(label, pos, rot, opening=opening, duration=1.8):
             nonlocal seed
-            seed = self.ik(np.array(pos) + rot @ offset, rot, seed)
+            seed = (
+                self.ik(np.array(pos), rot, seed, pinch=pinch)
+                if upright
+                else self.ik(np.array(pos) + rot @ offset, rot, seed)
+            )
             seed[5] = opening
             plans.append((label, seed.copy(), duration))
 
         lift = self.configuration.get("lift", 0.10)
-        move("Approach", grip + [0, 0, lift], down)
+        move("Approach", grip + [0, 0, min(lift, 0.035) if upright else lift], down)
         move("Descend", grip, down, duration=1.5)
         closed = seed.copy()
         closed[5] = -0.17
@@ -229,7 +250,7 @@ class PickPlacePolicy:
                 else np.array([0, 0, 1])
             )
         )
-        desired_axis = desired_axis / np.linalg.norm(desired_axis)
+        desired_axis = desired_axis / max(np.linalg.norm(desired_axis), 1e-12)
         seed = self.steps[-1][1].copy()
         scratch = mujoco.MjData(m)
         scratch.qpos[:] = d.qpos

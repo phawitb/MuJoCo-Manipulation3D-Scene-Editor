@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -23,7 +23,7 @@ import {
 import { TaskPanel, type PickMode } from "./TaskPanel";
 import { CameraEditor } from "./CameraEditor";
 import { ImportDialog } from "./ImportDialog";
-import { Library } from "./Library";
+import { Library, type PlacementCursor } from "./Library";
 import { Inspector } from "./Inspector";
 import { Viewport } from "./Viewport";
 import { useSimulation } from "./useSimulation";
@@ -43,11 +43,27 @@ import type {
 
 export default function App() {
   const sim = useSimulation();
+  const libraryAssets = useMemo(
+    () =>
+      sim.assets.filter((a) => a.id.startsWith("kalas_") || a.id === "cube"),
+    [sim.assets],
+  );
   const path = useMemo(
     () => sim.state?.plan?.points || [],
     [sim.state?.plan?.id],
   );
   const [dragAsset, setDragAsset] = useState<Asset | null>(null);
+  const [dragCursor, setDragCursor] = useState<PlacementCursor | null>(null);
+  const drag = useCallback((asset: Asset | null, cursor?: PlacementCursor) => {
+    setDragAsset(asset);
+    setDragCursor(cursor ?? null);
+  }, []);
+  useEffect(() => {
+    if (dragCursor?.drop) {
+      setDragAsset(null);
+      setDragCursor(null);
+    }
+  }, [dragCursor]);
   const [highlight, setHighlight] = useState<{
     id: string;
     token: number;
@@ -438,6 +454,7 @@ export default function App() {
         snapshot: snapShot,
         assets: sim.assets,
         dragAsset,
+        dragCursor,
         highlight,
         path,
         live: sim.live,
@@ -526,8 +543,8 @@ export default function App() {
       <div className={`workspace-body narrow-${narrowPanel || "none"}`}>
         {scene && (
           <Library
-            assets={sim.assets}
-            drag={setDragAsset}
+            assets={libraryAssets}
+            drag={drag}
             scene={scene}
             selected={selected}
             select={selectObject}
@@ -867,7 +884,7 @@ export default function App() {
               Updating scene…
             </>
           ) : (
-            `${scene?.objects.length || 0} objects · ${sim.assets.length} assets`
+            `${scene?.objects.length || 0} objects · ${libraryAssets.length} assets`
           )}
           <span className="status-divider" />
           {Math.round(1 / (sim.state?.timeStep || 0.002))} Hz physics · Z up ·
@@ -882,7 +899,7 @@ export default function App() {
           >
             Session {sim.state?.sessionId?.slice(0, 8) || "…"}
           </button>
-          <span className="version">v3.1</span>
+          <span className="version">v3.2</span>
         </span>
       </footer>
       {sim.error && (

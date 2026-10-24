@@ -35,19 +35,19 @@ test("scene selection sets task and front camera is editable", async ({
     page.getByText("Simulation connected", { exact: true }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Add Plastic spoon", exact: true })
+    .getByRole("button", { name: "Add IKEA KALAS spoon", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Add Plastic cup", exact: true })
+    .getByRole("button", { name: "Add IKEA KALAS cup", exact: true })
     .click();
   await page.getByRole("button", { name: "Choose pick object" }).click();
-  await page.locator('[data-testid^="object-spoon_"]').click();
-  await page.locator('[data-testid^="object-cup_"]').click();
+  await page.locator('[data-testid^="object-kalas_spoon_"]').click();
+  await page.locator('[data-testid^="object-kalas_cup_"]').click();
   await expect(page.getByTestId("task-instruction")).toContainText(
-    "Plastic spoon",
+    "IKEA KALAS spoon",
   );
   await expect(page.getByTestId("task-instruction")).toContainText(
-    "Plastic cup",
+    "IKEA KALAS cup",
   );
   await page.getByRole("button", { name: "Edit front camera" }).click();
   await page.getByLabel("Camera position X").fill("0.8");
@@ -229,11 +229,11 @@ test("narrow window keeps task, cameras and object controls usable", async ({
   ).toBeLessThanOrEqual(480);
   await page.getByRole("button", { name: "Objects", exact: true }).click();
   await page
-    .getByRole("button", { name: "Add Plastic cup", exact: true })
+    .getByRole("button", { name: "Add IKEA KALAS cup", exact: true })
     .click();
   await page.getByRole("button", { name: "Inspector", exact: true }).click();
   await expect(page.getByLabel("Object name", { exact: true })).toHaveValue(
-    "Plastic cup",
+    "IKEA KALAS cup",
   );
   await page.getByRole("button", { name: "Inspector", exact: true }).click();
   await page.screenshot({ path: "../docs/screenshots/narrow-workbench.png" });

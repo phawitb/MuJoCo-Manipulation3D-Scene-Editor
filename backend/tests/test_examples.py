@@ -10,7 +10,7 @@ from backend.simulation import Simulation
 
 @pytest.mark.parametrize("batch", [1, 17, 33])
 @pytest.mark.parametrize("example_id", [e["id"] for e in example_catalog()])
-def test_ten_examples_plan_and_execute(example_id, batch):
+def test_examples_plan_and_execute(example_id, batch):
     sim = Simulation(example_scene(example_id))
     initial = physics_fingerprint(sim)
     plan = calculate_plan(sim)
