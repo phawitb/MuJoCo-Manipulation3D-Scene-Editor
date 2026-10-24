@@ -475,6 +475,20 @@ export function Inspector(p: Props) {
             </div>
           </div>
           <section className="inspector-section">
+            <label className="toggle-row">
+              Tabletop color
+              <input
+                type="color"
+                aria-label="Tabletop color"
+                value={p.scene.table.color || "#b8c2bf"}
+                disabled={disabled}
+                onChange={(e) =>
+                  p.editScene((s) => {
+                    s.table.color = e.target.value;
+                  })
+                }
+              />
+            </label>
             <h4>Dimensions</h4>
             {(["width", "depth", "height"] as const).map((key) => (
               <NumberField

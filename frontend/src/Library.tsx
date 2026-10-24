@@ -1,17 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Search,
-  Upload,
-  GripVertical,
-  Plus,
-  Layers,
-  Box,
-  Bot,
-  Table2,
-  Circle,
-  CircleDot,
-  Utensils,
-} from "lucide-react";
+import { Search, Upload, GripVertical, Plus, Bot, Table2 } from "lucide-react";
 import type { Asset, Scene } from "./types";
 export function AssetArt({ id, color }: { id: string; color: string }) {
   id = id.replace("kalas_", "");
@@ -128,13 +116,13 @@ export function Library(p: Props) {
     };
   }, [p.editable, p.drag]);
   const cats = [
-    ["All assets", Layers],
-    ["Cups", CircleDot],
-    ["Bowls", Circle],
-    ["Plates", Circle],
-    ["Spoons", Utensils],
-    ["Other Objects", Box],
-  ] as const;
+    "All assets",
+    "Cups",
+    "Bowls",
+    "Plates",
+    "Spoons",
+    "Other Objects",
+  ];
   const filtered = p.assets.filter(
     (a) =>
       (category === "All assets" || a.category === category) &&
@@ -156,23 +144,23 @@ export function Library(p: Props) {
         />
         <kbd>⌕</kbd>
       </div>
-      <nav className="categories">
-        {cats.map(([name, Icon]) => (
-          <button
-            key={name}
-            className={name === category ? "selected" : ""}
-            onClick={() => setCategory(name)}
-          >
-            <Icon size={15} />
-            {name}
-            <span>
+      <div className="asset-filter">
+        <select
+          aria-label="Asset category"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+        >
+          {cats.map((name) => (
+            <option key={name} value={name}>
+              {name} (
               {name === "All assets"
                 ? p.assets.length
-                : p.assets.filter((x) => x.category === name).length}
-            </span>
-          </button>
-        ))}
-      </nav>
+                : p.assets.filter((a) => a.category === name).length}
+              )
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="section-label">
         OBJECTS <span>DRAG TO PLACE</span>
       </div>

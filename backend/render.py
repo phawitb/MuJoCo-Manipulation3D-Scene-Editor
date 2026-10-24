@@ -31,7 +31,7 @@ def render(payload):
         sim.model.vis.global_.fovy = config.fov
         if view == "top":
             camera.orthographic = 1
-            camera.azimuth = -90
+            camera.azimuth = 0
             camera.distance = 480 / (
                 config.zoom * 2 * math.tan(math.radians(config.fov / 2))
             )

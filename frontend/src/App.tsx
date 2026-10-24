@@ -28,7 +28,12 @@ import { Inspector } from "./Inspector";
 import { Viewport } from "./Viewport";
 import { useSimulation } from "./useSimulation";
 import { nudgePosition, objectDimensions } from "./interaction";
-import { dropPosition, readCameras, validateDocument } from "./math";
+import {
+  dropPosition,
+  readCameras,
+  rememberCameraSetup,
+  validateDocument,
+} from "./math";
 import type {
   Asset,
   TaskExample,
@@ -229,8 +234,13 @@ export default function App() {
       setPicking(mode === "source" && !task.target ? "target" : null);
     });
   };
-  const saveCamera = (kind: ViewKind, value: Cameras["main"]) => {
+  const saveCamera = (
+    kind: ViewKind,
+    value: Cameras["main"],
+    remember = false,
+  ) => {
     if (kind === "wrist") return;
+    if (remember) rememberCameraSetup(kind, value);
     const previous = cameraRef.current[kind];
     if (
       previous.position.every(
@@ -637,7 +647,8 @@ export default function App() {
               </button>
               <button
                 className="tool"
-                title="Frame selected (F)"
+                title="Frame selected in Main 3D (F)"
+                disabled={active !== "main"}
                 aria-label="Frame selected object"
                 onClick={frame}
               >
@@ -766,19 +777,6 @@ export default function App() {
             )}
           </div>
           <div className="simulation-bar">
-            <div className="sim-label">
-              <span className="physics-icon">μ</span>
-              <div>
-                <strong>MuJoCo Physics</strong>
-                <small>
-                  {sim.state?.running
-                    ? sim.state.mode === "physics"
-                      ? "Physics only"
-                      : sim.state.task.phase
-                    : "Run moves the robot"}
-                </small>
-              </div>
-            </div>
             <div className="sim-controls">
               <button
                 title="Run passive physics without the robot policy"
@@ -933,6 +931,7 @@ export default function App() {
           apply={async (value) => {
             await sim.waitForPending();
             await sim.command("camera", { camera: cameraEdit, value });
+            if (cameraEdit !== "wrist") rememberCameraSetup(cameraEdit, value);
             cameraRef.current = { ...cameraRef.current, [cameraEdit]: value };
             setCameras(cameraRef.current);
             setCameraEpoch((v) => v + 1);
@@ -1033,7 +1032,7 @@ export default function App() {
               {[
                 ["T", "Move object"],
                 ["R", "Rotate object"],
-                ["F", "Frame selection"],
+                ["F", "Frame selection in Main 3D"],
                 ["Space", "Run / pause"],
                 ["Delete", "Delete selection"],
                 ["⌘ / Ctrl S", "Save scene"],
@@ -1046,9 +1045,9 @@ export default function App() {
             </div>
             <p className="quiet">
               Main view: drag to orbit, right-drag to pan, scroll to zoom. Top
-              view: drag to pan, scroll to zoom. Cameras are independent. Scene
-              reset clears objects and restores the robot; camera settings stay
-              intact.
+              view: scroll to zoom, robot side below. Front and Back stay at
+              their saved setup. Scene reset clears objects and restores the
+              robot; camera settings stay intact.
             </p>
             <p className="quiet">
               The IK policy uses physical jaw contact and friction. A lost grasp

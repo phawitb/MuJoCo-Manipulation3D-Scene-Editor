@@ -130,11 +130,12 @@ test("drop placement in top viewport, joint edits, camera independence and keybo
   await expect(page.getByLabel("Object name", { exact: true })).toHaveValue(
     "IKEA KALAS plate",
   );
-  const x = Number(
-    await page.getByLabel("Position X", { exact: true }).inputValue(),
+  const y = Number(
+    await page.getByLabel("Position Y", { exact: true }).inputValue(),
   );
-  expect(x).toBeGreaterThan(0);
-  expect(x).toBeLessThan(0.3);
+  expect(y).toBeLessThan(0);
+  expect(y).toBeGreaterThan(-0.3);
+  await page.getByTestId("viewport-main").locator(".viewport-heading").click();
   await page
     .getByRole("button", { name: "Frame selected object", exact: true })
     .click();
@@ -206,11 +207,11 @@ test("translate gizmo persists a drag and reconnect restores acknowledged work",
       ),
   );
   await page.screenshot({ path: "test-results/before-gizmo.png" });
-  const cx = b.x + b.width / 2 + 0.08 * 320,
-    cy = b.y + b.height / 2 + 0.1 * 320;
-  await page.mouse.move(cx - 60, cy);
+  const cx = b.x + b.width / 2 + 0.1 * 320,
+    cy = b.y + b.height / 2 - 0.08 * 320;
+  await page.mouse.move(cx, cy + 60);
   await page.mouse.down();
-  await page.mouse.move(cx - 10, cy, { steps: 12 });
+  await page.mouse.move(cx, cy + 10, { steps: 12 });
   await page.mouse.up();
   await expect
     .poll(async () =>
@@ -282,8 +283,8 @@ test("pointer library drag and rotation gizmo work in the top view", async ({
   const y = Number(
     await page.getByLabel("Position Y", { exact: true }).inputValue(),
   );
-  expect(x).toBeCloseTo(65 / 320, 2);
-  expect(y).toBeCloseTo(-45 / 320, 2);
+  expect(x).toBeCloseTo(-45 / 320, 2);
+  expect(y).toBeCloseTo(-65 / 320, 2);
   await page.getByRole("button", { name: "Rotate tool", exact: true }).click();
   await page.evaluate(
     () =>
@@ -291,8 +292,8 @@ test("pointer library drag and rotation gizmo work in the top view", async ({
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       ),
   );
-  const cx = b.x + b.width / 2 + x * 320,
-    cy = b.y + b.height / 2 - y * 320;
+  const cx = b.x + b.width / 2 - y * 320,
+    cy = b.y + b.height / 2 - x * 320;
   const d = (b.height * 0.8) / 7 / Math.sqrt(2);
   await page.mouse.move(cx + d, cy - d);
   await page.mouse.down();

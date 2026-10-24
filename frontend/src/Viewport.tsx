@@ -63,7 +63,7 @@ interface Props {
   onTransform: (id: string, position: Vec3, quaternion: Quat) => void;
   onDrop: (asset: string, point: Vec3) => void;
   cameraState: CameraState;
-  saveCamera: (kind: ViewKind, state: CameraState) => void;
+  saveCamera: (kind: ViewKind, state: CameraState, remember?: boolean) => void;
   frameSignal: number;
   resetSignal: number;
   active: boolean;
@@ -265,27 +265,33 @@ function CameraRig(
   const { camera, gl } = useThree();
   const controls = useRef<OrbitControlsImpl>(null);
   const initial = useRef(p.cameraState);
+  const target = useRef(new Vector3(...p.cameraState.target));
   const consumedFrame = useRef(p.frameSignal);
   const consumedReset = useRef(p.resetSignal);
   const stateRef = useRef(p);
   stateRef.current = p;
   const apply = (state: CameraState) => {
     camera.position.fromArray(state.position);
-    camera.up.set(0, p.kind === "top" ? 1 : 0, p.kind === "top" ? 0 : 1);
+    camera.up.set(p.kind === "top" ? 1 : 0, 0, p.kind === "top" ? 0 : 1);
+    target.current.fromArray(state.target);
+    camera.lookAt(target.current);
     camera.zoom = state.zoom;
     if (camera instanceof PerspectiveCamera) camera.fov = state.fov || 42;
     camera.updateProjectionMatrix();
     controls.current?.target.fromArray(state.target);
     controls.current?.update();
   };
-  const save = () => {
-    if (!controls.current) return;
-    p.saveCamera(p.kind, {
-      position: camera.position.toArray() as Vec3,
-      target: controls.current.target.toArray() as Vec3,
-      zoom: camera.zoom,
-      fov: (camera as PerspectiveCamera).fov || 50,
-    });
+  const save = (remember = false) => {
+    p.saveCamera(
+      p.kind,
+      {
+        position: camera.position.toArray() as Vec3,
+        target: (controls.current?.target || target.current).toArray() as Vec3,
+        zoom: camera.zoom,
+        fov: (camera as PerspectiveCamera).fov || 50,
+      },
+      remember,
+    );
   };
   useFrame(() => {
     if (p.kind !== "wrist") return;
@@ -306,13 +312,13 @@ function CameraRig(
     consumedReset.current = p.resetSignal;
     if (changed && p.active) {
       apply(defaultCameras()[p.kind]);
-      save();
+      save(p.kind !== "top");
     }
   }, [p.resetSignal]);
   useEffect(() => {
     const changed = consumedFrame.current !== p.frameSignal;
     consumedFrame.current = p.frameSignal;
-    if (!changed || !p.active || !controls.current) return;
+    if (!changed || !p.active || p.kind !== "main" || !controls.current) return;
     let target: Vec3 = [0, 0, p.snapshot.scene.table.height];
     if (p.selected === "robot")
       target = p.snapshot.scene.robot.position.map(
@@ -329,10 +335,9 @@ function CameraRig(
     const objectSelected = p.snapshot.scene.objects.some(
       (o) => o.id === p.selected,
     );
-    if (p.kind !== "top") delta.setLength(objectSelected ? 0.35 : 1.25);
+    delta.setLength(objectSelected ? 0.35 : 1.25);
     camera.position.copy(new Vector3(...target).add(delta));
     controls.current.target.fromArray(target);
-    if (p.kind === "top") camera.zoom = objectSelected ? 1200 : 500;
     camera.updateProjectionMatrix();
     controls.current.update();
     save();
@@ -369,14 +374,16 @@ function CameraRig(
       p.dropRef.current = null;
     };
   }, [camera, gl]);
-  if (p.kind === "wrist") return null;
+  if (p.kind !== "main" && p.kind !== "top") return null;
   return (
     <OrbitControls
       ref={controls}
       makeDefault
       enableDamping
       dampingFactor={0.12}
-      enableRotate={p.kind !== "top"}
+      enableRotate={p.kind === "main"}
+      enablePan={p.kind === "main"}
+      enableZoom
       minDistance={0.12}
       maxDistance={5}
       minZoom={100}
@@ -388,7 +395,7 @@ function CameraRig(
         MIDDLE: MOUSE.DOLLY,
         RIGHT: MOUSE.PAN,
       }}
-      onEnd={save}
+      onEnd={() => save()}
     />
   );
 }
@@ -611,7 +618,7 @@ export function Viewport(p: Props) {
               : "PERSPECTIVE"}
         </span>
         <div className="view-actions">
-          {p.kind !== "wrist" && (
+          {(p.kind === "main" || p.kind === "front" || p.kind === "back") && (
             <button
               title="Edit camera position"
               aria-label={`Edit ${p.kind} camera`}
@@ -622,16 +629,18 @@ export function Viewport(p: Props) {
           )}
           {p.kind !== "wrist" && (
             <>
-              <button
-                title="Frame selected"
-                aria-label={`Frame ${p.kind} camera`}
-                onClick={() => {
-                  p.onActive();
-                  setLocalFrame((x) => x + 1);
-                }}
-              >
-                <Focus size={14} />
-              </button>
+              {p.kind === "main" && (
+                <button
+                  title="Frame selected"
+                  aria-label={`Frame ${p.kind} camera`}
+                  onClick={() => {
+                    p.onActive();
+                    setLocalFrame((x) => x + 1);
+                  }}
+                >
+                  <Focus size={14} />
+                </button>
+              )}
               <button
                 title="Reset camera"
                 aria-label={`Reset ${p.kind} camera`}
@@ -662,7 +671,7 @@ export function Viewport(p: Props) {
         orthographic={p.kind === "top"}
         camera={{
           position: p.cameraState.position,
-          up: p.kind === "top" ? [0, 1, 0] : [0, 0, 1],
+          up: p.kind === "top" ? [1, 0, 0] : [0, 0, 1],
           near: 0.005,
           far: 20,
           fov: p.cameraState.fov || 42,
@@ -682,8 +691,10 @@ export function Viewport(p: Props) {
         {p.kind === "wrist"
           ? "Mounted on wrist · follows the arm"
           : p.kind === "top"
-            ? "Drag to pan · Scroll to zoom"
-            : "Drag to orbit · Right-drag to pan · Scroll to zoom"}
+            ? "Scroll to zoom · Robot side below"
+            : p.kind === "main"
+              ? "Drag to orbit · Right-drag to pan · Scroll to zoom"
+              : "Fixed view · Edit camera to change setup"}
         <span>m · Z ↑</span>
       </div>
     </section>

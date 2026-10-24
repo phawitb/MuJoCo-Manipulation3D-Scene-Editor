@@ -24,6 +24,7 @@ export interface SceneObject {
   color: string;
 }
 export interface Table {
+  color?: string;
   width: number;
   depth: number;
   height: number;

@@ -1,5 +1,13 @@
 import { Euler, Quaternion, MathUtils } from "three";
-import type { Cameras, Quat, SavedDocument, Table, Vec3 } from "./types";
+import type {
+  Cameras,
+  Quat,
+  SavedDocument,
+  Table,
+  Vec3,
+  ViewKind,
+  CameraState,
+} from "./types";
 export const toThreeQuaternion = (q: Quat) =>
   new Quaternion(q[1], q[2], q[3], q[0]);
 export const toMujocoQuaternion = (q: Quaternion): Quat => [q.w, q.x, q.y, q.z];
@@ -92,17 +100,38 @@ export function validateDocument(input: unknown): SavedDocument {
     }
   return d; // Full scene validation happens authoritatively on the server.
 }
-export function readCameras(): Cameras {
+// Applied setup is independent of transient orbit/pan state and other open scenes.
+export function rememberCameraSetup(
+  kind: Exclude<ViewKind, "wrist">,
+  value: CameraState,
+) {
   try {
-    const cameras = JSON.parse(localStorage.getItem("so101.cameras") || "null");
-    const d = {
-      version: 1,
-      scene: { version: 1, objects: [], table: {}, robot: {} },
-      cameras,
-    };
-    if (cameras) return validateDocument(d).cameras!;
+    const previous = JSON.parse(
+      localStorage.getItem("so101.camera-setup") || "{}",
+    );
+    localStorage.setItem(
+      "so101.camera-setup",
+      JSON.stringify({ ...previous, [kind]: value }),
+    );
   } catch {
-    /* Invalid local state falls back to defaults. */
+    /* The current scene still owns the camera when storage is unavailable. */
   }
-  return defaultCameras();
+}
+export function readCameras(): Cameras {
+  let cameras = defaultCameras();
+  for (const key of ["so101.cameras", "so101.camera-setup"]) {
+    try {
+      const stored = JSON.parse(localStorage.getItem(key) || "null");
+      if (!stored || typeof stored !== "object" || Array.isArray(stored))
+        continue;
+      cameras = validateDocument({
+        version: 1,
+        scene: { version: 1, objects: [], table: {}, robot: {} },
+        cameras: { ...cameras, ...stored },
+      }).cameras!;
+    } catch {
+      /* Keep the last valid settings if one stored record is corrupt. */
+    }
+  }
+  return cameras;
 }

@@ -142,8 +142,8 @@ test("pick and destination can be selected directly on the 3D scene", async ({
       ),
   );
   await page.mouse.click(
-    box.x + box.width / 2 - 0.13 * 320,
-    box.y + box.height / 2 + 0.07 * 320,
+    box.x + box.width / 2 + 0.07 * 320,
+    box.y + box.height / 2 + 0.13 * 320,
   );
   await expect(page.getByTestId("task-instruction")).toContainText(
     "Pick · KALAS spoon",
@@ -152,8 +152,8 @@ test("pick and destination can be selected directly on the 3D scene", async ({
     page.getByRole("button", { name: "Choose place object" }),
   ).toBeEnabled();
   await page.mouse.click(
-    box.x + box.width / 2 - 0.04 * 320,
-    box.y + box.height / 2 - 0.09 * 320,
+    box.x + box.width / 2 - 0.09 * 320,
+    box.y + box.height / 2 + 0.04 * 320,
   );
   await expect(page.getByTestId("task-instruction")).toContainText(
     "Place · KALAS cup",

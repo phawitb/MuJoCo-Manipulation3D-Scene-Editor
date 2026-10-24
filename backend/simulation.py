@@ -129,7 +129,7 @@ def build_xml(scene):
         type="box",
         pos=numbers([0, 0, t.height - 0.018]),
         size=numbers([t.width / 2, t.depth / 2, 0.018]),
-        rgba=".72 .76 .75 1",
+        rgba=numbers([int(t.color[i : i + 2], 16) / 255 for i in (1, 3, 5)] + [1]),
         friction=".8 .005 .0001",
     )
     for x in (-1, 1):

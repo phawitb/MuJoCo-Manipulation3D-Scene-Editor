@@ -93,6 +93,7 @@ class SceneObject(StrictModel):
 
 
 class Table(StrictModel):
+    color: str = Field(default="#b8c2bf", pattern=r"^#[0-9a-fA-F]{6}$")
     width: float = Field(default=0.8, ge=0.4, le=2)
     depth: float = Field(default=0.6, ge=0.4, le=2)
     height: float = Field(default=0.75, ge=0.4, le=1.2)
