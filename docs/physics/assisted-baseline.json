@@ -1,0 +1,631 @@
+[
+  {
+    "id": "kalas-cup-front",
+    "verified": true,
+    "success": true,
+    "held_contact_steps": {
+      "2": 856,
+      "1": 1850,
+      "0": 595
+    },
+    "longest_no_contact_s": 0.078,
+    "phases": [
+      {
+        "phase": "Approach",
+        "t": 0.002,
+        "q": 0.6
+      },
+      {
+        "phase": "Descend",
+        "t": 1.802,
+        "q": 0.65
+      },
+      {
+        "phase": "Grasp",
+        "t": 3.304,
+        "q": 0.65
+      },
+      {
+        "phase": "Lift",
+        "t": 4.106,
+        "q": -0.03
+      },
+      {
+        "phase": "Transfer",
+        "t": 5.908,
+        "q": -0.03
+      },
+      {
+        "phase": "Place",
+        "t": 8.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Release",
+        "t": 10.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Retreat",
+        "t": 11.508,
+        "q": 0.8
+      },
+      {
+        "phase": "Verify",
+        "t": 13.208,
+        "q": 0.8
+      },
+      {
+        "phase": "Complete",
+        "t": 15.708,
+        "q": 0.8
+      }
+    ]
+  },
+  {
+    "id": "kalas-cup-left",
+    "verified": true,
+    "success": true,
+    "held_contact_steps": {
+      "2": 1160,
+      "1": 2027,
+      "0": 114
+    },
+    "longest_no_contact_s": 0.084,
+    "phases": [
+      {
+        "phase": "Approach",
+        "t": 0.002,
+        "q": 0.6
+      },
+      {
+        "phase": "Descend",
+        "t": 1.802,
+        "q": 0.65
+      },
+      {
+        "phase": "Grasp",
+        "t": 3.304,
+        "q": 0.65
+      },
+      {
+        "phase": "Lift",
+        "t": 4.106,
+        "q": -0.03
+      },
+      {
+        "phase": "Transfer",
+        "t": 5.908,
+        "q": -0.03
+      },
+      {
+        "phase": "Place",
+        "t": 8.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Release",
+        "t": 10.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Retreat",
+        "t": 11.508,
+        "q": 0.8
+      },
+      {
+        "phase": "Verify",
+        "t": 13.208,
+        "q": 0.8
+      },
+      {
+        "phase": "Complete",
+        "t": 15.708,
+        "q": 0.8
+      }
+    ]
+  },
+  {
+    "id": "kalas-cup-right",
+    "verified": true,
+    "success": true,
+    "held_contact_steps": {
+      "2": 613,
+      "1": 2066,
+      "0": 622
+    },
+    "longest_no_contact_s": 0.086,
+    "phases": [
+      {
+        "phase": "Approach",
+        "t": 0.002,
+        "q": 0.6
+      },
+      {
+        "phase": "Descend",
+        "t": 1.802,
+        "q": 0.65
+      },
+      {
+        "phase": "Grasp",
+        "t": 3.304,
+        "q": 0.65
+      },
+      {
+        "phase": "Lift",
+        "t": 4.106,
+        "q": -0.03
+      },
+      {
+        "phase": "Transfer",
+        "t": 5.908,
+        "q": -0.03
+      },
+      {
+        "phase": "Place",
+        "t": 8.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Release",
+        "t": 10.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Retreat",
+        "t": 11.508,
+        "q": 0.8
+      },
+      {
+        "phase": "Verify",
+        "t": 13.208,
+        "q": 0.8
+      },
+      {
+        "phase": "Complete",
+        "t": 15.708,
+        "q": 0.8
+      }
+    ]
+  },
+  {
+    "id": "kalas-cup-near",
+    "verified": true,
+    "success": true,
+    "held_contact_steps": {
+      "2": 53,
+      "1": 3118,
+      "0": 130
+    },
+    "longest_no_contact_s": 0.122,
+    "phases": [
+      {
+        "phase": "Approach",
+        "t": 0.002,
+        "q": 0.6
+      },
+      {
+        "phase": "Descend",
+        "t": 1.802,
+        "q": 0.65
+      },
+      {
+        "phase": "Grasp",
+        "t": 3.304,
+        "q": 0.65
+      },
+      {
+        "phase": "Lift",
+        "t": 4.106,
+        "q": -0.03
+      },
+      {
+        "phase": "Transfer",
+        "t": 5.908,
+        "q": -0.03
+      },
+      {
+        "phase": "Place",
+        "t": 8.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Release",
+        "t": 10.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Retreat",
+        "t": 11.508,
+        "q": 0.8
+      },
+      {
+        "phase": "Verify",
+        "t": 13.208,
+        "q": 0.8
+      },
+      {
+        "phase": "Complete",
+        "t": 15.708,
+        "q": 0.8
+      }
+    ]
+  },
+  {
+    "id": "kalas-bowl-front",
+    "verified": true,
+    "success": true,
+    "held_contact_steps": {
+      "2": 1009,
+      "1": 840,
+      "0": 1452
+    },
+    "longest_no_contact_s": 1.546,
+    "phases": [
+      {
+        "phase": "Approach",
+        "t": 0.002,
+        "q": 0.6
+      },
+      {
+        "phase": "Descend",
+        "t": 1.802,
+        "q": 0.65
+      },
+      {
+        "phase": "Grasp",
+        "t": 3.304,
+        "q": 0.65
+      },
+      {
+        "phase": "Lift",
+        "t": 4.106,
+        "q": -0.03
+      },
+      {
+        "phase": "Transfer",
+        "t": 5.908,
+        "q": -0.03
+      },
+      {
+        "phase": "Place",
+        "t": 8.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Release",
+        "t": 10.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Retreat",
+        "t": 11.508,
+        "q": 0.8
+      },
+      {
+        "phase": "Verify",
+        "t": 13.208,
+        "q": 0.8
+      },
+      {
+        "phase": "Complete",
+        "t": 15.708,
+        "q": 0.8
+      }
+    ]
+  },
+  {
+    "id": "kalas-bowl-left",
+    "verified": true,
+    "success": true,
+    "held_contact_steps": {
+      "2": 1177,
+      "1": 537,
+      "0": 1587
+    },
+    "longest_no_contact_s": 3.064,
+    "phases": [
+      {
+        "phase": "Approach",
+        "t": 0.002,
+        "q": 0.6
+      },
+      {
+        "phase": "Descend",
+        "t": 1.802,
+        "q": 0.65
+      },
+      {
+        "phase": "Grasp",
+        "t": 3.304,
+        "q": 0.65
+      },
+      {
+        "phase": "Lift",
+        "t": 4.106,
+        "q": -0.03
+      },
+      {
+        "phase": "Transfer",
+        "t": 5.908,
+        "q": -0.03
+      },
+      {
+        "phase": "Place",
+        "t": 8.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Release",
+        "t": 10.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Retreat",
+        "t": 11.508,
+        "q": 0.8
+      },
+      {
+        "phase": "Verify",
+        "t": 13.208,
+        "q": 0.8
+      },
+      {
+        "phase": "Complete",
+        "t": 15.708,
+        "q": 0.8
+      }
+    ]
+  },
+  {
+    "id": "kalas-plate-front",
+    "verified": true,
+    "success": true,
+    "held_contact_steps": {
+      "2": 3086,
+      "1": 215
+    },
+    "longest_no_contact_s": 0.0,
+    "phases": [
+      {
+        "phase": "Approach",
+        "t": 0.002,
+        "q": 0.6
+      },
+      {
+        "phase": "Descend",
+        "t": 1.802,
+        "q": 0.65
+      },
+      {
+        "phase": "Grasp",
+        "t": 3.304,
+        "q": 0.65
+      },
+      {
+        "phase": "Lift",
+        "t": 4.106,
+        "q": -0.03
+      },
+      {
+        "phase": "Transfer",
+        "t": 5.908,
+        "q": -0.03
+      },
+      {
+        "phase": "Place",
+        "t": 8.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Release",
+        "t": 10.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Retreat",
+        "t": 11.508,
+        "q": 0.8
+      },
+      {
+        "phase": "Verify",
+        "t": 13.208,
+        "q": 0.8
+      },
+      {
+        "phase": "Complete",
+        "t": 15.708,
+        "q": 0.8
+      }
+    ]
+  },
+  {
+    "id": "kalas-plate-angle",
+    "verified": true,
+    "success": true,
+    "held_contact_steps": {
+      "2": 2729,
+      "1": 48,
+      "0": 524
+    },
+    "longest_no_contact_s": 1.044,
+    "phases": [
+      {
+        "phase": "Approach",
+        "t": 0.002,
+        "q": 0.6
+      },
+      {
+        "phase": "Descend",
+        "t": 1.802,
+        "q": 0.65
+      },
+      {
+        "phase": "Grasp",
+        "t": 3.304,
+        "q": 0.65
+      },
+      {
+        "phase": "Lift",
+        "t": 4.106,
+        "q": -0.03
+      },
+      {
+        "phase": "Transfer",
+        "t": 5.908,
+        "q": -0.03
+      },
+      {
+        "phase": "Place",
+        "t": 8.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Release",
+        "t": 10.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Retreat",
+        "t": 11.508,
+        "q": 0.8
+      },
+      {
+        "phase": "Verify",
+        "t": 13.208,
+        "q": 0.8
+      },
+      {
+        "phase": "Complete",
+        "t": 15.708,
+        "q": 0.8
+      }
+    ]
+  },
+  {
+    "id": "kalas-cup-clutter",
+    "verified": true,
+    "success": true,
+    "held_contact_steps": {
+      "2": 855,
+      "1": 1852,
+      "0": 594
+    },
+    "longest_no_contact_s": 0.066,
+    "phases": [
+      {
+        "phase": "Approach",
+        "t": 0.002,
+        "q": 0.6
+      },
+      {
+        "phase": "Descend",
+        "t": 1.802,
+        "q": 0.65
+      },
+      {
+        "phase": "Grasp",
+        "t": 3.304,
+        "q": 0.65
+      },
+      {
+        "phase": "Lift",
+        "t": 4.106,
+        "q": -0.03
+      },
+      {
+        "phase": "Transfer",
+        "t": 5.908,
+        "q": -0.03
+      },
+      {
+        "phase": "Place",
+        "t": 8.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Release",
+        "t": 10.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Retreat",
+        "t": 11.508,
+        "q": 0.8
+      },
+      {
+        "phase": "Verify",
+        "t": 13.208,
+        "q": 0.8
+      },
+      {
+        "phase": "Complete",
+        "t": 15.708,
+        "q": 0.8
+      }
+    ]
+  },
+  {
+    "id": "kalas-bowl-clutter",
+    "verified": true,
+    "success": false,
+    "held_contact_steps": {
+      "2": 1332,
+      "1": 1516,
+      "0": 453
+    },
+    "longest_no_contact_s": 0.892,
+    "phases": [
+      {
+        "phase": "Approach",
+        "t": 0.002,
+        "q": 0.6
+      },
+      {
+        "phase": "Descend",
+        "t": 1.802,
+        "q": 0.65
+      },
+      {
+        "phase": "Grasp",
+        "t": 3.304,
+        "q": 0.65
+      },
+      {
+        "phase": "Lift",
+        "t": 4.106,
+        "q": -0.03
+      },
+      {
+        "phase": "Transfer",
+        "t": 5.908,
+        "q": -0.03
+      },
+      {
+        "phase": "Place",
+        "t": 8.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Release",
+        "t": 10.708,
+        "q": -0.03
+      },
+      {
+        "phase": "Retreat",
+        "t": 11.508,
+        "q": 0.8
+      },
+      {
+        "phase": "Verify",
+        "t": 13.208,
+        "q": 0.8
+      },
+      {
+        "phase": "Needs attention",
+        "t": 15.708,
+        "q": 0.8
+      }
+    ]
+  }
+]

@@ -45,10 +45,10 @@ All commands accept optional unique `requestId`; edits accept optional current `
 | `plan` | Rehearse asynchronously without moving live physics; poll plan.status, inspect points, require verified:true before run |
 | `task` | `source`, `target`: object IDs or null; must exist and differ; paused only |
 | `run` | Start an unchanged verified plan or resume a paused active task; **moves arm**; rejects missing/stale/failed plans |
-| `pause` | Freeze physics/controller, retaining phase/grasp |
-| `stop` | Cancel controller and release grasp; pause |
+| `pause` | Freeze physics/controller, retaining phase/actuator targets |
+| `stop` | Cancel controller, queue jaw opening, and pause; Step/physics advances the physical opening |
 | `physics` | Cancel/release task and run passive physics |
-| `step` | `count`: 1–2500 integration steps (default 10), paused only; advances active policy too |
+| `step` | `count`: 1–2500 integration steps (default 10; each step is 1 ms), paused only; advances active policy too |
 | `object_add` | `object`: valid SceneObject |
 | `object_update` | `id`, `patch`: partial object properties (ID immutable) |
 | `object_remove` | `id`; clears task references to the removed object |
@@ -116,7 +116,7 @@ Typical agent sequence: list sessions → get_scene → scene_command example/ta
 
 ## State, geometry and portable files
 
-`state`: type, sessionId, sequence, revision, running, mode, time, contacts, poses, joints, objects, task, cameras. `task` includes status (`idle|running|cancelled|succeeded|failed`), phase, progress, message, held, graspAssist, success. While paused mid-task, status remains running but `running:false`; phase/grasp resume on Run. `cameras.wrist` is the measured position/WXYZ quaternion/fov. `snapshot` additionally contains scene, geometry, jointInfo and imported compiled `meshes`.
+`state`: type, sessionId, sequence, revision, running, mode, time, contacts, poses, joints, objects, task, cameras. `task` includes status (`idle|running|cancelled|succeeded|failed`), phase, progress, message, held, graspAssist:false, grip, success. `grip` contains leftForce/rightForce (newtons), opposing, secure, maxPenetration (metres). `held` means a confirmed physical grasp, not an attachment constraint. `timeStep` is 0.001 s. On a dropped grasp the task fails but physics continues for 1.5 s to let gravity act; workspace/numerical errors still pause immediately. While paused mid-task, status remains running but `running:false`; phase/grasp resume on Run. `cameras.wrist` is the measured position/WXYZ quaternion/fov. `snapshot` additionally contains scene, geometry, jointInfo and imported compiled `meshes`.
 
 Geometry size uses MuJoCo conventions: box half-extents; cylinder/capsule radius and half-length; sphere radius; ellipsoid radii. Mesh vertices/faces come from the compiled model and use compiled geom world transforms. Combine immutable robot meshes with snapshot imported meshes by numeric key; source STL offsets must not be reapplied. Collision proxies (groups 3/4) stay hidden in visuals but remain active in physics. WebSocket unsolicited states have no requestId. A workspace-boundary failure returns a paused snapshot with `warning`, task failure and last valid physics state.
 
@@ -132,4 +132,4 @@ KALAS IDs: `kalas_bowl`, `kalas_cup`, `kalas_spoon`, `kalas_plate`. They compile
 
 ## Policy limits
 
-All ten named examples are rehearsed and executed in tests, plus four custom spoon yaw angles and legacy ±5 mm source variations. IK uses actual robot kinematics and bounded joints; actuator targets interpolate smoothly. Grasp assist requires closure and measured proximity before enabling a soft weld. Delivery solves for the measured carried spoon bowl/axis, not a guessed fixed grasp transform. Object qpos is never animated by the controller. The weld is removed at release; success requires measured lift, bowl inside the upright cup, low translational speed and no active grasp. Unsupported destinations, disabled collisions, tilted cups or unreachable poses fail explicitly. This is not a general collision-free planner or hardware-ready controller.
+All ten examples are rehearsed and independently executed with contact-only dynamics, including source rotations and legacy spoon variations. IK uses measured robot kinematics and bounded actuators. A grasp requires sustained opposing jaw contacts; no equality weld or object-pose animation is used. Delivery solves from the carried spoon pose after lift. Released placement must have actual destination support and no jaw support, correct containment, low linear/angular speed and measured lift. Unsupported or missed grasps fail explicitly. See [contact physics audit](PHYSICS-AUDIT.md) for the force thresholds, numerical settings, results and limitations.

@@ -806,7 +806,13 @@ export default function App() {
                 aria-label="Step simulation"
                 title="Advance 20 ms"
                 disabled={!editable}
-                onClick={() => void safe(() => sim.command("step"))}
+                onClick={() =>
+                  void safe(() =>
+                    sim.command("step", {
+                      count: Math.round(0.02 / (sim.state?.timeStep || 0.002)),
+                    }),
+                  )
+                }
               >
                 <SkipForward size={17} />
               </button>
@@ -864,7 +870,8 @@ export default function App() {
             `${scene?.objects.length || 0} objects · ${sim.assets.length} assets`
           )}
           <span className="status-divider" />
-          500 Hz physics · Z up · meters
+          {Math.round(1 / (sim.state?.timeStep || 0.002))} Hz physics · Z up ·
+          meters
         </span>
         <span>
           <button
@@ -875,7 +882,7 @@ export default function App() {
           >
             Session {sim.state?.sessionId?.slice(0, 8) || "…"}
           </button>
-          <span className="version">v3.0</span>
+          <span className="version">v3.1</span>
         </span>
       </footer>
       {sim.error && (
@@ -1019,9 +1026,10 @@ export default function App() {
               intact.
             </p>
             <p className="quiet">
-              The IK policy drives the arm with proximity-gated grasp
-              assistance. Success is measured after release. Load the spoon →
-              cup example to try it. Imported meshes use solid convex collision.
+              The IK policy uses physical jaw contact and friction. A lost grasp
+              lets the object fall and fails the task. Success is measured after
+              release. Load the spoon → cup example to try it. Imported meshes
+              use solid convex collision.
             </p>
           </div>
         </div>

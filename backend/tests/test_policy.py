@@ -14,10 +14,11 @@ def test_example_physically_lifts_releases_and_settles():
     sim.start_policy()
     max_z = z0
     attached = False
-    for _ in range(1500):
+    for _ in range(3000):
         sim.step(10)
         max_z = max(max_z, sim.data.xpos[bid, 2])
-        attached |= bool(sim.data.eq_active.any())
+        attached |= sim.policy.held
+        assert not sim.data.eq_active.any()
         if sim.policy.status in ("succeeded", "failed"):
             break
     assert sim.policy.status == "succeeded", sim.policy.packet()
@@ -56,8 +57,10 @@ def test_unreachable_task_does_not_move_or_activate_grasp():
     scene.objects[0].position = [2, 2, 0.756]
     sim = Simulation(scene)
     before = sim.data.qpos.copy()
-    with pytest.raises(ValueError, match="reach"):
-        sim.start_policy()
+    from backend.planning import calculate_plan
+
+    plan = calculate_plan(sim)
+    assert not plan["verified"] and "reach" in plan["message"].lower()
     assert np.array_equal(before, sim.data.qpos)
     assert not sim.running and not sim.data.eq_active.any()
 
@@ -65,7 +68,7 @@ def test_unreachable_task_does_not_move_or_activate_grasp():
 def test_cancel_releases_held_object_and_does_not_report_success():
     sim = Simulation(example_scene())
     sim.start_policy()
-    for _ in range(250):
+    for _ in range(700):
         sim.step(10)
     assert sim.policy.held
     sim.stop_policy()
@@ -80,7 +83,7 @@ def test_example_repeatability_with_small_placement_variations(offset):
     scene.objects[0].position[0] += offset
     sim = Simulation(scene)
     sim.start_policy()
-    for _ in range(1000):
+    for _ in range(3000):
         sim.step(10)
         if sim.policy.status in ("succeeded", "failed"):
             break

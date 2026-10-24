@@ -72,8 +72,8 @@ def calculate_plan(sim, cancel=None):
         {},
         {"lift": 0.08, "transfer_clearance": 0.10},
         {"lift": 0.12, "transfer_clearance": 0.15},
-        {"lift": 0.09, "yaw_offset": 0.35},
-        {"lift": 0.09, "yaw_offset": -0.35},
+        {"reverse_grasp": True},
+        {"reverse_grasp": True, "lift": 0.08, "transfer_clearance": 0.10},
     ]
     failures = []
     for configuration in configurations:
@@ -95,7 +95,7 @@ def calculate_plan(sim, cancel=None):
         )
         try:
             trial.start_policy()
-            for step in range(1500):
+            for step in range(int(30 / (10 * trial.model.opt.timestep))):
                 if cancel.is_set():
                     return idle_plan("Calculation cancelled.")
                 if time.monotonic() - started > 45:

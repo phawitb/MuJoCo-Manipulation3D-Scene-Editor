@@ -93,6 +93,7 @@ export interface StatePacket {
   running: boolean;
   time: number;
   contacts: number;
+  timeStep?: number;
   poses: Pose[];
   joints: number[];
   objects: ObjectPose[];
@@ -107,6 +108,13 @@ export interface StatePacket {
     progress: number;
     success: boolean;
     graspAssist: boolean;
+    grip?: {
+      leftForce: number;
+      rightForce: number;
+      opposing: boolean;
+      secure: boolean;
+      maxPenetration: number;
+    };
     held: boolean;
   };
   cameras: { wrist: { position: Vec3; quaternion: Quat; fov: number } };

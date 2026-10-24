@@ -16,7 +16,7 @@ def test_rehearsal_does_not_move_live_scene_and_matches_execution():
     assert physics_fingerprint(sim) == before
     sim.policy.configuration = plan["configuration"]
     sim.start_policy()
-    for _ in range(1500):
+    for _ in range(3000):
         sim.step(10)
         if sim.policy.status in ("succeeded", "failed"):
             break

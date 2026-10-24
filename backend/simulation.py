@@ -96,7 +96,7 @@ def add_object(world, obj):
             friction=numbers(obj.friction),
             contype=str(int(obj.collision)),
             conaffinity=str(int(obj.collision)),
-            solref="0.01 1",
+            solref="0.004 1",
             condim="6",
         )
         attrs.update(props)
@@ -106,7 +106,7 @@ def add_object(world, obj):
 def build_xml(scene):
     root = ET.parse(MODEL_DIR / "so101.xml").getroot()
     root.find("compiler").set("meshdir", str(MODEL_DIR / "assets"))
-    root.find("option").set("timestep", "0.002")
+    root.find("option").set("timestep", "0.001")
     root.find("option").set("iterations", "50")
     world = root.find("worldbody")
     base = world.find("body[@name='base']")
@@ -149,7 +149,11 @@ def build_xml(scene):
                 size=numbers([0.016, 0.016, (t.height - 0.036) / 2]),
                 rgba=".18 .22 .25 1",
             )
-    equality = ET.SubElement(root, "equality")
+    # Resolve the millimetre-scale utensil/jaw contacts without soft overlap.
+    for cls in ("collision_gripper", "collision_gripper_mesh"):
+        root.find(f".//default[@class='{cls}']/geom").set("solref", "0.004 1")
+    # Gentle closing effort, below the source servo's 2.94 Nm stall limit.
+    root.find("actuator/position[@name='gripper']").set("forcerange", "-0.5 0.5")
     for obj in scene.objects:
         if obj.asset in KALAS:
             vertices, faces = visual_mesh(obj.asset)
@@ -169,16 +173,6 @@ def build_xml(scene):
                 face=" ".join(str(x) for x in obj.mesh.faces),
             )
         add_object(world, obj)
-        ET.SubElement(
-            equality,
-            "weld",
-            name=f"grasp_{obj.id}",
-            body1="gripper",
-            body2=f"object_{obj.id}",
-            active="false",
-            solref="0.005 1",
-            torquescale=".03",
-        )
     return ET.tostring(root, encoding="unicode")
 
 
@@ -285,6 +279,7 @@ class Simulation:
             revision=self.revision,
             running=self.running,
             time=float(self.data.time),
+            timeStep=float(self.model.opt.timestep),
             contacts=int(self.data.ncon),
             task=self.policy.packet(),
             cameras=self.camera_poses(),

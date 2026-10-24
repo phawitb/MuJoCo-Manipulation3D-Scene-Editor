@@ -139,7 +139,18 @@ export function TaskPanel({
       </div>
       <div className="policy-note">
         IK pick & place{" "}
-        <span>Grasp assist on · success checked after release</span>
+        <span
+          data-testid="grip-physics"
+          title="Measured opposing jaw contact forces. Objects are supported by contact and friction; no attachment constraint."
+        >
+          {task?.graspAssist
+            ? "Legacy assisted physics · reconnect to update"
+            : task?.held
+              ? task.grip?.secure
+                ? `Grip confirmed · L ${task.grip.leftForce.toFixed(1)} N / R ${task.grip.rightForce.toFixed(1)} N`
+                : "Grip slipping · checking contact"
+              : "Contact physics · no attachment"}
+        </span>
       </div>
     </section>
   );

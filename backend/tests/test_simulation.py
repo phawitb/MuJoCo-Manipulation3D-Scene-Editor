@@ -23,7 +23,7 @@ def test_objects_fall_and_settle_on_table(asset):
         Scene(objects=[SceneObject(id="drop", asset=asset, position=[0, 0.08, 1.0])])
     )
     start = sim.state()["objects"][0]["position"][2]
-    sim.step(1500)
+    sim.step(round(3.0 / sim.model.opt.timestep))
     obj = sim.state()["objects"][0]
     assert 0.72 < obj["position"][2] < 0.9
     assert obj["position"][2] < start
@@ -107,7 +107,7 @@ def test_disabled_collision_passes_through_table():
             ]
         )
     )
-    sim.step(200)
+    sim.step(round(0.4 / sim.model.opt.timestep))
     assert sim.state()["objects"][0]["position"][2] < 0.4
 
 

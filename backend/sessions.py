@@ -295,6 +295,10 @@ class Session:
             except ValueError as exc:
                 self.sim.stop_policy()
                 self.sim.policy.fail(str(exc))
+                # Numerical/workspace guards must pause immediately; only an
+                # ordinary dropped grasp receives the passive settling period.
+                self.sim.policy.failure_settle_until = None
+                self.sim.running = False
                 self.sequence += 1
                 p = self.packet()
                 p["warning"] = str(exc)
@@ -313,10 +317,11 @@ class Session:
                     self.broadcast(self.packet())
             if self.sim.running:
                 accum += min(now - last, 0.1)
-                count = min(int(accum / 0.002), 50)
+                dt = self.sim.model.opt.timestep
+                count = min(int(accum / dt), int(0.1 / dt))
                 if count:
                     packet = await asyncio.to_thread(self.tick, count)
-                    accum -= count * 0.002
+                    accum -= count * dt
                     if packet:
                         self.broadcast(packet)
             else:

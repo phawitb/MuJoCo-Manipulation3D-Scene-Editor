@@ -1,15 +1,11 @@
-"""Bounded IK pick/place controller. Only actuator targets and weld state are written.
+"""Contact-only IK pick/place controller. Writes actuator targets only."""
 
-Grasp assist is deliberate: a soft constraint is enabled only near the selected
-object after closure. Released objects move solely under MuJoCo physics.
-"""
-
-import math
 import mujoco
 import numpy as np
 from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation
 from .catalog import profile
+from .grasp import jaw_contacts
 
 
 class PickPlacePolicy:
@@ -26,6 +22,10 @@ class PickPlacePolicy:
         self.source = None
         self.target = None
         self.configuration = {}
+        self.contact = jaw_contacts(sim, None)
+        self.contact_since = None
+        self.lost_since = None
+        self.failure_settle_until = None
 
     def packet(self):
         return dict(
@@ -34,7 +34,8 @@ class PickPlacePolicy:
             message=self.message,
             progress=1.0 if self.success else self.index / 9,
             success=self.success,
-            graspAssist=True,
+            graspAssist=False,
+            grip=self.contact,
             held=self.held,
             source=self.source,
             target=self.target,
@@ -99,82 +100,105 @@ class PickPlacePolicy:
         dst = next(o for o in s.scene.objects if o.id == self.target)
         if not src.collision or not dst.collision:
             raise ValueError("Enable collision on both task objects.")
-        sp, dp = profile(src), profile(dst)
+        dp = profile(dst)
         if dp["family"] not in ("cup", "bowl", "plate", "cube", "mesh"):
             raise ValueError("Choose a cup, plate or solid support as the destination.")
         source = s.data.body(f"object_{src.id}")
         target = s.data.body(f"object_{dst.id}")
         if target.xmat.reshape(3, 3)[2, 2] < 0.95:
             raise ValueError("Place the destination upright before running.")
+        self.initial_source_z = float(source.xpos[2])
+        self.lifted = False
+        self.steps = [("Settle", s.data.qpos[:6].copy(), 0.5)]
+        self.index = 0
+        self.start_q = s.data.qpos[:6].copy()
+        self.started = float(s.data.time)
+        self.phase = "Settle"
+        self.status = "running"
+        self.success = self.held = False
+        self.message = "Contact-only IK · gravity and friction"
+        self.contact_since = self.lost_since = None
+
+    def plan_pick(self):
+        s = self.sim
+        src = next(o for o in s.scene.objects if o.id == self.source)
+        sp = profile(src)
+        source = s.data.body(f"object_{src.id}")
         grip = source.xpos.copy()
         if sp["family"] == "spoon":
             grip += source.xmat.reshape(3, 3) @ np.array(
                 [sp["grasp"] * src.scale, 0, 0]
             )
         self.grip_point = grip
-        # Arm pitch plane is radial; gripper's local Z points away from fingers.
-        shoulder = s.data.body("shoulder").xpos
-        yaw = math.atan2(
-            grip[1] - shoulder[1], grip[0] - shoulder[0]
-        ) + self.configuration.get("yaw_offset", 0)
-        radial = np.array([math.cos(yaw), math.sin(yaw), 0.0])
-        tangent = np.array([-math.sin(yaw), math.cos(yaw), 0.0])
-        down = np.column_stack([radial, tangent, [0, 0, 1]])
+        # Close across the handle, not along an arbitrary radial direction.
+        long_axis = source.xmat.reshape(3, 3)[:, 0]
+        across = np.array([-long_axis[1], long_axis[0], 0.0])
+        if np.linalg.norm(across) < 0.2:
+            raise ValueError(
+                "This grasp requires the utensil lying flat. Reposition it before calculating."
+            )
+        across /= np.linalg.norm(across)
+        if self.configuration.get("reverse_grasp", False):
+            across *= -1
+        down = np.column_stack([across, np.cross([0, 0, 1], across), [0, 0, 1]])
+        width = (
+            0.014
+            if src.asset == "kalas_spoon"
+            else 0.006
+            if src.asset == "spoon"
+            else sp["dimensions"][1]
+        ) * src.scale
+        if width > 0.065:
+            raise ValueError(
+                "Object is too wide for this gripper at the selected grasp."
+            )
+        pinch = np.array(
+            [
+                -0.008 + width / 2,
+                0,
+                -0.1025
+                if src.asset == "spoon"
+                else -0.104
+                if sp["family"] == "spoon"
+                else -0.098,
+            ]
+        )
+        pinch[2] += self.configuration.get("grasp_depth_offset", 0)
+        offset = s.model.site_pos[s.model.site("gripperframe").id] - pinch
+        opening = float(np.clip((width + 0.005 - 0.016) / 0.078, -0.08, 0.7))
         seed = s.data.qpos[:6].copy()
         plans = []
 
-        def move(label, pos, rot, opening=0.65, duration=1.8):
+        def move(label, pos, rot, opening=opening, duration=1.8):
             nonlocal seed
-            seed = self.ik(np.array(pos), rot, seed)
+            seed = self.ik(np.array(pos) + rot @ offset, rot, seed)
             seed[5] = opening
             plans.append((label, seed.copy(), duration))
 
         lift = self.configuration.get("lift", 0.10)
         move("Approach", grip + [0, 0, lift], down)
-        move("Descend", grip + [0, 0, 0.003], down, duration=1.5)
+        move("Descend", grip, down, duration=1.5)
         closed = seed.copy()
-        closed[5] = -0.03
-        plans.append(("Grasp", closed, 0.8))
-        move("Lift", grip + [0, 0, lift], down, -0.03)
+        closed[5] = -0.17
+        plans.append(("Grasp", closed, 2.5))
+        move("Lift", grip + [0, 0, lift], down, -0.17)
         # The remaining path is planned from the measured grasp transform,
         # after closing. Thin objects can rotate slightly while being grasped.
-        self.steps = plans
-        self.index = 0
-        self.start_q = s.data.qpos[:6].copy()
-        self.started = float(s.data.time)
-        self.phase = plans[0][0]
-        self.status = "running"
-        self.success = False
-        self.held = False
-        self.message = "IK policy · proximity-gated grasp assist"
-        self.initial_source_z = float(source.xpos[2])
-        self.lifted = False
+        self.steps.extend(plans)
 
-    def attach(self):
-        s = self.sim
-        m, d = s.model, s.data
-        b1 = m.body("gripper").id
-        b2 = s.object_bodies[self.source]
-        obj = next(o for o in s.scene.objects if o.id == self.source)
-        actual = d.xpos[b2].copy()
-        if profile(obj)["family"] == "spoon":
-            actual += d.xmat[b2].reshape(3, 3) @ np.array(
-                [profile(obj)["grasp"] * obj.scale, 0, 0]
-            )
-        distance = np.linalg.norm(d.site("gripperframe").xpos - actual)
-        if distance > 0.025 or d.qpos[5] > 0.25:
+    def confirm_grasp(self):
+        self.contact = jaw_contacts(self.sim, self.source)
+        if (
+            not self.contact["secure"]
+            or self.contact_since is None
+            or self.sim.data.time - self.contact_since < 0.08
+        ):
             self.fail(
-                f"Grasp missed ({distance * 1000:.0f} mm). Reposition the object or reload the example."
+                "Grasp missed: both jaws must maintain opposing contact. Reposition the object."
             )
             return
-        eq = m.equality(f"grasp_{self.source}").id
-        r = d.xmat[b1].reshape(3, 3)
-        m.eq_data[eq, 3:6] = r.T @ (d.xpos[b2] - d.xpos[b1])
-        q = np.zeros(4)
-        mujoco.mju_mat2Quat(q, (r.T @ d.xmat[b2].reshape(3, 3)).reshape(-1))
-        m.eq_data[eq, 6:10] = q
-        d.eq_active[eq] = True
         self.held = True
+        self.lost_since = None
 
     def plan_delivery(self):
         s = self.sim
@@ -250,7 +274,7 @@ class PickPlacePolicy:
                 raise ValueError(
                     "Cannot orient the grasped object over this destination. Move it closer or reload the example."
                 )
-            seed = np.r_[best.x, -0.03]
+            seed = np.r_[best.x, -0.17]
             self.steps.append((label, seed.copy(), duration))
 
         height = dp["dimensions"][2] * dst.scale
@@ -265,34 +289,31 @@ class PickPlacePolicy:
                 2.0,
             )
         else:
-            # Place the measured carried point over the receiving surface.
-            z = (
-                -height / 2 + dp.get("thickness", 0.004) * dst.scale
-                if dp["family"] in ("bowl", "plate")
-                else height / 2
-            )
+            # Release above the rim; driving the hand down to the bowl floor
+            # pushes the utensil against the vessel and cannot be a valid place.
             position = target.xpos + [
                 0,
                 0,
-                z + sp["dimensions"][2] * src.scale / 2 + 0.014,
+                height / 2 + sp["dimensions"][2] * src.scale / 2 + 0.008,
             ]
             carry("Transfer", position + [0, 0, clearance], 2.8)
             carry("Place", position, 2.0)
         opened = seed.copy()
         opened[5] = 0.8
         self.steps.append(("Release", opened, 0.8))
-        scratch.qpos[:6] = seed
-        mujoco.mj_forward(m, scratch)
-        retreat = self.ik(
-            scratch.site("gripperframe").xpos + [0, 0, 0.08],
-            scratch.body("gripper").xmat.reshape(3, 3).copy(),
-            seed,
+        # Use the same reachable carried-point constraint for withdrawal.
+        place_point = (
+            target.xpos + [0, 0, min(0.012 * dst.scale, height * 0.15)]
+            if inserting
+            else position
         )
+        carry("Retreat", place_point + [0, 0, 0.08], 1.7)
+        label, retreat, duration = self.steps[-1]
         retreat[5] = 0.8
-        self.steps.extend([("Retreat", retreat, 1.7), ("Verify", retreat, 2.5)])
+        self.steps[-1] = (label, retreat, duration)
+        self.steps.append(("Verify", retreat.copy(), 2.5))
 
     def release(self):
-        self.sim.data.eq_active[:] = False
         self.held = False
 
     def cancel(self):
@@ -301,13 +322,17 @@ class PickPlacePolicy:
         self.phase = "Stopped"
         self.message = "Task stopped. Objects released."
         self.sim.data.ctrl[:] = self.sim.data.qpos[:6]
+        self.sim.data.ctrl[5] = 0.8
 
     def fail(self, message):
         self.release()
         self.status = "failed"
         self.phase = "Needs attention"
         self.message = message
-        self.sim.running = False
+        self.sim.data.ctrl[:] = self.sim.data.qpos[:6]
+        self.sim.data.ctrl[5] = 0.8
+        self.failure_settle_until = float(self.sim.data.time) + 1.5
+        self.sim.running = True
 
     def verify(self):
         s = self.sim
@@ -344,10 +369,28 @@ class PickPlacePolicy:
             s.model, mujoco.mjtObj.mjOBJ_BODY, f"object_{self.source}"
         )
         dof = s.model.jnt_dofadr[s.model.body_jntadr[adr]]
-        stable = np.linalg.norm(d.qvel[dof : dof + 3]) < 0.03
+        stable = (
+            np.linalg.norm(d.qvel[dof : dof + 3]) < 0.03
+            and np.linalg.norm(d.qvel[dof + 3 : dof + 6]) < 0.3
+        )
+        supported = False
+        for index, contact in enumerate(d.contact):
+            bodies = {int(s.model.geom_bodyid[g]) for g in contact.geom}
+            if bodies == {s.object_bodies[self.source], s.object_bodies[self.target]}:
+                force = np.zeros(6)
+                mujoco.mj_contactForce(s.model, d, index, force)
+                supported |= force[0] > 0.005
+        grip = jaw_contacts(s, self.source)
+        released = grip["leftForce"] + grip["rightForce"] < 0.02
         upright = b.xmat.reshape(3, 3)[2, 2] > 0.9
         self.success = bool(
-            inside and stable and upright and self.lifted and not self.held
+            inside
+            and stable
+            and upright
+            and supported
+            and released
+            and self.lifted
+            and not self.held
         )
         self.status = "succeeded" if self.success else "failed"
         self.phase = "Complete" if self.success else "Needs attention"
@@ -359,9 +402,31 @@ class PickPlacePolicy:
         s.running = False
 
     def update(self):
+        if self.status == "failed" and self.failure_settle_until is not None:
+            if self.sim.data.time >= self.failure_settle_until:
+                self.sim.running = False
+            return
         if self.status != "running":
             return
         s = self.sim
+        self.contact = jaw_contacts(s, self.source)
+        if self.contact["secure"]:
+            if self.contact_since is None:
+                self.contact_since = float(s.data.time)
+            self.lost_since = None
+        else:
+            self.contact_since = None
+            if self.held and self.lost_since is None:
+                self.lost_since = float(s.data.time)
+        if (
+            self.held
+            and self.lost_since is not None
+            and s.data.time - self.lost_since > 0.10
+        ):
+            self.fail(
+                "Object slipped from the gripper. Physics continues while it falls; adjust the grasp."
+            )
+            return
         self.lifted |= (
             s.data.xpos[s.object_bodies[self.source], 2] > self.initial_source_z + 0.06
         )
@@ -372,10 +437,17 @@ class PickPlacePolicy:
         s.data.ctrl[:] = self.start_q + (q - self.start_q) * blend
         if elapsed < duration:
             return
+        if label == "Settle":
+            try:
+                self.plan_pick()
+            except ValueError as exc:
+                self.fail(str(exc))
+                return
         if label == "Grasp":
-            self.attach()
+            self.confirm_grasp()
             if self.status == "failed":
                 return
+        if label == "Lift":
             try:
                 self.plan_delivery()
             except ValueError as exc:

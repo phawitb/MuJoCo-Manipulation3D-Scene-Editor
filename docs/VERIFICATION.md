@@ -1,61 +1,28 @@
-# Verification — path preview and KALAS workbench (v3)
+# Verification — contact-only physics v3.1
 
-2026-10-24 · macOS Apple Silicon · Python 3.12 · MuJoCo 3.17.0 · official MCP SDK 2.3.0 · React 19 / Three.js / Vite 7. Pinned dependency locks are committed.
+2026-10-24 · MuJoCo 3.17.0 · macOS Apple Silicon · Python 3.12.
 
-## Results
+- **88 backend tests passed** in 165.60 seconds. This includes each of the ten original arrangements executed with 1-, 17- and 33-step observation batches, custom yaw angles, a changed robot base, unreachable/blocked scenes, legacy spoon variations, scene import/export, HTTP/WebSocket and real MCP integration.
+- **13 frontend unit tests passed**, strict TypeScript and production build passed. The existing large 3D bundle warning remains (~1.24 MB before gzip).
+- **22 browser scenarios passed** in 1.8 minutes. Example06 specifically verifies measured opposing forces in the UI/API, contact-only mode and released completion. Existing placement, arrows, camera, import, persistence and reconnect flows also pass.
+- **123 automated tests total**, plus an independent every-1-ms physical audit of all ten examples. Every case succeeded with 6,602/6,602 secure carrying samples, no active attachment constraint and 0 ms unsupported carrying time.
+- Native close-up video and frames were inspected for examples01,06,08 (cup, bowl, plate). See [detailed root cause, measurements, source documentation and video](PHYSICS-AUDIT.md).
 
-- Backend: **63 tests passed**, including native physics, asynchronous planning/invalidation, real MCP stdio handshake/tool calls/images, imports and scene roundtrips.
-- Frontend: **13 unit tests passed**, strict TypeScript and production build pass. Vite retains its large 3D bundle warning (~1.24 MB before gzip).
-- Browser: **21 scenarios passed** on the final implementation, including a complete pick-and-place run through the UI. Total: **97 automated tests passed**.
-- The standalone HTTP example also calculated a 160-point trajectory and physically completed the task at 15.73 simulated seconds.
-- An earlier run correctly exposed outdated asset-count/name assertions after adding KALAS; those assertions now match the new library. The task-example selector uses an exact label to avoid also matching the Load button.
-- New regressions cover ghost visibility/cancellation/exact drop coordinates; blank-table selection; Inspector row selection; repeated and fine arrow movement without stealing form input; task selection pulses; isolated path calculation and edit invalidation; ten-item example picker.
+## Regression evidence
 
-## Ten actual physics executions
+The original three regressions failed against assisted physics: invisible constraint during carrying, opening the gripper without the object falling, and proximity without contact accepted as a grasp. They now pass. A separate regression catches geometric containment without destination support (observed RED then GREEN). A loss-of-contact test also proves that failure allows passive falling instead of freezing mid-air; reverting that behavior made the test fail before restoration passed. Existing workspace-boundary tests caught the distinction between normal grasp failure and a numerical/workspace guard; guards still pause immediately.
 
-Each case first runs an isolated rehearsal without modifying the live-state fingerprint, then starts a separate physical execution with the selected controller configuration. Execution uses 17-step batches to exercise a different observation cadence. Every result below required actual lift, active grasp then release, stable placement and no active weld at completion. No object qpos animation is used.
+The previous fixed-step-duration tests were updated to retain their original simulated time budgets after the integration step changed from 2 ms to 1 ms. Success/contact thresholds were strengthened, not relaxed. Original example positions, source meshes, object masses, friction and arm actuator force limits were retained. Gripper effort is reduced from the source model's 2.94 Nm limit to 0.5 Nm.
 
-| Example | Destination / arrangement | Rehearsal attempts | Measured lift | Actual completion |
-|---|---|---:|---:|---|
-| 01 kalas-cup-front | KALAS cup, front | 1 | 0.217 m | PASS · 15.71 s |
-| 02 kalas-cup-left | Cup left, source rotated 170° | 1 | 0.217 m | PASS · 15.71 s |
-| 03 kalas-cup-right | Cup right, source rotated 190° | 1 | 0.217 m | PASS · 15.71 s |
-| 04 kalas-cup-near | Near cup, source rotated 160° | 1 | 0.217 m | PASS · 15.71 s |
-| 05 kalas-bowl-front | KALAS bowl | 2 | 0.114 m | PASS · 15.71 s |
-| 06 kalas-bowl-left | Bowl left, angled source | 3 | 0.164 m | PASS · 15.71 s |
-| 07 kalas-plate-front | KALAS plate | 1 | 0.148 m | PASS · 15.71 s |
-| 08 kalas-plate-angle | Plate right, angled source | 1 | 0.148 m | PASS · 15.71 s |
-| 09 kalas-cup-clutter | Cup with surrounding bowl/cup | 1 | 0.217 m | PASS · 15.71 s |
-| 10 kalas-bowl-clutter | Bowl with surrounding bowl/cup | 3 | 0.164 m | PASS · 15.71 s |
+## Decisions and limitations
 
-Test: `backend/tests/test_examples.py` (16 cases: ten examples, four custom rotations, a moved/rotated robot base and a blocked scene). All pass. The custom scenes change the destination position and set spoon yaw to 0°, 45°, 90° and 270°; both plan and execution succeed. An obstructed source and an out-of-reach source produce explicit failed plans with unchanged live state. Legacy ±5 mm variation tests also pass.
+- The user's realism requirement supersedes assisted-mode behavior. There is no weld option. Previously successful assisted scenes may correctly fail physical grasp validation.
+- Work stays on a dedicated branch in the existing checkout; coupled controller/session/UI changes are implemented inline, with one independent final review. This preserves the local app path; it provides less filesystem isolation than a separate checkout.
+- The planner tries bounded physical candidates and can reject solvable scenes. It does not guarantee arbitrary placement success.
+- A dropped grasp leaves passive physics running for 1.5 seconds; explicit Pause/Stop and numerical guards still freeze the scene. Stop queues a physical jaw opening; physics or Step must advance it.
+- Contacts remain a soft rigid-body approximation; peak measured jaw overlap is about 0.5–0.7 mm. KALAS dimensions/material properties and hardware calibration remain the limits documented in [KALAS-SOURCES.md](KALAS-SOURCES.md).
+- Local open scenes were backed up in ignored scene-backups/ folders and restored across the service update. Their positions/cameras remain; physics time and old plans reset. No private backups are pushed.
 
-Runnable scene files: [examples/tasks](../examples/tasks). HTTP runner: [examples/run_task.py](../examples/run_task.py).
+The earlier assisted-mode report is retained as [historical evidence](VERIFICATION-V3-ASSISTED.md), not current physical-grasp validation.
 
-## Design decisions, evidence and limits
-
-- User delegated decisions. Work uses a dedicated feature branch in the existing checkout to keep the local app path usable. Implementation stays inline because physics/session/UI contracts are coupled; source research and final review use independent agents.
-- Chosen approach is bounded rehearsal in a full model/data copy, rather than geometric-only preview. The displayed path records actual gripper motion. Planning takes additional time and is not a complete search over every possible manipulation trajectory.
-- Grasp assistance is disclosed in the UI. A soft weld only activates after measured proximity and closure; release occurs before success evaluation. This is not pure-contact or hardware grasp validation.
-- Planning is bounded to two workers/four jobs, five candidate configurations, 45 seconds wall budget and 30 simulated seconds per candidate. Edits/cancellation invalidate the result; camera-only updates preserve it. Fingerprints prevent starting a stale plan. Pause/resume preserves the active controller.
-- Shallow-container placement allows spoon yaw to follow reachable kinematics while keeping the spoon level; cup insertion aims its head downward. A too-near initial example failed IK and was moved to a reachable arrangement, not relabelled successful.
-- Official dimensions, secondary-source heights and inferred thicknesses/profiles are separated in [KALAS-SOURCES.md](KALAS-SOURCES.md). Original procedural meshes avoid uncertain redistribution rights. Real samples are needed for metrology-grade dimensions and physical properties.
-- KALAS cups/bowls/plates have hollow compound collision shells. Imported STL/OBJ/GLB still use convex hull collision; imported hollow containers are unsuitable for insertion. Legacy asset IDs retain original dimensions.
-- Old scene/import recovery, full-scene size budgeting, queued snapshot retention, monotonic revisions, camera persistence and native PNG observation remain covered by regression tests.
-- Local-only service; no hardware control or public deployment. Save files preserve poses/task/cameras/assets, not velocities/controller checkpoints/plans. Arbitrary scene success is not guaranteed: failures keep user work intact and leave Run unavailable until a valid plan is calculated.
-
-Screenshots: [path preview and Inspector](screenshots/path-preview.png), [drag placement preview](screenshots/placement-preview.png), [successful physical execution](screenshots/pick-place-success.png), [narrow window](screenshots/narrow-workbench.png).
-
-A regression also caught visual-only mesh shells inadvertently reducing the requested body mass. Mass now distributes across collision pieces only; the actual compiled body mass matches the Inspector value. All ten tasks were rerun after this correction; the table above uses those results.
-
-## Independent review and final decisions
-
-A fresh-context, read-only whole-branch review covered afad159..c82cf07, the spec/plan and decision ledger. Verdict: **Ready to merge**; no Critical, Important or deferred Minor findings. The reviewer inspected code and tests; the execution results above were run by the implementer. The following boundaries were explicitly reviewed and retained:
-
-- Bounded planning can reject physically possible arrangements. A valid rehearsal is required before Run; comprehensive planning is beyond this implementation. Cost: the user may need to move objects or simplify a scene.
-- Grasp assistance remains disclosed, with measured closure/proximity and release checks. Cost: a successful simulation does not prove hardware or contact-only grasp reliability.
-- Missing manufacturer measurements remain estimates with provenance. Cost: real-world replicas need physical calibration.
-- Imported meshes retain their documented convex collision hull. Cost: an imported hollow vessel cannot be relied on for insertion; use the procedural hollow containers.
-- The app remains a local workbench. Cost: public or multi-user hosting needs a separate authentication/isolation design.
-
-The earlier implementation decisions remain: preserve the existing app checkout on a dedicated feature branch (cost: no second filesystem sandbox); implement coupled changes inline with independent research/review (cost: fewer implementation perspectives); rehearse full physics before showing a runnable path (cost: calculation time and bounded solvability); identify unreported dimensions as estimates (cost: calibration needed). No external third-party models were redistributed. Main is updated by fast-forward, without force push.
+Independent whole-branch review: pending final verdict.
