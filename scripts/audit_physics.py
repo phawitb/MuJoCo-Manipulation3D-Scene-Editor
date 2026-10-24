@@ -26,7 +26,9 @@ def audit(example, video=None):
         return dict(example=example, success=False, message=plan["message"])
     sim.policy.configuration = plan["configuration"]
     sim.start_policy()
-    z0 = float(sim.data.body("object_spoon").xpos[2])
+    source = sim.scene.task.source
+    body_name = f"object_{source}"
+    z0 = float(sim.data.body(body_name).xpos[2])
     max_z = z0
     max_gap = gap = max_penetration = 0.0
     min_force = float("inf")
@@ -75,8 +77,8 @@ def audit(example, video=None):
         for step in range(round(30 / sim.model.opt.timestep)):
             sim.step(1)
             assert not sim.data.eq_active.any(), "Unexpected non-contact attachment"
-            grip = jaw_contacts(sim, "spoon")
-            max_z = max(max_z, float(sim.data.body("object_spoon").xpos[2]))
+            grip = jaw_contacts(sim, source)
+            max_z = max(max_z, float(sim.data.body(body_name).xpos[2]))
             if sim.policy.held:
                 held_steps += 1
                 secure_steps += int(grip["secure"])
@@ -94,7 +96,7 @@ def audit(example, video=None):
             if renderer and (step % 40 == 0 or changed):
                 camera = mujoco.MjvCamera()
                 camera.lookat[:] = (
-                    sim.data.body("object_spoon").xpos
+                    sim.data.body(body_name).xpos
                     + sim.data.site("gripperframe").xpos
                 ) / 2
                 camera.distance = 0.34

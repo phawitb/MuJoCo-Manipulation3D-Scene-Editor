@@ -94,6 +94,14 @@ def calculate_plan(sim, cancel=None):
         {"grasp_along_offset": 0.03},
         {"grasp_along_offset": 0.03, "reverse_grasp": True},
     ]
+    from .catalog import profile
+
+    source = next((o for o in sim.scene.objects if o.id == sim.scene.task.source), None)
+    if source is not None and profile(source)["family"] == "cup":
+        configurations = [
+            dict(rim_angle=angle)
+            for angle in (0, np.pi / 4, -np.pi / 4, np.pi / 2, -np.pi / 2, np.pi)
+        ]
     failures = []
     for configuration in configurations:
         if cancel.is_set():

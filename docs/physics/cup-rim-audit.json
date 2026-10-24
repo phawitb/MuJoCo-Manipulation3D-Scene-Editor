@@ -1,0 +1,141 @@
+[
+  {
+    "example": "kalas-rim-to-plate",
+    "success": true,
+    "message": "Object released and settled in the destination.",
+    "seconds": 17.906999999998902,
+    "attempts": 5,
+    "configuration": {
+      "rim_angle": -1.5707963267948966
+    },
+    "lift": 0.07394365604431308,
+    "heldSteps": 6602,
+    "secureSteps": 6602,
+    "maxUnsupportedSeconds": 0.0,
+    "maxJawPenetration": 0.00015367933558049643,
+    "minimumJawForce": 5.733599030369635,
+    "phases": [
+      {
+        "phase": "Settle",
+        "time": 0.001,
+        "grip": {
+          "leftForce": 0.0,
+          "rightForce": 0.0,
+          "opposing": false,
+          "secure": false,
+          "maxPenetration": 0.0
+        }
+      },
+      {
+        "phase": "Approach",
+        "time": 0.5010000000000003,
+        "grip": {
+          "leftForce": 0.0,
+          "rightForce": 0.0,
+          "opposing": false,
+          "secure": false,
+          "maxPenetration": 0.0
+        }
+      },
+      {
+        "phase": "Descend",
+        "time": 2.3019999999998575,
+        "grip": {
+          "leftForce": 0.0,
+          "rightForce": 0.0,
+          "opposing": false,
+          "secure": false,
+          "maxPenetration": 0.0
+        }
+      },
+      {
+        "phase": "Grasp",
+        "time": 3.802999999999692,
+        "grip": {
+          "leftForce": 0.0,
+          "rightForce": 0.0,
+          "opposing": false,
+          "secure": false,
+          "maxPenetration": 0.0
+        }
+      },
+      {
+        "phase": "Lift",
+        "time": 6.30300000000044,
+        "grip": {
+          "leftForce": 5.844566057940107,
+          "rightForce": 5.733599030369635,
+          "opposing": true,
+          "secure": true,
+          "maxPenetration": 0.00015306918538981226
+        }
+      },
+      {
+        "phase": "Transfer",
+        "time": 8.103000000000948,
+        "grip": {
+          "leftForce": 6.481282273845916,
+          "rightForce": 6.408320375305389,
+          "opposing": true,
+          "secure": true,
+          "maxPenetration": 0.0001246026799537755
+        }
+      },
+      {
+        "phase": "Place",
+        "time": 10.903999999999396,
+        "grip": {
+          "leftForce": 6.478229708014149,
+          "rightForce": 6.475748764233854,
+          "opposing": true,
+          "secure": true,
+          "maxPenetration": 0.00013498451173184233
+        }
+      },
+      {
+        "phase": "Release",
+        "time": 12.904999999998287,
+        "grip": {
+          "leftForce": 6.4572853736221125,
+          "rightForce": 6.417406489152866,
+          "opposing": true,
+          "secure": true,
+          "maxPenetration": 0.0001290265290727416
+        }
+      },
+      {
+        "phase": "Retreat",
+        "time": 13.705999999997843,
+        "grip": {
+          "leftForce": 0.0,
+          "rightForce": 0.0,
+          "opposing": false,
+          "secure": false,
+          "maxPenetration": 0.0
+        }
+      },
+      {
+        "phase": "Verify",
+        "time": 15.4069999999969,
+        "grip": {
+          "leftForce": 0.0,
+          "rightForce": 0.0,
+          "opposing": false,
+          "secure": false,
+          "maxPenetration": 0.0
+        }
+      },
+      {
+        "phase": "Complete",
+        "time": 17.906999999998902,
+        "grip": {
+          "leftForce": 0.0,
+          "rightForce": 0.0,
+          "opposing": false,
+          "secure": false,
+          "maxPenetration": 0.0
+        }
+      }
+    ]
+  }
+]

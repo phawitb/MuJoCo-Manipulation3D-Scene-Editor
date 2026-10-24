@@ -18,14 +18,15 @@ def test_examples_plan_and_execute(example_id, batch):
     assert initial == physics_fingerprint(sim)
     sim.policy.configuration = plan["configuration"]
     sim.start_policy()
-    original = sim.data.body("object_spoon").xpos[2]
+    source_body = f"object_{sim.scene.task.source}"
+    original = sim.data.body(source_body).xpos[2]
     max_z = original
     held = False
     longest_gap = gap = 0.0
     min_force = float("inf")
     for _ in range(int(30 / (batch * sim.model.opt.timestep))):
         sim.step(batch)
-        max_z = max(max_z, sim.data.body("object_spoon").xpos[2])
+        max_z = max(max_z, sim.data.body(source_body).xpos[2])
         held |= sim.policy.held
         assert not sim.data.eq_active.any(), (
             "No invisible attachment may carry the load"
@@ -44,7 +45,7 @@ def test_examples_plan_and_execute(example_id, batch):
     assert min_force > 0.02
     assert sim.policy.success, (example_id, sim.policy.packet())
     assert not sim.data.eq_active.any()
-    assert np.linalg.norm(sim.data.body("object_spoon").cvel) < 0.2
+    assert np.linalg.norm(sim.data.body(source_body).cvel) < 0.2
     print(
         example_id,
         f"PASS batch={batch} {sim.data.time:.2f}s attempts={plan['attempts']} lift={max_z - original:.3f}m gap={longest_gap:.3f}s min_force={min_force:.3f}N",

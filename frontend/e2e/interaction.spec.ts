@@ -33,7 +33,10 @@ test("empty Inspector lists objects, highlights selection and keyboard nudges on
   await expect
     .poll(async () => (await read())[0])
     .toBeCloseTo(before[0] + 0.04, 4);
+  // HTTP state can lead the WebSocket acknowledgement that re-enables inputs.
+  await expect(page.getByLabel("Position X")).toBeEnabled();
   await page.getByLabel("Position X").focus();
+  await expect(page.getByLabel("Position X")).toBeFocused();
   const after = await read();
   await page.keyboard.press("ArrowLeft");
   expect(await read()).toEqual(after);
@@ -92,7 +95,7 @@ test("task buttons pulse their current object and every example is selectable", 
   await page.getByRole("button", { name: "Cancel task selection" }).click();
   await expect(
     page.getByLabel("Task example", { exact: true }).locator("option"),
-  ).toHaveCount(11);
+  ).toHaveCount(13);
   await page
     .getByLabel("Task example", { exact: true })
     .selectOption("kalas-bowl-clutter");

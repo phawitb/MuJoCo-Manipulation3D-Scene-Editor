@@ -21,6 +21,10 @@ def collision_issue(sim, data=None, *, kinematic=False, ignore_source=False):
     names = {objects[o.id]: o.name for o in sim.scene.objects}
     hand = d.body("gripper")
     held = getattr(sim.policy, "held", False)
+    # Loose cargo moves through contact with the cup but still occupies space.
+    carried = {source} | {
+        objects[oid] for oid in getattr(sim.policy, "contents", []) if oid in objects
+    }
     for c in d.contact:
         a, b = (int(m.geom_bodyid[g]) for g in c.geom)
         if ignore_source and source in (a, b):
@@ -42,9 +46,10 @@ def collision_issue(sim, data=None, *, kinematic=False, ignore_source=False):
                     0 if kinematic and not (tip and other == 0) else BODY_TOLERANCE
                 )
                 kind = "Arm collision"
-        elif held and source in (a, b):
-            # The held utensil may contact its source vessel while extracting,
-            # but it must not be driven through it or other obstacles.
+        elif held and (a in carried or b in carried):
+            # Include protruding cargo against external obstacles, as well as
+            # cup/cargo contacts. Ordinary touching is allowed; deep penetration
+            # is not, even when an item remains geometrically inside the cup.
             tolerance = 0.0015
             kind = "Held object collision"
         else:

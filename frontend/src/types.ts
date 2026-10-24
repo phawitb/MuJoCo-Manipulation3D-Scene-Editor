@@ -115,6 +115,7 @@ export interface StatePacket {
     progress: number;
     success: boolean;
     graspAssist: boolean;
+    contents?: string[];
     grip?: {
       leftForce: number;
       rightForce: number;

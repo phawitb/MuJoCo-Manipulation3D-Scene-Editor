@@ -1,6 +1,6 @@
 # SO-101 Scene Studio
 
-A local 3D manipulation workbench with **real MuJoCo physics**, an **SO-101 arm**, five camera views, portable mesh import, researched **IKEA KALAS assets**, and **eleven rehearsed pick/place examples**, and **MCP / HTTP control** of the scene you see in the browser.
+A local 3D manipulation workbench with **real MuJoCo physics**, an **SO-101 arm**, five camera views, portable mesh import, researched **IKEA KALAS assets**, and **thirteen rehearsed pick/place examples**, and **MCP / HTTP control** of the scene you see in the browser.
 
 ![Successful spoon-to-cup task](docs/screenshots/pick-place-success.png)
 
@@ -17,18 +17,18 @@ Open **http://127.0.0.1:5173**. First launch installs dependencies automatically
 
 ## Try the task
 
-1. Choose a task from the **10-example menu** and click **Load example**.
+1. Choose a task from the **13-example menu** and click **Load example**.
 2. Click **Calculate path**. The app rehearses the task in an isolated MuJoCo copy; your live scene stays still.
 3. Inspect the **rainbow gripper path**, then click **Run simulation**. The arm approaches, closes, lifts, transfers, lowers, releases and retreats.
 4. **Complete** appears after measured lift, release and settling. Examples take about 18 simulated seconds. Pause/Run resumes the active task; physical edits require a new calculation.
 
 Calculation also works with user-arranged objects. Tests include moved destinations and spoon rotations of 0°, 45°, 90° and 270°. Unreachable or obstructed arrangements show a failure instead of enabling Run. This is a bounded rehearsal search, not a guarantee for every placement. Calculation can be cancelled; camera changes preserve a valid plan.
 
-The controller uses numerical IK and **physical jaw contact/friction only**. There is no grasp weld, hidden attachment or object teleportation. Both jaws must sustain opposing forces before lifting; contact loss fails the task and lets gravity act. The UI shows measured left/right grip forces. Delivery is recalculated after lifting, and success requires release, actual destination support and settling. All eleven examples were audited at every 1 ms step; see the [whole-arm safety audit](docs/physics/WHOLE-ARM-SAFETY.md) and [example 06 contact audit/video](docs/PHYSICS-AUDIT.md). This is not hardware-calibrated contact dynamics or a guarantee for arbitrary scenes.
+The controller uses numerical IK and **physical jaw contact/friction only**. There is no grasp weld, hidden attachment or object teleportation. Both jaws must sustain opposing forces before lifting; contact loss fails the task and lets gravity act. The UI shows measured left/right grip forces. Delivery is recalculated after lifting, and success requires release, actual destination support and settling. The original eleven examples were audited at every 1 ms step; see the [whole-arm safety audit](docs/physics/WHOLE-ARM-SAFETY.md) and [example 06 contact audit/video](docs/PHYSICS-AUDIT.md). This is not hardware-calibrated contact dynamics or a guarantee for arbitrary scenes.
 
 ## Build your own task
 
-Click **Pick object**, then click the object directly in a viewport or the scene collection. Next click the destination. **Calculate path first, then Run simulation / Space moves the arm**; Pause freezes execution, Run resumes, Stop releases and cancels. Invalid or unreachable tasks show an actionable error. Cups, bowls, plates and solid supports can be destinations; the eleven bundled arrangements cover cup insertion, bowl/plate placement and surrounding objects. Bring objects closer to the arm if IK cannot reach them. Imported hollow vessels use solid collision; use the procedural cup for insertion.
+Click **Pick object**, then click the object directly in a viewport or the scene collection. Next click the destination. **Calculate path first, then Run simulation / Space moves the arm**; Pause freezes execution, Run resumes, Stop releases and cancels. Invalid or unreachable tasks show an actionable error. Cups, bowls, plates and solid supports can be destinations; the thirteen bundled arrangements cover cup insertion, bowl/plate placement and surrounding objects. Bring objects closer to the arm if IK cannot reach them. Imported hollow vessels use solid collision; use the procedural cup for insertion.
 
 **Physics only** runs physics without a pick/place policy and opens the gripper. **Step** advances 20 ms while paused. While a task is paused, Step also advances its controller. Editing physical scene properties cancels the current task, recompiles and resets time/velocities. Changing only pick/place instructions preserves the measured physical state. Saved poses use measured joints, not unreachable actuator targets.
 
@@ -94,3 +94,9 @@ Example **11 · Spoon from cup onto plate** starts with a physically resting spo
 Select **SCENE COLLECTION → SO-101 arm**, adjust **Joint positions**, then click **Save current pose as reset**. **Reset scene** and **Load example** start from that saved pose. **Apply saved pose** previews it in the current scene; **Use folded default** restores and saves the compact folded pose. The saved angles travel with scene files and are remembered for new workspaces in the same browser profile. Existing sessions and imported scenes keep their own settings.
 
 Front and Back cameras have only their setup editor and expand control; their Reset camera buttons have been removed. Main and Top retain their reset controls.
+
+### Cup rim grasp and loose contents
+
+Example **12 · Cup by rim onto plate** pinches the cup wall near its rim, rather than attempting to span the full diameter. Example **13 · Cup with spoon onto plate** starts with a physically resting spoon in the cup; the spoon remains a free body throughout transport. The planner rehearses six rim directions with the same whole-arm checks and real actuator/contact limits as execution. It refuses a path if the cup or contents cannot be carried and settled safely.
+
+For a consecutive task, place a spoon at `[-0.07, -0.015, 0.756]` with yaw 180° in example 12. Select **spoon → cup**, calculate and run; after completion select **cup → plate**, calculate again and run. The regression uses the measured state of the first task without resetting or repositioning either object. Contents must remain inside the cup and have real contact support at completion. The supplied cup geometry and friction are estimates, not calibrated hardware measurements. See [cup grasp validation](docs/physics/CUP-RIM-GRASP.md).

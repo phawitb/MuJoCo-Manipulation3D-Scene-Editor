@@ -144,8 +144,61 @@ EXAMPLES = [
 ]
 
 
+CUP_EXAMPLES = [
+    dict(
+        id="kalas-rim-to-plate",
+        name="12 · Cup by rim onto plate",
+        description="Pinch the cup wall at the rim, carry upright and release onto the plate",
+    ),
+    dict(
+        id="kalas-loaded-cup-to-plate",
+        name="13 · Cup with spoon onto plate",
+        description="Carry a cup containing a loose spoon; both must settle without spilling",
+    ),
+]
+
+
 def example_catalog():
-    return [dict(id=e[0], name=e[1], description=e[2]) for e in EXAMPLES]
+    return [dict(id=e[0], name=e[1], description=e[2]) for e in EXAMPLES] + CUP_EXAMPLES
+
+
+def cup_example(example_id):
+    from .catalog import KALAS
+
+    row = next(e for e in CUP_EXAMPLES if e["id"] == example_id)
+    objects = []
+    for oid, asset, position in [
+        ("cup", "kalas_cup", [-0.08, -0.07, 0.7905]),
+        ("plate", "kalas_plate", [-0.04, 0.10, 0.7658]),
+    ]:
+        p = KALAS[asset]
+        objects.append(
+            SceneObject(
+                id=oid,
+                name=("Pick" if oid == "cup" else "Place") + " · KALAS " + p["family"],
+                asset=asset,
+                position=position,
+                mass=p["mass"],
+                color=p["color"],
+            )
+        )
+    if example_id == "kalas-loaded-cup-to-plate":
+        # Measured resting pose after the real spoon→cup task, with no attachment.
+        p = KALAS["kalas_spoon"]
+        objects.append(
+            SceneObject(
+                id="spoon",
+                name="Contents · KALAS spoon",
+                asset="kalas_spoon",
+                position=[-0.0517882665, -0.0872420702, 0.8257582501],
+                quaternion=[0.2402246622, -0.5237020982, 0.1836190647, 0.7964372311],
+                mass=p["mass"],
+                color=p["color"],
+            )
+        )
+    return Scene(
+        name=row["name"], objects=objects, task=Task(source="cup", target="plate")
+    )
 
 
 legacy_example_scene = example_scene
@@ -157,6 +210,8 @@ def example_scene(example_id=None):
     from .catalog import KALAS
     import math
 
+    if example_id in {e["id"] for e in CUP_EXAMPLES}:
+        return cup_example(example_id)
     row = next((e for e in EXAMPLES if e[0] == example_id), None)
     if row is None:
         raise ValueError("Unknown example ID")

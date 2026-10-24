@@ -6,6 +6,7 @@ from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation
 from .catalog import profile
 from .grasp import jaw_contacts
+from .contents import find_contents, contents_issue
 from .safety import collision_issue, swept_collision
 
 
@@ -23,6 +24,7 @@ class PickPlacePolicy:
         self.source = None
         self.target = None
         self.configuration = {}
+        self.contents = []
         self.contact = jaw_contacts(sim, None)
         self.contact_since = None
         self.lost_since = None
@@ -42,6 +44,7 @@ class PickPlacePolicy:
             held=self.held,
             source=self.source,
             target=self.target,
+            contents=list(self.contents),
         )
 
     def ik(self, position, rotation, seed, pinch=None, opening=0.65):
@@ -126,6 +129,7 @@ class PickPlacePolicy:
         target = s.data.body(f"object_{dst.id}")
         if target.xmat.reshape(3, 3)[2, 2] < 0.95:
             raise ValueError("Place the destination upright before running.")
+        self.contents = find_contents(s, self.source)
         self.initial_source_z = float(source.xpos[2])
         self.lifted = False
         self.steps = [("Settle", s.data.qpos[:6].copy(), 0.5)]
@@ -153,6 +157,27 @@ class PickPlacePolicy:
                     0,
                 ]
             )
+        rim_grasp = sp["family"] == "cup"
+        if rim_grasp:
+            if source.xmat.reshape(3, 3)[2, 2] < 0.98:
+                raise ValueError("Stand the cup upright before grasping its rim.")
+            toward_base = s.data.body("base").xpos - source.xpos
+            angle = np.arctan2(toward_base[1], toward_base[0]) + self.configuration.get(
+                "rim_angle", 0
+            )
+            rim_direction = np.array([np.cos(angle), np.sin(angle), 0.0])
+            depth = 0.006 * src.scale
+            radius = (sp["rim"] - sp["thickness"] / 2) * src.scale
+            radius -= (
+                depth * (sp["rim"] - sp.get("base", sp["rim"])) / sp["dimensions"][2]
+            )
+            # Inset the pinch centre so the inner finger clears the tapered wall.
+            radius -= 0.002 * src.scale
+            grip = (
+                source.xpos
+                + radius * rim_direction
+                + np.array([0, 0, sp["dimensions"][2] * src.scale / 2 - depth])
+            )
         self.grip_point = grip
         # Close across the handle, not along an arbitrary radial direction.
         long_axis = source.xmat.reshape(3, 3)[:, 0]
@@ -165,6 +190,8 @@ class PickPlacePolicy:
             else np.array([-long_axis[1], long_axis[0], 0.0])
         )
 
+        if rim_grasp:
+            across = rim_direction
         if np.linalg.norm(across) < 0.2:
             raise ValueError(
                 "This grasp requires the utensil lying flat. Reposition it before calculating."
@@ -177,7 +204,9 @@ class PickPlacePolicy:
         up = np.array([0, 0, 1])
         down = np.column_stack([across, np.cross(up, across), up])
         width = (
-            0.014
+            sp["thickness"]
+            if rim_grasp
+            else 0.014
             if src.asset == "kalas_spoon"
             else 0.006
             if src.asset == "spoon"
@@ -208,14 +237,18 @@ class PickPlacePolicy:
             nonlocal seed
             seed = (
                 self.ik(np.array(pos), rot, seed, pinch=pinch, opening=opening)
-                if upright
+                if upright or rim_grasp
                 else self.ik(np.array(pos) + rot @ offset, rot, seed, opening=opening)
             )
             seed[5] = opening
             plans.append((label, seed.copy(), duration))
 
-        lift = self.configuration.get("lift", 0.10)
-        move("Approach", grip + [0, 0, min(lift, 0.035) if upright else lift], down)
+        lift = self.configuration.get("lift", 0.075 if rim_grasp else 0.10)
+        move(
+            "Approach",
+            grip + [0, 0, min(lift, 0.035) if upright or rim_grasp else lift],
+            down,
+        )
         move("Descend", grip, down, duration=1.5)
         closed = seed.copy()
         closed[5] = -0.17
@@ -332,7 +365,9 @@ class PickPlacePolicy:
             self.steps.append((label, seed.copy(), duration))
 
         height = dp["dimensions"][2] * dst.scale
-        clearance = self.configuration.get("transfer_clearance", 0.13)
+        clearance = self.configuration.get(
+            "transfer_clearance", 0.035 if sp["family"] == "cup" else 0.13
+        )
         if inserting:
             carry(
                 "Transfer", target.xpos + [0, 0, max(clearance, height / 2 + 0.06)], 2.8
@@ -361,7 +396,11 @@ class PickPlacePolicy:
             if inserting
             else position
         )
-        carry("Retreat", place_point + [0, 0, 0.08], 1.7)
+        carry(
+            "Retreat",
+            place_point + [0, 0, 0.035 if sp["family"] == "cup" else 0.08],
+            1.7,
+        )
         label, retreat, duration = self.steps[-1]
         retreat[5] = 0.8
         self.steps[-1] = (label, retreat, duration)
@@ -438,8 +477,23 @@ class PickPlacePolicy:
         grip = jaw_contacts(s, self.source)
         released = grip["leftForce"] + grip["rightForce"] < 0.02
         upright = b.xmat.reshape(3, 3)[2, 2] > 0.9
+        if sp["family"] == "cup":
+            upright = upright and a.xmat.reshape(3, 3)[2, 2] > 0.95
+            if dp["family"] == "plate":
+                inside = (
+                    inside
+                    and np.linalg.norm(relative[:2])
+                    + sp.get("base", sp["rim"]) * src.scale
+                    < dp["rim"] * dst.scale
+                )
+        content_error = (
+            contents_issue(s, self.source, self.contents, settled=True)
+            if self.contents
+            else None
+        )
         self.success = bool(
-            inside
+            not content_error
+            and inside
             and stable
             and upright
             and supported
@@ -452,7 +506,8 @@ class PickPlacePolicy:
         self.message = (
             "Object released and settled in the destination."
             if self.success
-            else "Object did not settle in the destination. Reload the example or adjust the task."
+            else content_error
+            or "Object did not settle in the destination. Reload the example or adjust the task."
         )
         s.running = False
 
@@ -464,6 +519,11 @@ class PickPlacePolicy:
         if self.status != "running":
             return
         s = self.sim
+        if self.lifted and self.contents:
+            issue = contents_issue(s, self.source, self.contents)
+            if issue:
+                self.fail(issue)
+                return
         self.contact = jaw_contacts(s, self.source)
         if self.contact["secure"]:
             if self.contact_since is None:
