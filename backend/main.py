@@ -142,7 +142,7 @@ async def read_session(sid: str, request: Request):
 
 @app.get("/api/sessions/{sid}/image")
 async def camera_image(
-    sid: str, request: Request, view: Literal["main", "top", "front", "wrist"] = "wrist"
+    sid: str, request: Request, view: Literal["main", "top", "front", "back", "wrist"] = "wrist"
 ):
     state = await asyncio.to_thread(session(request, sid).packet)
     payload = json.dumps(

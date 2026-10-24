@@ -52,7 +52,7 @@ class Command(BaseModel):
     id: str | None = None
     patch: dict[str, Any] | None = None
     joints: list[float] | None = None
-    camera: Literal["main", "top", "front"] | None = None
+    camera: Literal["main", "top", "front", "back"] | None = None
     value: dict | None = None
     count: int = Field(default=10, ge=1, le=2500)
     exampleId: str | None = Field(default=None, max_length=80)
@@ -244,7 +244,7 @@ class Session:
                 s.load(Scene.model_validate(scene.model_dump()))
             elif kind == "camera":
                 if cmd.camera is None:
-                    raise ValueError("Choose main, top or front camera")
+                    raise ValueError("Choose main, top, front or back camera")
                 scene = s.export_scene()
                 scene.cameras[cmd.camera] = Camera.model_validate(cmd.value)
                 scene = Scene.model_validate(scene.model_dump())

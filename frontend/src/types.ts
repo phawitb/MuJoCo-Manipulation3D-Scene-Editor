@@ -35,7 +35,7 @@ export interface Scene {
   robot: { model: "so101"; position: Vec3; quaternion: Quat; joints: number[] };
   objects: SceneObject[];
   task: { source: string | null; target: string | null };
-  cameras: Record<"main" | "top" | "front", CameraState>;
+  cameras: Record<"main" | "top" | "front" | "back", CameraState>;
 }
 export interface Asset {
   id: AssetId;
@@ -132,7 +132,7 @@ export interface CameraState {
   zoom: number;
   fov?: number;
 }
-export type ViewKind = "main" | "top" | "front" | "wrist";
+export type ViewKind = "main" | "top" | "front" | "back" | "wrist";
 export type Cameras = Record<ViewKind, CameraState>;
 export interface SavedDocument {
   version: 1;

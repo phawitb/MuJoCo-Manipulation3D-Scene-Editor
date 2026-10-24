@@ -10,7 +10,7 @@ test("empty startup, precise edits, simulation, cameras and scene persistence", 
   await expect(
     page.getByText("Simulation connected", { exact: true }),
   ).toBeVisible();
-  await expect(page.locator("canvas")).toHaveCount(4);
+  await expect(page.locator("canvas")).toHaveCount(5);
   await expect(page.getByTestId("simulation-time")).toHaveText("0.00 s");
   await expect(
     page.getByText("Your tabletop is a blank canvas."),
@@ -73,7 +73,7 @@ test("empty startup, precise edits, simulation, cameras and scene persistence", 
   await page
     .getByRole("button", { name: "Toggle dual viewport", exact: true })
     .click();
-  await expect(page.locator("canvas")).toHaveCount(4);
+  await expect(page.locator("canvas")).toHaveCount(5);
   const top = page.getByTestId("viewport-top");
   const box = (await top.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -121,7 +121,7 @@ test("drop placement in top viewport, joint edits, camera independence and keybo
   await expect(
     page.getByText("Simulation connected", { exact: true }),
   ).toBeVisible();
-  await expect(page.locator("canvas")).toHaveCount(4);
+  await expect(page.locator("canvas")).toHaveCount(5);
   const top = page.getByTestId("viewport-top");
   const b = (await top.boundingBox())!;
   await page.getByTestId("asset-kalas_plate").dragTo(top, {
@@ -185,7 +185,7 @@ test("translate gizmo persists a drag and reconnect restores acknowledged work",
   await expect(
     page.getByText("Simulation connected", { exact: true }),
   ).toBeVisible();
-  await expect(page.locator("canvas")).toHaveCount(4);
+  await expect(page.locator("canvas")).toHaveCount(5);
   await page
     .getByRole("button", { name: "Add IKEA KALAS cup", exact: true })
     .click();
@@ -249,7 +249,7 @@ test("asset loading recovers from a transient server failure", async ({
     else await route.continue();
   });
   await page.goto("/");
-  await expect(page.locator("canvas")).toHaveCount(4, { timeout: 6000 });
+  await expect(page.locator("canvas")).toHaveCount(5, { timeout: 6000 });
   await expect(
     page.getByRole("button", { name: "Add IKEA KALAS cup", exact: true }),
   ).toBeEnabled();
@@ -262,7 +262,7 @@ test("pointer library drag and rotation gizmo work in the top view", async ({
   await expect(
     page.getByText("Simulation connected", { exact: true }),
   ).toBeVisible();
-  await expect(page.locator("canvas")).toHaveCount(4);
+  await expect(page.locator("canvas")).toHaveCount(5);
   await page.getByRole("button", { name: "Top view", exact: true }).click();
   const viewport = page.getByTestId("viewport-top");
   const canvas = viewport.locator("canvas");
@@ -431,7 +431,7 @@ test("camera actions are not replayed into another view or imported cameras", as
   await expect(
     page.getByRole("button", { name: "Add IKEA KALAS cup", exact: true }),
   ).toBeEnabled();
-  await expect(page.locator("canvas")).toHaveCount(4);
+  await expect(page.locator("canvas")).toHaveCount(5);
   await page
     .getByRole("button", { name: "Add IKEA KALAS cup", exact: true })
     .click();

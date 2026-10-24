@@ -129,6 +129,7 @@ def default_cameras():
     return {
         "main": Camera(position=[1.05, -1.25, 1.55], target=[0, 0, 0.77], fov=42),
         "top": Camera(position=[0, 0, 2.6], target=[0, 0, 0.75], zoom=320),
+        "back": Camera(position=[-0.30, 0, 1.65], target=[0, 0, 0.80], fov=55),
         "front": Camera(position=[0.65, -0.75, 1.3], target=[-0.04, 0, 0.82], fov=50),
     }
 
@@ -139,7 +140,7 @@ class Scene(StrictModel):
     table: Table = Field(default_factory=Table)
     robot: Robot = Field(default_factory=Robot)
     task: Task = Field(default_factory=Task)
-    cameras: dict[Literal["main", "top", "front"], Camera] = Field(
+    cameras: dict[Literal["main", "top", "front", "back"], Camera] = Field(
         default_factory=default_cameras
     )
     objects: list[SceneObject] = Field(default_factory=list, max_length=64)

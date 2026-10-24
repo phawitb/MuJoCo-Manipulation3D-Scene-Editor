@@ -38,6 +38,7 @@ export const defaultCameras = (): Cameras => ({
     zoom: 1,
     fov: 50,
   },
+  back: { position: [-0.3, 0, 1.65], target: [0, 0, 0.8], zoom: 1, fov: 55 },
   wrist: { position: [0, 0, 1], target: [0, 0, 0.75], zoom: 1, fov: 61 },
   top: { position: [0, 0, 2.6], target: [0, 0, 0.75], zoom: 320 },
 });
@@ -61,8 +62,11 @@ export function validateDocument(input: unknown): SavedDocument {
   )
     throw new Error("Not a supported Scene Studio file (version 1)");
   if (d.cameras)
-    for (const kind of ["main", "top", "front", "wrist"] as const) {
-      if (!d.cameras[kind] && (kind === "front" || kind === "wrist"))
+    for (const kind of ["main", "top", "front", "back", "wrist"] as const) {
+      if (
+        !d.cameras[kind] &&
+        (kind === "front" || kind === "back" || kind === "wrist")
+      )
         d.cameras[kind] = defaultCameras()[kind];
       const c = d.cameras[kind];
       if (

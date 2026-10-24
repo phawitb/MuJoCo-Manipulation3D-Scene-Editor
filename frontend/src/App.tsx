@@ -136,6 +136,7 @@ export default function App() {
         main: cameraRef.current.main,
         top: cameraRef.current.top,
         front: cameraRef.current.front,
+        back: cameraRef.current.back,
       };
       await sim.command("load", { scene });
     });
@@ -284,6 +285,7 @@ export default function App() {
           main: doc.cameras.main,
           top: doc.cameras.top,
           front: doc.cameras.front,
+          back: doc.cameras.back,
         };
       await sim.command("load", { scene: doc.scene });
       if (doc.cameras) {
@@ -670,7 +672,7 @@ export default function App() {
                 <h1>See. Pick. Place.</h1>
               </div>
               <div className="view-tabs">
-                {(["main", "top", "front", "wrist"] as ViewKind[]).map(
+                {(["main", "top", "front", "back", "wrist"] as ViewKind[]).map(
                   (kind) => (
                     <button
                       key={kind}
@@ -690,6 +692,7 @@ export default function App() {
                           main: "Main 3D",
                           top: "Top view",
                           front: "Front",
+                          back: "Back",
                           wrist: "Wrist",
                         }[kind]
                       }
@@ -711,22 +714,27 @@ export default function App() {
                 </div>
                 {dual && (
                   <div className="observation-strip">
-                    {(["top", "front", "wrist"] as ViewKind[]).map((kind) => (
-                      <div className="observation-view" key={kind}>
-                        <Viewport
-                          {...common}
-                          kind={kind}
-                          active={active === kind}
-                          onActive={() => setActive(kind)}
-                          cameraState={cameraRef.current[kind]}
-                          onExpand={() => {
-                            setDual(false);
-                            setSingleView(kind);
-                            setActive(kind);
-                          }}
-                        />
-                      </div>
-                    ))}
+                    {(["top", "front", "back", "wrist"] as ViewKind[]).map(
+                      (kind) => (
+                        <div
+                          className={`observation-view observation-${kind}`}
+                          key={kind}
+                        >
+                          <Viewport
+                            {...common}
+                            kind={kind}
+                            active={active === kind}
+                            onActive={() => setActive(kind)}
+                            cameraState={cameraRef.current[kind]}
+                            onExpand={() => {
+                              setDual(false);
+                              setSingleView(kind);
+                              setActive(kind);
+                            }}
+                          />
+                        </div>
+                      ),
+                    )}
                   </div>
                 )}
                 {scene?.objects.length === 0 && (

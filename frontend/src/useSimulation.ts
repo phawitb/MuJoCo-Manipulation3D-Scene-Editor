@@ -219,6 +219,7 @@ export function useSimulation() {
                 main: cameras.main,
                 top: cameras.top,
                 front: cameras.front,
+                back: cameras.back,
               },
             },
           }).catch((e) => {

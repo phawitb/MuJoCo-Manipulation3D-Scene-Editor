@@ -1716,7 +1716,7 @@ p {
   right: 0;
   height: 31%;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border-top: 2px solid #46635f;
   gap: 2px;
   background: #3b4c50;
@@ -2085,7 +2085,8 @@ p {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     height: 32%;
   }
-  .observation-view:first-child {
+  .observation-top,
+  .observation-back {
     display: none;
   }
   .canvas-area.dual .primary-view {
@@ -2266,4 +2267,15 @@ p {
 .viewport.drop-target {
   outline: 1px solid #9ed4b5;
   outline-offset: -2px;
+}
+
+/* Keep all camera controls reachable in the four-view observation strip. */
+.observation-view .view-projection {
+  display: none;
+}
+.observation-view .viewport-heading {
+  padding-inline: 5px;
+}
+.observation-view .view-actions button[title="Frame selected"] {
+  display: none;
 }

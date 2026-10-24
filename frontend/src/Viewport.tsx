@@ -598,6 +598,7 @@ export function Viewport(p: Props) {
               main: "Main 3D View",
               top: "Top View",
               front: "Front Camera",
+              back: "Back Camera",
               wrist: "Wrist Camera",
             }[p.kind]
           }

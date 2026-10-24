@@ -60,7 +60,7 @@ async def get_scene(session_id: str) -> dict:
 
 @mcp.tool()
 async def scene_command(session_id: str, command: Command) -> dict:
-    """Control the entire editor through typed commands. load takes a full scene; example loads spoon-to-cup; task takes source/target IDs; run/pause/stop/physics/step control execution. object_add takes object; object_update takes id/patch; object_remove takes id; robot takes joints or patch; camera takes camera/main|top|front and value/position,target,zoom,fov. Include revision on edits to reject stale changes. reset clears scene. run is asynchronous: poll get_scene until task.status succeeded/failed."""
+    """Control the entire editor through typed commands. load takes a full scene; example loads spoon-to-cup; task takes source/target IDs; run/pause/stop/physics/step control execution. object_add takes object; object_update takes id/patch; object_remove takes id; robot takes joints or patch; camera takes camera/main|top|front|back and value/position,target,zoom,fov. Include revision on edits to reject stale changes. reset clears scene. run is asynchronous: poll get_scene until task.status succeeded/failed."""
     return compact(
         await request(
             "POST",
@@ -108,7 +108,7 @@ async def get_contract() -> dict:
 
 @mcp.tool()
 async def camera_image(
-    session_id: str, view: Literal["main", "top", "front", "wrist"] = "wrist"
+    session_id: str, view: Literal["main", "top", "front", "back", "wrist"] = "wrist"
 ) -> ImageContent:
     """Observe the simulated scene through a native MuJoCo camera as a 640×480 PNG. Wrist uses the actual robot-mounted camera. Free views use saved position/target. This is a physics renderer, so lighting differs from the editor."""
     async with httpx.AsyncClient(base_url=API, timeout=30, trust_env=False) as client:

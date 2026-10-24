@@ -27,7 +27,7 @@ Limit 16 sessions. Idle browser-only sessions can be evicted at capacity. API-cr
 | POST `/api/sessions/ID/command` | Validated command, returns snapshot |
 | DELETE `/api/sessions/ID` | Stop/release/delete session |
 | POST `/api/import?filename=part.stl&size=0.1` | Raw octet-stream upload → portable SceneObject; size is longest side in meters |
-| GET `/api/sessions/ID/image?view=wrist` | 640×480 PNG; `main`, `top`, `front`, `wrist`; headers X-Scene-Revision/X-Simulation-Time |
+| GET `/api/sessions/ID/image?view=wrist` | 640×480 PNG; `main`, `top`, `front`, `back`, `wrist`; headers X-Scene-Revision/X-Simulation-Time |
 | GET `/docs` | Interactive OpenAPI explorer with command schema |
 
 Errors: 404 unknown session, 409 revision conflict, 413 payload too large, 422 validation/task planning error, 503 native renderer unavailable. Errors are JSON `{detail: ...}`. Rejected scene edits preserve the current model. Import conversion returns an object but does not add it until `object_add` succeeds.
@@ -53,7 +53,7 @@ All commands accept optional unique `requestId`; edits accept optional current `
 | `object_update` | `id`, `patch`: partial object properties (ID immutable) |
 | `object_remove` | `id`; clears task references to the removed object |
 | `robot` | `joints`: six targets and/or `patch` for base position/quaternion/joints |
-| `camera` | `camera`: main/top/front; `value`: position,target,zoom,fov; allowed during execution |
+| `camera` | `camera`: main/top/front/back; `value`: position,target,zoom,fov; allowed during execution |
 
 Table dimensions, scene name, entire imported geometry and any other schema field are editable via `load`. Physical edits require pause and recompile, resetting time/velocity and cancelling a paused policy. Camera-only edits do not reset simulation. Top camera must be directly above its target; wrist is model-mounted and not a free camera.
 
@@ -120,7 +120,7 @@ Typical agent sequence: list sessions → get_scene → scene_command example/ta
 
 Geometry size uses MuJoCo conventions: box half-extents; cylinder/capsule radius and half-length; sphere radius; ellipsoid radii. Mesh vertices/faces come from the compiled model and use compiled geom world transforms. Combine immutable robot meshes with snapshot imported meshes by numeric key; source STL offsets must not be reapplied. Collision proxies (groups 3/4) stay hidden in visuals but remain active in physics. WebSocket unsolicited states have no requestId. A workspace-boundary failure returns a paused snapshot with `warning`, task failure and last valid physics state.
 
-Save wrapper: `{version:1, scene: <Scene>, cameras: <optional legacy camera map>}`. Scene version remains 1 with additive defaults: old primitive-only scenes remain valid. Scene includes `task:{source,target}`, `cameras:{main,top,front}` and object mesh data. Legacy wrapper cameras override scene cameras when opened in the editor. Mesh objects include `asset:"mesh"`, `mesh:{vertices:[...],faces:[...],filename:"part.stl"}`. Bounds: 64 objects, 8 MB scene/message, object centers ±5 m, scale .25–3, mass .001–10 kg, friction 0–5; imported files 10 MB, 20k vertices/40k triangles, longest side .005–1 m. The complete formatted portable scene is budgeted before accepting edits, including cumulative imports and serialization headroom; an oversized addition leaves the previous scene intact. Imported collision is convex: no hollow cavity or texture fidelity is implied.
+Save wrapper: `{version:1, scene: <Scene>, cameras: <optional legacy camera map>}`. Scene version remains 1 with additive defaults: old primitive-only scenes remain valid. Scene includes `task:{source,target}`, `cameras:{main,top,front,back}` and object mesh data. Legacy wrapper cameras override scene cameras when opened in the editor. Mesh objects include `asset:"mesh"`, `mesh:{vertices:[...],faces:[...],filename:"part.stl"}`. Bounds: 64 objects, 8 MB scene/message, object centers ±5 m, scale .25–3, mass .001–10 kg, friction 0–5; imported files 10 MB, 20k vertices/40k triangles, longest side .005–1 m. The complete formatted portable scene is budgeted before accepting edits, including cumulative imports and serialization headroom; an oversized addition leaves the previous scene intact. Imported collision is convex: no hollow cavity or texture fidelity is implied.
 
 ## Path lifecycle
 
@@ -135,3 +135,5 @@ KALAS IDs: `kalas_bowl`, `kalas_cup`, `kalas_spoon`, `kalas_plate`. They compile
 All ten examples are rehearsed and independently executed with contact-only dynamics, including source rotations and legacy spoon variations. IK uses measured robot kinematics and bounded actuators. A grasp requires sustained opposing jaw contacts; no equality weld or object-pose animation is used. Delivery solves from the carried spoon pose after lift. Released placement must have actual destination support and no jaw support, correct containment, low linear/angular speed and measured lift. Unsupported or missed grasps fail explicitly. See [contact physics audit](PHYSICS-AUDIT.md) for the force thresholds, numerical settings, results and limitations.
 
 `kalas-cup-to-plate` starts with spoon `spoon` supported by `source_cup` and uses `cup` (a KALAS plate) as the task destination. Upright utensils use position plus pinch-axis IK constraints, with remaining wrist tilt selected by the five-axis arm. The API retains legacy asset entries for existing scenes; the editor library displays only KALAS assets and cube.
+
+Back camera defaults to position `[-0.30, 0, 1.65]`, look-at target `[0, 0, 0.80]` and 55° field of view: above the default robot base, looking obliquely down onto the table. Missing back-camera records in older scenes are filled automatically. `camera_image` accepts `view: "back"`; camera edits use `camera: "back"`.

@@ -1,6 +1,6 @@
 # SO-101 Scene Studio
 
-A local 3D manipulation workbench with **real MuJoCo physics**, an **SO-101 arm**, four camera views, portable mesh import, researched **IKEA KALAS assets**, and **ten rehearsed pick/place examples**, and **MCP / HTTP control** of the scene you see in the browser.
+A local 3D manipulation workbench with **real MuJoCo physics**, an **SO-101 arm**, five camera views, portable mesh import, researched **IKEA KALAS assets**, and **eleven rehearsed pick/place examples**, and **MCP / HTTP control** of the scene you see in the browser.
 
 ![Successful spoon-to-cup task](docs/screenshots/pick-place-success.png)
 
@@ -34,9 +34,9 @@ Click **Pick object**, then click the object directly in a viewport or the scene
 
 ## Cameras and editing
 
-- **Main**, **Top**, **Front**, **Wrist** tabs expand a view. Multi-view shows all four; narrow windows show front/wrist previews and keep Top available as a tab.
-- Front camera defaults to a front oblique/downward angle. Its settings button edits position, look-at target and field of view. Main/front support orbit/pan/zoom; top is orthographic with locked downward direction. Wrist follows the actual model-mounted `wrist_cam` pose and field of view.
-- Drag asset cards into a view or use +. During dragging a translucent object and footprint show the exact clamped drop position before release. **Import object** accepts STL, OBJ and self-contained GLB from your computer, with explicit longest-side sizing. The mesh is centered and embedded in saved scenes, with editable color and **convex hull collision**. Limits: 10 MB upload, 20k vertices/40k triangles; textures and external sidecar files are not imported.
+- **Main**, **Top**, **Front**, **Back**, **Wrist** tabs expand a view. Multi-view shows all five; narrow windows show front/wrist previews and keep Top and Back available as tabs.
+- Front camera defaults to a front oblique/downward angle. Its settings button edits position, look-at target and field of view. Back defaults above the robot base, angled down toward the tabletop; it has the same editable settings and reset controls. Main/front/back support orbit/pan/zoom; top is orthographic with locked downward direction. Wrist follows the actual model-mounted `wrist_cam` pose and field of view.
+- Drag asset cards into a view or use +. During dragging a translucent object shows the exact clamped drop position before release. **Import object** accepts STL, OBJ and self-contained GLB from your computer, with explicit longest-side sizing. The mesh is centered and embedded in saved scenes, with editable color and **convex hull collision**. Limits: 10 MB upload, 20k vertices/40k triangles; textures and external sidecar files are not imported.
 - Click empty tabletop/background to see the current object list in **Inspector**. Clicking a row selects the same object and axes as the viewport. Selection and task-source/destination buttons briefly highlight the object in every view.
 - **Arrow keys** move the selected object on world X/Y by 1 cm; **Shift + arrows** uses 1 mm. Footprints stay within the tabletop; typing in fields is unaffected.
 - Select an object for move/rotate gizmos, exact pose, scale, mass, friction, collision and color. **T/R**, **F**, **Delete**, **Cmd/Ctrl+S** shortcuts are available. Snap uses 1 cm / 15° increments.
@@ -75,7 +75,7 @@ cd frontend && npm run test:e2e
 # Or: npx playwright install chromium && PLAYWRIGHT_CHROMIUM=1 npm run test:e2e
 ```
 
-See **[docs/VERIFICATION.md](docs/VERIFICATION.md)** for current evidence and limits. Tests cover physical manipulation, repeated/perturbed placements, cancellation, camera poses/images, real STL/OBJ/GLB import, real MCP handshake/tools, shared API/browser control, direct scene clicks, four views, responsive layout and existing editing/recovery workflows.
+See **[docs/VERIFICATION.md](docs/VERIFICATION.md)** for current evidence and limits. Tests cover physical manipulation, repeated/perturbed placements, cancellation, camera poses/images, real STL/OBJ/GLB import, real MCP handshake/tools, shared API/browser control, direct scene clicks, five views, responsive layout and existing editing/recovery workflows.
 
 ## Model and system limits
 
