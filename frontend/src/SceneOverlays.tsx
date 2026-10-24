@@ -9,11 +9,9 @@ import { objectDimensions } from "./interaction";
 export function PlacementGhost({
   asset,
   position,
-  tableHeight,
 }: {
   asset: Asset;
   position: Vec3;
-  tableHeight: number;
 }) {
   const [x, y, z] = asset.dimensions;
   const family = asset.id.replace("kalas_", "");
@@ -49,24 +47,6 @@ export function PlacementGhost({
   return (
     <group raycast={() => {}}>
       <group position={position}>
-        {(family === "cup" || family === "bowl" || family === "plate") && (
-          <Line
-            points={Array.from(
-              { length: 65 },
-              (_, i) =>
-                [
-                  (x / 2) * Math.cos((i * Math.PI) / 32),
-                  (y / 2) * Math.sin((i * Math.PI) / 32),
-                  z / 2,
-                ] as Vec3,
-            )}
-            color="#73ffd0"
-            lineWidth={2}
-            transparent
-            opacity={0.9}
-          />
-        )}
-
         {family === "cup" || family === "bowl" || family === "plate" ? (
           <mesh geometry={shell}>{material}</mesh>
         ) : family === "spoon" ? (
@@ -86,28 +66,7 @@ export function PlacementGhost({
             {material}
           </mesh>
         )}
-        <axesHelper args={[0.055]} />
       </group>
-      <mesh position={[position[0], position[1], tableHeight + 0.001]}>
-        <planeGeometry args={[x + 0.008, y + 0.008]} />
-        <meshBasicMaterial
-          color="#b2efd7"
-          transparent
-          opacity={0.18}
-          depthWrite={false}
-        />
-      </mesh>
-      <Line
-        points={[
-          [position[0] - x / 2, position[1] - y / 2, tableHeight + 0.002],
-          [position[0] + x / 2, position[1] - y / 2, tableHeight + 0.002],
-          [position[0] + x / 2, position[1] + y / 2, tableHeight + 0.002],
-          [position[0] - x / 2, position[1] + y / 2, tableHeight + 0.002],
-          [position[0] - x / 2, position[1] - y / 2, tableHeight + 0.002],
-        ]}
-        color="#b2efd7"
-        lineWidth={1.5}
-      />
     </group>
   );
 }

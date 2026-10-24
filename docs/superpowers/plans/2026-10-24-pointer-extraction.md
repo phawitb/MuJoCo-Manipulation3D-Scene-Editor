@@ -28,4 +28,4 @@ No invisible attachment or object teleportation during execution. Preserve live 
 - [x] Run contact tests, all examples, audit/render new example, full suites; commit.
 
 ### Task 3: Review and integrate
-- [ ] Independent final review, fix important findings with regressions, preserve results/decisions in verification docs, push main.
+- [x] Independent final review, fix important findings with regressions, preserve results/decisions in verification docs, push main.

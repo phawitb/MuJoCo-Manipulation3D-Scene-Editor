@@ -92,3 +92,25 @@ test("pointer placement never starts native drag; Escape and outside release can
   );
   await expect(view).toHaveAttribute("data-preview-position", "");
 });
+
+test("dropping into another viewport activates that camera", async ({
+  page,
+}) => {
+  const view = page.getByTestId("viewport-top");
+  await expect(page.getByTestId("viewport-main")).toHaveClass(/active/);
+  const card = page.getByTestId("asset-kalas_bowl");
+  await card.scrollIntoViewIfNeeded();
+  const source = (await card.boundingBox())!;
+  const target = (await view.locator("canvas").boundingBox())!;
+  await page.mouse.move(source.x + 30, source.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(
+    target.x + target.width / 2,
+    target.y + target.height / 2,
+    { steps: 12 },
+  );
+  await expect(view).not.toHaveAttribute("data-preview-position", "");
+  await page.mouse.up();
+  await expect(page.getByLabel("Object name")).toHaveValue("IKEA KALAS bowl");
+  await expect(view).toHaveClass(/active/);
+});

@@ -491,11 +491,7 @@ function Contents(
         ]}
       />
       {p.dragAsset && p.ghost && (
-        <PlacementGhost
-          asset={p.dragAsset}
-          position={p.ghost}
-          tableHeight={p.snapshot.scene.table.height}
-        />
+        <PlacementGhost asset={p.dragAsset} position={p.ghost} />
       )}
       {highlighted && (
         <SelectionHalo
@@ -555,6 +551,7 @@ export function Viewport(p: Props) {
       setDragOver(false);
       if (committed.current !== cursor) {
         committed.current = cursor;
+        p.onActive();
         p.onDrop(p.dragAsset.id, hit);
       }
     } else {
