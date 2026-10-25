@@ -1,58 +1,39 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { Cable, Camera, RefreshCw, ShieldCheck, Square } from "lucide-react";
+import { Cable, Camera, RefreshCw, ShieldCheck } from "lucide-react";
 import {
   api,
-  jointNames,
   type Assignments,
-  type CalibrationJoint,
-  type ConnectionStatus,
+  type CameraResult,
+  type ConnectionSettings,
+  type Verification,
 } from "./api";
+import CameraStack from "./CameraStack";
 import "./connection.css";
-type Session = { sessionId: string; name: string };
-type Port = { device?: string; port?: string; description?: string };
-type CameraResult = { index: number; available: boolean; error?: string };
+type Port = { port: string; description?: string };
+const roles = ["back", "front", "wrist"] as const;
 export default function ConnectionTab({
   activeTab = true,
 }: {
   activeTab?: boolean;
 }) {
-  const [status, setStatus] = useState<ConnectionStatus | null>(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
-  const [ports, setPorts] = useState<Port[]>([]),
-    [port, setPort] = useState("");
-  const [sessions, setSessions] = useState<Session[]>([]),
-    [sid, setSid] = useState(
-      () => new URLSearchParams(location.search).get("session") || "",
-    );
-  const [cameras, setCameras] = useState<CameraResult[]>([]),
-    [scanMax, setScanMax] = useState(5),
-    [assign, setAssign] = useState<Assignments>({
-      back: null,
-      front: null,
-      wrist: null,
-    });
-  const [preview, setPreview] = useState<number | null>(null),
-    [frame, setFrame] = useState(""),
-    [frameError, setFrameError] = useState("");
-  const [calOpen, setCalOpen] = useState(false),
-    [confirmed, setConfirmed] = useState(false),
-    [draft, setDraft] = useState<CalibrationJoint[]>(() =>
-      jointNames.map((name) => ({
-        name,
-        zero_raw: NaN,
-        direction: 1,
-        raw_min: 0,
-        raw_max: 4095,
-        radians_per_tick: (2 * Math.PI) / 4096,
-      })),
-    );
+  const [ports, setPorts] = useState<Port[]>([]);
+  const [port, setPort] = useState("");
+  const [assign, setAssign] = useState<Assignments>({
+    back: null,
+    front: null,
+    wrist: null,
+  });
+  const [saved, setSaved] = useState<ConnectionSettings | null>(null);
+  const [count, setCount] = useState(5);
+  const [cameras, setCameras] = useState<CameraResult[]>([]);
+  const verificationEpoch = useRef(0);
+  const [verification, setVerification] = useState<Verification | null>(null);
+  const [view, setView] = useState<"scan" | "verify">("scan");
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const current = useRef(status);
-  current.current = status;
-  const run = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
+  const run = async (name: string, fn: () => Promise<void>) => {
+    setBusy(name);
     setError("");
     setNotice("");
     try {
@@ -60,154 +41,51 @@ export default function ConnectionTab({
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      setBusy("");
     }
   };
-  const refreshStatus = async () => {
-    const s = await api<ConnectionStatus>("/status");
-    setStatus(s);
-    if (s.port) setPort(s.port);
-    return s;
-  };
-  const inventory = async () => {
-    const [p, r, settings] = await Promise.all([
-      api<Port[] | { ports: Port[] }>("/ports"),
-      fetch("/api/sessions"),
-      api<{
-        assignments: Assignments;
-        calibration?: { joints: CalibrationJoint[] };
-      }>("/settings"),
-    ]);
-    const ps = Array.isArray(p) ? p : p.ports;
-    setPorts(ps);
-    if (!port && ps.length === 1) setPort(ps[0].device || ps[0].port || "");
-    if (!r.ok) throw new Error("Cannot list Gym sessions");
-    setSessions(await r.json());
-    setAssign(settings.assignments);
-    if (settings.calibration?.joints) setDraft(settings.calibration.joints);
-    await refreshStatus();
+  const refreshPorts = async () => {
+    const result = await api<{ ports: Port[] }>("/ports");
+    setPorts(result.ports);
   };
   useEffect(() => {
-    void run(inventory);
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
-      try {
-        const s = current.current;
-        if (
-          document.visibilityState === "visible" &&
-          !stopped &&
-          s?.connected &&
-          (s.enabled || s.sync_mode !== "off") &&
-          s.owner_session_id === sid
-        )
-          await api("/heartbeat", "POST", { session_id: sid });
-        if (!stopped) await refreshStatus();
-      } catch (e) {
-        if (!stopped) setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        if (!stopped) timer = setTimeout(poll, 700);
-      }
-    };
-    timer = setTimeout(poll, 700);
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-    };
-    // sid changes must renew the lease only for the selected owner.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sid]);
-  useEffect(() => {
-    const stopHidden = () => {
-      const state = current.current;
-      if (
-        !state?.connected ||
-        state.owner_session_id !== sid ||
-        (!state.enabled && state.sync_mode === "off")
-      )
-        return;
-      // Keep internal Gym navigation usable; leaving the browser ends physical control.
-      void fetch("/api/connection/stop", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sid }),
-        keepalive: true,
+    // A tab refresh may discover setup changed by another viewer or MCP.
+    // Invalidate both displayed results and captures still in flight.
+    verificationEpoch.current += 1;
+    setVerification(null);
+    if (!activeTab) return;
+    let cancelled = false;
+    void Promise.all([
+      api<ConnectionSettings>("/settings"),
+      api<{ ports: Port[] }>("/ports"),
+    ])
+      .then(([settings, inventory]) => {
+        if (cancelled) return;
+        verificationEpoch.current += 1;
+        setVerification(null);
+        setSaved(settings);
+        setAssign(settings.assignments);
+        setPorts(inventory.ports);
+        setPort(
+          settings.robot_port ||
+            (inventory.ports.length === 1 ? inventory.ports[0].port : ""),
+        );
       })
-        .then(async (response) => {
-          if (!response.ok)
-            throw new Error(
-              "Stop request could not be confirmed; controller lease will expire.",
-            );
-          setStatus(await response.json());
-        })
-        .catch((error) => setError(String(error)));
-    };
-    const visibility = () => {
-      if (document.visibilityState !== "visible") stopHidden();
-    };
-    document.addEventListener("visibilitychange", visibility);
-    window.addEventListener("pagehide", stopHidden);
+      .catch((e) => {
+        if (!cancelled) setError(String(e));
+      });
     return () => {
-      document.removeEventListener("visibilitychange", visibility);
-      window.removeEventListener("pagehide", stopHidden);
+      cancelled = true;
     };
-  }, [sid]);
-  useEffect(() => {
-    if (preview === null || !activeTab) return;
-    let stopped = false,
-      url = "";
-    let timer: ReturnType<typeof setTimeout>;
-    const capture = async () => {
-      try {
-        const r = await fetch(`/api/connection/cameras/${preview}/frame`);
-        if (!r.ok) throw new Error((await r.text()).slice(0, 180));
-        const blob = await r.blob();
-        if (!stopped) {
-          if (url) URL.revokeObjectURL(url);
-          url = URL.createObjectURL(blob);
-          setFrame(url);
-          setFrameError("");
-        }
-      } catch (e) {
-        if (!stopped) setFrameError(e instanceof Error ? e.message : String(e));
-      } finally {
-        if (!stopped) timer = setTimeout(capture, 700);
-      }
-    };
-    setFrame("");
-    void capture();
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [preview, activeTab]);
-  const command = (path: string, extra: Record<string, unknown> = {}) =>
-    run(async () => {
-      setStatus(
-        await api<ConnectionStatus>(path, "POST", {
-          session_id: sid,
-          ...extra,
-        }),
-      );
-    });
-  const owned = !!sid && status?.owner_session_id === sid;
-  const stop = () =>
-    void run(async () => {
-      setStatus(
-        await api<ConnectionStatus>("/stop", "POST", {
-          session_id: status?.owner_session_id,
-        }),
-      );
-    });
-  const updateJoint = (
-    index: number,
-    key: keyof CalibrationJoint,
-    value: number,
-  ) =>
-    setDraft((old) =>
-      old.map((j, i) => (i === index ? { ...j, [key]: value } : j)),
-    );
+  }, [activeTab]);
+  const portDirty = port !== (saved?.robot_port ?? "");
+  const camerasDirty = roles.some(
+    (role) => assign[role] !== saved?.assignments[role],
+  );
+  const clearResult = () => {
+    verificationEpoch.current += 1;
+    setVerification(null);
+  };
   return (
     <main className="connection-page">
       <header className="connection-heading">
@@ -215,524 +93,120 @@ export default function ConnectionTab({
           <p className="connection-eyebrow">REAL WORLD / LOCAL DEVICES</p>
           <h1>Setting Connection</h1>
           <p>
-            Connect your SO-101 and choose the cameras around your workspace.
+            Set up your arm and camera views. Connect and move the robot in Gym.
           </p>
         </div>
-        <button onClick={() => void run(inventory)} disabled={busy}>
-          <RefreshCw size={16} /> Refresh devices
-        </button>
       </header>
       {error && (
-        <div role="alert" className="connection-error">
+        <div className="connection-error" role="alert">
           {error}
         </div>
       )}
       {notice && (
-        <div role="status" className="connection-notice">
+        <div className="connection-notice" role="status">
           {notice}
         </div>
       )}
-      <div className="connection-grid">
-        <section className="connection-card">
-          <h2>
-            <Cable size={19} /> SO-101 arm{" "}
-            <span
-              className={`connection-badge ${status?.connected ? "ok" : ""}`}
-            >
-              {status?.connected ? "Connected" : "Disconnected"}
-            </span>
-          </h2>
-          <label>
-            Gym session
-            <select
-              aria-label="Hardware Gym session"
-              value={sid}
-              disabled={busy}
-              onChange={(e) => setSid(e.target.value)}
-            >
-              <option value="">Choose a scene session</option>
-              {sessions.map((s) => (
-                <option key={s.sessionId} value={s.sessionId}>
-                  {s.name} · {s.sessionId.slice(0, 8)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {!sessions.length && (
-            <button
-              disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  const r = await fetch("/api/sessions", { method: "POST" });
-                  if (!r.ok) throw new Error("Could not create session");
-                  const s = await r.json();
-                  setSid(s.sessionId);
-                  await inventory();
-                })
-              }
-            >
-              Create a device workspace
-            </button>
-          )}
+      <section className="connection-card">
+        <h2>
+          <Cable size={19} /> SO-101 arm
+        </h2>
+        <div className="connection-port-row">
           <label>
             Serial port
             <input
               aria-label="Serial port"
               list="serial-ports"
               value={port}
-              disabled={!!status?.connected}
-              onChange={(e) => setPort(e.target.value)}
+              disabled={!!busy}
+              onChange={(e) => {
+                setPort(e.target.value);
+                clearResult();
+              }}
               placeholder="/dev/cu.usbmodem…"
             />
-            <datalist id="serial-ports">
-              {ports.map((p) => (
-                <option key={p.device || p.port} value={p.device || p.port}>
-                  {p.description}
-                </option>
-              ))}
-            </datalist>
           </label>
-          <div className="connection-actions">
-            <button
-              className="primary"
-              disabled={busy || !port || !sid || !!status?.connected}
-              onClick={() => void command("/connect", { port })}
-            >
-              Connect & verify
-            </button>
-            <button
-              disabled={busy || !status?.connected}
-              onClick={() =>
-                void command("/disconnect", {
-                  session_id: status?.owner_session_id,
-                })
-              }
-            >
-              Disconnect
-            </button>
-          </div>
-          <p className="connection-hint">
-            Connecting reads the six motors. It does not enable movement or
-            change motor calibration.
-          </p>
-          {status?.identity && (
-            <p className="connection-device-id">
-              Device:{" "}
-              {typeof status.identity === "string"
-                ? status.identity
-                : JSON.stringify(status.identity)}
-            </p>
-          )}
-          {status?.connected && (
-            <>
-              <div className="connection-verify">
-                <ShieldCheck size={17} />
-                {status.calibrated
-                  ? "Joint mapping verified"
-                  : "Joint mapping required before movement"}
-              </div>
-              <button
-                disabled={
-                  !owned || busy || status.enabled || status.sync_mode !== "off"
-                }
-                onClick={() => {
-                  setCalOpen(!calOpen);
-                  setConfirmed(false);
-                }}
-              >
-                Edit joint mapping
-              </button>
-            </>
-          )}
-        </section>
-        <section className="connection-card">
-          <h2>
-            Live motion{" "}
-            <span className={`connection-badge ${status?.enabled ? "ok" : ""}`}>
-              {status?.enabled ? "Enabled" : "Read only"}
-            </span>
-          </h2>
-          <p className="connection-hint">
-            Use measured angles to match Gym, or send Gym motion to the real
-            arm. The connection stops streaming if feedback or the controller
-            heartbeat is lost.
-          </p>
-          <div className="connection-actions">
-            <button
-              disabled={
-                busy ||
-                !owned ||
-                !status?.calibrated ||
-                !!status?.enabled ||
-                status?.sync_mode !== "off"
-              }
-              onClick={() => void command("/align")}
-            >
-              Match Gym to real arm
-            </button>
-            <button
-              className="primary"
-              disabled={
-                busy || !owned || !status?.calibrated || !!status?.enabled
-              }
-              onClick={() => void command("/enable")}
-            >
-              Enable at current pose
-            </button>
-            <button
-              className="connection-stop"
-              disabled={!status?.connected}
-              onClick={stop}
-            >
-              <Square size={14} /> Stop & hold
-            </button>
-          </div>
-          <label>
-            Realtime direction
-            <select
-              aria-label="Realtime direction"
-              disabled={busy || !owned || !status?.calibrated}
-              value={status?.sync_mode || "off"}
-              onChange={(e) => void command("/sync", { mode: e.target.value })}
-            >
-              <option value="off">Off</option>
-              <option value="real_to_gym">Real arm → Gym</option>
-              <option value="gym_to_real">Gym → Real arm</option>
-            </select>
-          </label>
-          <p className="connection-hint">
-            First match Gym to the measured arm pose, then enable movement and
-            choose Gym → Real arm.
-          </p>
-          <p className="connection-hint">
-            Stop & hold keeps motor torque. It is not a physical emergency power
-            switch. Reconnection never resumes motion automatically.
-          </p>
-          {status?.fault && <p className="connection-error">{status.fault}</p>}
-          <div className="connection-metrics">
-            <span>
-              Largest angle error{" "}
-              <strong>
-                {status?.sync_mode !== "gym_to_real" ||
-                !status.tracking_error_rad
-                  ? "—"
-                  : `${((Math.max(...status.tracking_error_rad.map(Math.abs)) * 180) / Math.PI).toFixed(2)}°`}
-              </strong>
-            </span>
-            <span>
-              Feedback age{" "}
-              <strong>
-                {status?.telemetry_age_s == null
-                  ? "—"
-                  : `${(status.telemetry_age_s * 1000).toFixed(0)} ms`}
-              </strong>
-            </span>
-            <span>
-              Owner{" "}
-              <strong>{status?.owner_session_id?.slice(0, 8) || "—"}</strong>
-            </span>
-            <span>
-              Temperature rechecks{" "}
-              <strong>{status?.temperature_rechecks ?? 0}</strong>
-            </span>
-          </div>
-        </section>
-      </div>
-      {calOpen && (
-        <section className="connection-card connection-calibration">
-          <h2>Joint mapping</h2>
-          <p>
-            Enter the encoder reading for each joint at the simulation zero
-            angle. Check rotation direction and mechanical limits for your arm.
-            Values are stored locally; motor EEPROM is never changed.
-          </p>
-          <div className="connection-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Joint</th>
-                  <th>Zero encoder</th>
-                  <th>Direction</th>
-                  <th>Min encoder</th>
-                  <th>Max encoder</th>
-                  <th>Radians / tick</th>
-                </tr>
-              </thead>
-              <tbody>
-                {draft.map((j, i) => (
-                  <tr key={j.name}>
-                    <th>{j.name}</th>
-                    <td>
-                      <input
-                        aria-label={`${j.name} zero`}
-                        type="number"
-                        step="any"
-                        value={Number.isNaN(j.zero_raw) ? "" : j.zero_raw}
-                        onChange={(e) =>
-                          updateJoint(
-                            i,
-                            "zero_raw",
-                            e.target.value === ""
-                              ? NaN
-                              : Number(e.target.value),
-                          )
-                        }
-                      />
-                    </td>
-                    <td>
-                      <select
-                        value={j.direction}
-                        onChange={(e) =>
-                          updateJoint(i, "direction", Number(e.target.value))
-                        }
-                      >
-                        <option value={1}>+1</option>
-                        <option value={-1}>−1</option>
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        aria-label={`${j.name} minimum`}
-                        type="number"
-                        value={j.raw_min}
-                        onChange={(e) =>
-                          updateJoint(i, "raw_min", Number(e.target.value))
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        aria-label={`${j.name} maximum`}
-                        type="number"
-                        value={j.raw_max}
-                        onChange={(e) =>
-                          updateJoint(i, "raw_max", Number(e.target.value))
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        aria-label={`${j.name} radians per tick`}
-                        type="number"
-                        step="0.000001"
-                        value={j.radians_per_tick}
-                        onChange={(e) =>
-                          updateJoint(
-                            i,
-                            "radians_per_tick",
-                            Number(e.target.value),
-                          )
-                        }
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <label className="connection-checkbox">
-            <input
-              type="checkbox"
-              checked={confirmed}
-              onChange={(e) => setConfirmed(e.target.checked)}
-            />{" "}
-            I have checked these zero angles, directions and limits against this
-            physical arm.
-          </label>
+          <datalist id="serial-ports">
+            {ports.map((p) => (
+              <option key={p.port} value={p.port}>
+                {p.description}
+              </option>
+            ))}
+          </datalist>
+          <button
+            disabled={!!busy}
+            onClick={() => void run("ports", refreshPorts)}
+          >
+            <RefreshCw size={16} /> Refresh ports
+          </button>
           <button
             className="primary"
-            disabled={
-              busy ||
-              !confirmed ||
-              draft.some((j) => !Number.isFinite(j.zero_raw))
-            }
+            disabled={!!busy || !port || !portDirty}
             onClick={() =>
-              void run(async () => {
-                setStatus(
-                  await api<ConnectionStatus>("/calibration", "PUT", {
-                    session_id: sid,
-                    identity: status?.identity,
-                    confirmed,
-                    joints: draft,
-                  }),
+              void run("save-port", async () => {
+                setSaved(
+                  await api<ConnectionSettings>("/port", "PUT", { port }),
                 );
-                setCalOpen(false);
-                setNotice("Joint mapping saved for this device.");
+                clearResult();
+                setNotice("Robot port saved.");
               })
             }
           >
-            Save verified mapping
+            Save port
           </button>
-        </section>
-      )}
-      <section className="connection-card">
-        <h2>Motor feedback & small moves</h2>
-        <p className="connection-hint">
-          Jog ±1° at a time. Movement requires verified mapping, enabled motors,
-          and a collision-safe matching Gym scene.
-        </p>
-        <div className="connection-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Joint</th>
-                <th>Encoder</th>
-                <th>Measured angle</th>
-                <th>Gym target</th>
-                <th>Difference</th>
-                <th>Voltage</th>
-                <th>Temperature</th>
-                <th>Torque</th>
-                <th>Jog</th>
-              </tr>
-            </thead>
-            <tbody>
-              {jointNames.map((name, i) => {
-                const t = status?.telemetry?.find((t) => t.name === name);
-                return (
-                  <tr key={name}>
-                    <th>{name.replaceAll("_", " ")}</th>
-                    <td>{t?.raw ?? "—"}</td>
-                    <td>
-                      {t?.position_rad == null
-                        ? "Unmapped"
-                        : `${((t.position_rad * 180) / Math.PI).toFixed(1)}°`}
-                    </td>
-                    <td>
-                      {status?.sync_mode === "gym_to_real" && status.desired_rad
-                        ? `${((status.desired_rad[i] * 180) / Math.PI).toFixed(2)}°`
-                        : "—"}
-                    </td>
-                    <td>
-                      {status?.sync_mode === "gym_to_real" &&
-                      status.tracking_error_rad
-                        ? `${((status.tracking_error_rad[i] * 180) / Math.PI).toFixed(2)}°`
-                        : "—"}
-                    </td>
-                    <td>{t ? `${t.voltage.toFixed(1)} V` : "—"}</td>
-                    <td>{t ? `${t.temperature} °C` : "—"}</td>
-                    <td>{t ? (t.torque ? "On" : "Off") : "—"}</td>
-                    <td>
-                      <button
-                        aria-label={`Jog ${name} minus`}
-                        disabled={
-                          busy ||
-                          !owned ||
-                          !status?.enabled ||
-                          status.sync_mode !== "off"
-                        }
-                        onClick={() =>
-                          void command("/jog", {
-                            joint: i,
-                            delta_rad: -Math.PI / 180,
-                          })
-                        }
-                      >
-                        −1°
-                      </button>
-                      <button
-                        aria-label={`Jog ${name} plus`}
-                        disabled={
-                          busy ||
-                          !owned ||
-                          !status?.enabled ||
-                          status.sync_mode !== "off"
-                        }
-                        onClick={() =>
-                          void command("/jog", {
-                            joint: i,
-                            delta_rad: Math.PI / 180,
-                          })
-                        }
-                      >
-                        +1°
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
         </div>
+        <p className="connection-hint">
+          Saving a port does not move or connect the arm. Use Connect robot in
+          Gym when you are ready.
+        </p>
       </section>
       <section className="connection-card">
         <h2>
           <Camera size={19} /> Workspace cameras
         </h2>
-        <p className="connection-hint">
-          Scan local camera indices, preview each source, then assign Back,
-          Front and Wrist. Allow camera access in macOS if prompted.
-        </p>
-        <div className="connection-actions">
+        <div className="connection-scan-row">
           <label>
             Indices to check
             <input
-              aria-label="Camera scan count"
+              aria-label="Indices to check"
               type="number"
               min={1}
               max={8}
-              value={scanMax}
-              onChange={(e) => setScanMax(Number(e.target.value))}
+              value={count}
+              disabled={!!busy}
+              onChange={(e) => setCount(Number(e.target.value))}
             />
           </label>
           <button
-            disabled={busy}
+            disabled={
+              !!busy || !Number.isInteger(count) || count < 1 || count > 8
+            }
             onClick={() =>
-              void run(async () => {
-                setPreview(null);
-                const r = await api<{
-                  cameras: CameraResult[];
-                  assignments: Assignments;
-                }>("/cameras/scan", "POST", { max_index: scanMax - 1 });
-                setCameras(r.cameras);
-                setAssign(r.assignments);
-                setNotice(
-                  `Found ${r.cameras.filter((c) => c.available).length} available cameras.`,
-                );
+              void run("scan", async () => {
+                setView("scan");
+                setCameras([]);
+                setVerification(null);
+                // Capture sequentially so each image appears as soon as its camera responds.
+                for (let index = 0; index < count; index++) {
+                  const result = await api<CameraResult>(
+                    `/cameras/${index}/snapshot`,
+                  );
+                  setCameras((previous) => [...previous, result]);
+                }
+                setNotice("Scan complete. Assign the indices you want below.");
               })
             }
           >
-            Scan & verify cameras
+            <Camera size={16} />
+            {busy === "scan" ? "Scanning…" : "Scan"}
           </button>
+          <span className="connection-hint">
+            idx 0–{Math.max(0, count - 1)}
+          </span>
         </div>
-        <div className="connection-camera-grid">
-          {cameras.map((c) => (
-            <button
-              className={`connection-camera ${preview === c.index ? "selected" : ""}`}
-              key={c.index}
-              disabled={!c.available}
-              onClick={() => setPreview(c.index)}
-            >
-              <Camera size={22} />
-              <strong>idx {c.index}</strong>
-              <span>
-                {c.available ? "Preview camera" : c.error || "Unavailable"}
-              </span>
-            </button>
-          ))}
-        </div>
-        {preview !== null && (
-          <div className="connection-preview">
-            <div>
-              <strong>Camera idx {preview}</strong>
-              <button
-                onClick={() => {
-                  setPreview(null);
-                  setFrame("");
-                }}
-              >
-                Close preview
-              </button>
-            </div>
-            {frame && <img src={frame} alt={`Live camera ${preview}`} />}
-            <p>
-              {frameError ||
-                (!frame ? "Waiting for camera…" : "Refreshed local snapshot")}
-            </p>
-          </div>
-        )}
+        {view === "scan" && <CameraStack cameras={cameras} />}
         <div className="connection-assignments">
-          {(["back", "front", "wrist"] as const).map((role) => (
+          {roles.map((role) => (
             <label key={role}>
               {role[0].toUpperCase() + role.slice(1)} camera idx
               <input
@@ -741,26 +215,33 @@ export default function ConnectionTab({
                 min={0}
                 max={7}
                 value={assign[role] ?? ""}
+                disabled={!!busy}
                 placeholder="Unassigned"
-                onChange={(e) =>
+                onChange={(e) => {
                   setAssign((a) => ({
                     ...a,
                     [role]:
                       e.target.value === "" ? null : Number(e.target.value),
-                  }))
-                }
+                  }));
+                  clearResult();
+                }}
               />
             </label>
           ))}
           <button
             className="primary"
-            disabled={busy}
+            disabled={!!busy || !camerasDirty}
             onClick={() =>
-              void run(async () => {
-                await api("/cameras/assignments", "PUT", assign);
-                setNotice(
-                  "Camera assignments saved. They will be restored next launch.",
+              void run("save-cameras", async () => {
+                setSaved(
+                  await api<ConnectionSettings>(
+                    "/cameras/assignments",
+                    "PUT",
+                    assign,
+                  ),
                 );
+                clearResult();
+                setNotice("Camera setup saved for the next launch.");
               })
             }
           >
@@ -768,14 +249,55 @@ export default function ConnectionTab({
           </button>
         </div>
       </section>
-      {status?.connected &&
-        (status.enabled || status.sync_mode !== "off") &&
-        createPortal(
-          <button className="connection-global-stop" onClick={stop}>
-            <Square size={16} /> Real arm · Stop & hold
-          </button>,
-          document.body,
+      <footer className="connection-verification">
+        <button
+          className="primary"
+          disabled={!!busy || !saved?.robot_port || portDirty || camerasDirty}
+          onClick={() =>
+            void run("verify", async () => {
+              setView("verify");
+              setVerification(null);
+              const epoch = verificationEpoch.current;
+              const result = await api<Verification>("/verify", "POST");
+              if (epoch === verificationEpoch.current) setVerification(result);
+            })
+          }
+        >
+          <ShieldCheck size={18} />
+          {busy === "verify" ? "Verifying…" : "Verify connections"}
+        </button>
+        <p className="connection-hint">
+          {portDirty || camerasDirty
+            ? "Save your changes before verifying."
+            : "Check the robot and saved camera views without sending motion commands."}
+        </p>
+        {verification && (
+          <div role="status">
+            <p
+              className={
+                verification.robot.ok ? "connection-verify" : "connection-error"
+              }
+            >
+              {verification.robot.ok
+                ? "Robot verified · "
+                : "Robot check failed · "}
+              {verification.robot.message}
+              {verification.robot.ok && !verification.robot.calibrated
+                ? " Joint mapping is required before movement."
+                : ""}
+            </p>
+            {verification.unassigned.length > 0 && (
+              <p className="connection-hint">
+                Unassigned: {verification.unassigned.join(", ")}
+              </p>
+            )}
+            {!verification.cameras.length && (
+              <p className="connection-hint">No camera views assigned.</p>
+            )}
+            <CameraStack cameras={verification.cameras} />
+          </div>
         )}
+      </footer>
     </main>
   );
 }

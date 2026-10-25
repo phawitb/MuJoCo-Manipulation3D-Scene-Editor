@@ -22,10 +22,14 @@ class Owner(StrictModel):
     session_id: str = Field(min_length=1, max_length=100)
 
 
-class Connect(Owner):
+class RobotPort(StrictModel):
     port: str = Field(
         min_length=1, max_length=200, pattern=r"^/dev/(cu\.|tty)[A-Za-z0-9_.-]+$"
     )
+
+
+class Connect(Owner, RobotPort):
+    pass
 
 
 class JointCalibration(StrictModel):

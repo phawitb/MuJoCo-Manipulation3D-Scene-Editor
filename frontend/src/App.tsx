@@ -5,18 +5,24 @@ import {
   selectedModule,
   type ModuleId,
 } from "./modules/registry";
+import type { ModuleProps, RobotControlProps } from "./modules/types";
 const entries = import.meta.glob<{
-  default: ComponentType<{ activeTab?: boolean }>;
+  default: ComponentType<ModuleProps>;
+  GymRobot?: ComponentType<RobotControlProps>;
 }>("./modules/*/index.ts");
 const panels = Object.fromEntries(
   Object.entries(entries).map(([path, load]) => [
     path.split("/")[2],
     lazy(load),
   ]),
-) as Record<
-  ModuleId,
-  ReturnType<typeof lazy<ComponentType<{ activeTab?: boolean }>>>
->;
+) as Record<ModuleId, ReturnType<typeof lazy<ComponentType<ModuleProps>>>>;
+const connectionEntry = entries["./modules/connection/index.ts"];
+const RobotControls = connectionEntry
+  ? lazy(async () => {
+      const module = await connectionEntry();
+      return { default: module.GymRobot || (() => null) };
+    })
+  : undefined;
 const labels = {
   gym: "Gym",
   connection: "Setting Connection",
@@ -85,7 +91,14 @@ export default function App() {
                   <p className="module-loading">Loading {labels[id]}…</p>
                 }
               >
-                <Panel activeTab={active === id} />
+                <Panel
+                  activeTab={active === id}
+                  robotControls={
+                    id === "gym" && available.includes("connection")
+                      ? RobotControls
+                      : undefined
+                  }
+                />
               </Suspense>
             </section>
           );

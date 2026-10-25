@@ -2,8 +2,17 @@
 
 import asyncio
 from fastapi import APIRouter, HTTPException, Request, Path
-from fastapi.responses import Response
-from .schemas import Connect, Owner, Calibration, Jog, Sync, Scan, Assignments
+from fastapi.responses import Response, JSONResponse
+from .schemas import (
+    Connect,
+    Owner,
+    Calibration,
+    Jog,
+    Sync,
+    Scan,
+    Assignments,
+    RobotPort,
+)
 from .service import ConnectionError
 from .driver import discover_ports
 
@@ -35,6 +44,14 @@ def create_router(service=None):
     @router.get("/settings")
     async def settings(request: Request):
         return await invoke(get(request).settings)
+
+    @router.put("/port")
+    async def configure_port(body: RobotPort, request: Request):
+        return await invoke(get(request).configure_port, body.port)
+
+    @router.post("/verify")
+    async def verify(request: Request):
+        return await invoke(get(request).verify)
 
     @router.post("/connect")
     async def connect(body: Connect, request: Request):
@@ -87,6 +104,13 @@ def create_router(service=None):
     @router.put("/cameras/assignments")
     async def assignments(body: Assignments, request: Request):
         return await invoke(get(request).assign_cameras, body.model_dump())
+
+    @router.get("/cameras/{index}/snapshot")
+    async def snapshot(request: Request, index: int = Path(ge=0, le=7)):
+        return JSONResponse(
+            await invoke(get(request).cameras.snapshot, index),
+            headers={"Cache-Control": "no-store"},
+        )
 
     @router.get("/cameras/{index}/frame")
     async def frame(request: Request, index: int = Path(ge=0, le=7)):

@@ -7,7 +7,7 @@ from pathlib import Path
 import tempfile
 import threading
 import time
-from .schemas import Calibration, Assignments, JOINT_NAMES
+from .schemas import Calibration, Assignments, RobotPort, JOINT_NAMES
 from .driver import SerialDriver
 from .bridge import GymBridge
 from .tracking import TrackingController
@@ -40,6 +40,7 @@ class ConnectionService:
         self.connected = False
         self.identity = None
         self.port = None
+        self.robot_port = None
         self.owner_session_id = None
         self.enabled = False
         self.sync_mode = "off"
@@ -66,6 +67,8 @@ class ConnectionService:
             self.assignments = Assignments.model_validate(
                 data.get("assignments", {})
             ).model_dump()
+            if data.get("robot_port"):
+                self.robot_port = RobotPort(port=data["robot_port"]).port
             if data.get("calibration"):
                 self.calibration = Calibration.model_validate(data["calibration"])
         except FileNotFoundError:
@@ -94,7 +97,86 @@ class ConnectionService:
                     self.calibration.model_dump() if self.calibration else None
                 ),
                 "assignments": dict(self.assignments),
+                "robot_port": self.robot_port,
             }
+
+    def configure_port(self, port):
+        port = RobotPort(port=port).port
+        with self.lock:
+            if self.connected and port != self.port:
+                raise ConnectionError(
+                    "Disconnect the robot in Gym before changing its port"
+                )
+            previous = self.robot_port
+            self.robot_port = port
+            try:
+                self._persist()
+            except Exception:
+                self.robot_port = previous
+                raise
+            return self.settings()
+
+    def verify(self):
+        # Never create a Gym owner, enable torque, or send goals. Do not hold
+        # the serial lock while camera workers run: stop/heartbeat must remain responsive.
+        with self.lock:
+            assignments = dict(self.assignments)
+            port = self.robot_port
+            robot = dict(ok=False, port=port, motor_count=0, calibrated=False)
+            temporary = None
+            try:
+                if not port:
+                    raise ConnectionError("Save a serial port first")
+                if self.connected:
+                    if port != self.port:
+                        raise ConnectionError(
+                            "Connected robot does not match the saved port"
+                        )
+                    self._read()
+                    rows, identity = self.telemetry, self.identity
+                else:
+                    temporary = self.driver_factory(port)
+                    temporary.open()
+                    rows = temporary.read()
+                    self._validate_rows(rows)
+                    identity = temporary.identity
+                robot.update(
+                    ok=True,
+                    motor_count=len(rows),
+                    identity=identity,
+                    calibrated=bool(
+                        self.calibration
+                        and self.calibration.confirmed
+                        and self.calibration.identity == identity
+                    ),
+                    message="All six motors responded. No movement requested.",
+                )
+            except Exception as exc:
+                robot["message"] = str(exc)
+            finally:
+                if temporary is not None:
+                    temporary.close()
+        cameras = [
+            dict(self.cameras.snapshot(index), role=role)
+            for role, index in assignments.items()
+            if index is not None
+        ]
+        unassigned = [role for role, index in assignments.items() if index is None]
+        return dict(
+            robot=robot,
+            cameras=cameras,
+            unassigned=unassigned,
+            ok=robot["ok"] and all(c["available"] for c in cameras),
+        )
+
+    def replace_scene(self, session, command):
+        # Same lock order as the streaming worker: hardware before Gym session.
+        # Keep the lock until the replacement is complete, preventing a concurrent enable.
+        with self.lock:
+            if self.connected and self.owner_session_id == session.id:
+                if self.enabled or self.sync_mode != "off":
+                    self.stop(session.id)
+            return session.execute(command)
 
     def _persist(self):
         self.settings_dir.mkdir(parents=True, exist_ok=True)

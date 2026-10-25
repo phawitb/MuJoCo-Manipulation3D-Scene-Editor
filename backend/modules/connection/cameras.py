@@ -1,5 +1,6 @@
 """Killable OpenCV capture workers bound permission and device-read stalls."""
 
+import base64
 import subprocess
 import sys
 import threading
@@ -61,15 +62,22 @@ class CameraService:
         finally:
             self.lock.release()
 
+    def snapshot(self, index):
+        try:
+            image = base64.b64encode(self.frame(index)).decode("ascii")
+            return dict(
+                index=index,
+                available=True,
+                image="data:image/jpeg;base64," + image,
+                error=None,
+            )
+        except (ValueError, OSError) as exc:
+            return dict(index=index, available=False, image=None, error=str(exc))
+
     def scan(self, max_index=4):
-        rows = []
-        for index in range(max_index + 1):
-            try:
-                self.frame(index)
-                rows.append(dict(index=index, available=True, error=None))
-            except ValueError as exc:
-                rows.append(dict(index=index, available=False, error=str(exc)))
-        return rows
+        if not isinstance(max_index, int) or not 0 <= max_index <= 7:
+            raise ValueError("Maximum camera index must be 0–7")
+        return [self.snapshot(index) for index in range(max_index + 1)]
 
     def shutdown(self):
         self.closed = True

@@ -47,7 +47,11 @@ import type {
   ViewKind,
 } from "./types";
 
-export default function App({ activeTab = true }: { activeTab?: boolean }) {
+import type { ModuleProps } from "../types";
+export default function App({
+  activeTab = true,
+  robotControls: RobotControls,
+}: ModuleProps) {
   const sim = useSimulation();
   const libraryAssets = useMemo(
     () =>
@@ -322,6 +326,8 @@ export default function App({ activeTab = true }: { activeTab?: boolean }) {
         setCameraEpoch((v) => v + 1);
       }
       setSelected(null);
+      setPicking(null);
+      setHighlight(null);
       notify("Scene loaded");
     });
   };
@@ -532,6 +538,9 @@ export default function App({ activeTab = true }: { activeTab?: boolean }) {
           <span className="local-badge">LOCAL</span>
         </div>
         <div className="header-actions">
+          {RobotControls && (
+            <RobotControls sessionId={sim.state?.sessionId ?? null} />
+          )}
           <button onClick={() => setApiHelp(true)}>AI / API</button>
           <button
             className="icon-button"
@@ -603,6 +612,7 @@ export default function App({ activeTab = true }: { activeTab?: boolean }) {
                   await sim.command("example", { exampleId });
                   setSelected(null);
                   setPicking(null);
+                  setHighlight(null);
                   notify("Example ready · calculate a path first");
                 })
               }

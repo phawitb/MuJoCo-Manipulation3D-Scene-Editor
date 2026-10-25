@@ -609,3 +609,129 @@ def test_slow_stop_validation_uses_new_feedback_and_clears_bias(service, monkeyp
     s.stop("one")
     assert s.tracker is None
     assert s.driver.writes[-1] == ("goals", [2048, 2048, 2068, 2048, 2048, 2048])
+
+
+def test_robot_port_persists_and_cannot_change_connected_device(service):
+    s = service
+    s.configure_port("/dev/cu.test")
+    assert s.settings()["robot_port"] == "/dev/cu.test"
+    restored = ConnectionService(settings_dir=s.settings_dir, start_worker=False)
+    assert restored.settings()["robot_port"] == "/dev/cu.test"
+    restored.shutdown()
+    s.connect("/dev/cu.test", "one", None)
+    with pytest.raises(ConnectionError):
+        s.configure_port("/dev/cu.other")
+
+
+def test_verify_only_assigned_views_and_never_claims_or_moves_robot(service):
+    s = service
+    created = []
+
+    def factory(port):
+        d = Driver(port)
+        created.append(d)
+        return d
+
+    s.driver_factory = factory
+    s.configure_port("/dev/cu.test")
+    s.assign_cameras({"back": 2, "front": None, "wrist": 0})
+    seen = []
+    s.cameras.snapshot = lambda index: (
+        seen.append(index)
+        or dict(index=index, available=True, image="data:image/jpeg;base64,/9g=")
+    )
+    result = s.verify()
+    assert result["robot"]["ok"] and result["robot"]["motor_count"] == 6
+    assert seen == [2, 0]
+    assert result["unassigned"] == ["front"]
+    assert not s.connected and s.owner_session_id is None
+    assert created[0].writes == []
+    s.connect("/dev/cu.test", "one", None)
+    result = s.verify()
+    assert result["robot"]["ok"] and len(created) == 2
+    assert s.driver.writes == []
+
+
+def test_verify_camera_checks_continue_after_robot_failure(service):
+    s = service
+    s.configure_port("/dev/cu.test")
+    s.connect("/dev/cu.test", "one", None)
+    s.driver.broken = True
+    s.assign_cameras({"front": 1})
+    s.cameras.snapshot = lambda i: dict(index=i, available=False, error="unplugged")
+    result = s.verify()
+    assert not result["ok"] and not result["robot"]["ok"]
+    assert result["cameras"][0]["role"] == "front"
+
+
+def test_scan_returns_actual_image_without_an_extra_capture():
+    from backend.modules.connection.cameras import CameraService
+
+    c = CameraService()
+    seen = []
+
+    def frame(index):
+        seen.append(index)
+        if index == 1:
+            raise ValueError("unavailable")
+        return b"\xff\xd8image"
+
+    c.frame = frame
+    rows = c.scan(2)
+    assert seen == [0, 1, 2]
+    assert rows[0]["image"].startswith("data:image/jpeg;base64,")
+    assert not rows[1]["available"] and rows[1]["image"] is None
+    assert rows[2]["image"] == rows[0]["image"]
+
+
+def test_scene_replacement_stops_only_owning_controller_before_execution(service):
+    from types import SimpleNamespace
+    from backend.sessions import Command
+
+    s = calibrated(service)
+    s.enable("one")
+    s.sync("one", "gym_to_real")
+    observed = []
+    session = SimpleNamespace(
+        id="one",
+        execute=lambda cmd: (
+            observed.append((s.enabled, s.sync_mode)) or {"replaced": True}
+        ),
+    )
+    assert s.replace_scene(session, Command(type="reset")) == {"replaced": True}
+    assert observed == [(False, "off")]
+    s.enable("one")
+    session.id = "other"
+    s.replace_scene(session, Command(type="reset"))
+    assert observed[-1] == (True, "off")
+
+
+def test_connection_setup_routes_validate_and_verify_without_session(service):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from backend.modules.connection.routes import create_router
+
+    app = FastAPI()
+    app.include_router(create_router(service))
+    with TestClient(app) as client:
+        assert (
+            client.put("/api/connection/port", json={"port": "unsafe"}).status_code
+            == 422
+        )
+        assert (
+            client.put(
+                "/api/connection/port", json={"port": "/dev/cu.test"}
+            ).status_code
+            == 200
+        )
+        result = client.post("/api/connection/verify")
+        assert result.status_code == 200 and result.json()["robot"]["ok"]
+        assert result.json()["cameras"] == []
+        assert not service.connected
+        service.cameras.snapshot = lambda index: {
+            "index": index,
+            "available": True,
+            "image": "jpeg",
+        }
+        assert client.get("/api/connection/cameras/2/snapshot").json()["index"] == 2
+        assert client.get("/api/connection/cameras/8/snapshot").status_code == 422

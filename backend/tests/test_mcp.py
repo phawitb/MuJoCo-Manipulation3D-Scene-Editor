@@ -64,6 +64,8 @@ def test_mcp_handshake_tools_and_shared_scene():
                     "import_mesh",
                     "connection_status",
                     "connect_robot",
+                    "configure_robot_port",
+                    "verify_connections",
                     "stop_robot",
                     "sync_robot",
                     "calibrate_robot",

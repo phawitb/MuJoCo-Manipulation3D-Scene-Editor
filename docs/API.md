@@ -145,3 +145,14 @@ Editor navigation: Main allows orbit/pan/zoom; Top allows zoom only and uses +X 
 `scene.robot.reset_joints` contains six joint targets in radians, ordered shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper. Both current and reset joints are checked against the model limits before replacing the scene. The default compact folded pose is `[0, -1.5, 1.5, -1.5, 0, 0]`; older files keep their current joints and receive this reset default. `reset` and `example` preserve the saved reset joints and use them as the initial joint positions. Base transforms continue to follow the new scene/example's setup.
 
 To save a reset pose through HTTP or MCP, send `{"type":"robot","patch":{"reset_joints":[0,-1.5,1.5,-1.5,0,0]}}`. Include `joints` in that patch to apply the pose immediately as an editor change. This setting is serialized in scene files. The browser's explicit Save current pose / Use folded default actions additionally remember it in local storage for new workspaces; opening an existing session or scene file respects that scene's setting. These are paused editing actions, not animated policy motions.
+
+
+### Connection setup and verification
+
+- `GET /api/connection/settings` includes persisted `robot_port` (nullable), assignments and calibration.
+- `PUT /api/connection/port` accepts `{port: "/dev/cu.…"}`. Changing the port while a different robot is connected is rejected. MCP: `configure_robot_port`.
+- `POST /api/connection/verify` needs no session. It reads six motors and captures only assigned Back/Front/Wrist indices. It never claims ownership or sends torque/goal commands. A temporary read connection is closed afterwards; an existing owner is reused under the serial lock. Returns `{ok, robot:{ok,port,motor_count,calibrated,message}, cameras:[{role,index,available,image,error}], unassigned:[roles]}`. `ok` means every configured device passed; unassigned roles are separately listed. MCP: `verify_connections`.
+- `GET /api/connection/cameras/{index}/snapshot` returns `{index,available,image,error}` with a JPEG data URL, or an unavailable result. No caching. The UI calls this sequentially to show each scan result immediately.
+- `POST /api/connection/cameras/scan` retains `{max_index}` and now includes the same image data in every available result. MCP: `scan_physical_cameras`.
+
+Camera checks do not hold the serial lock, so Stop and heartbeat remain available during capture. Setup does not create Gym sessions. The optional connection module contributes robot controls to Gym without a static dependency from the Gym module. Physical scene `load`, `example` and `reset` commands stop the owning controller before replacing the current scene, through both HTTP and WebSocket (and therefore MCP). Camera-only commands do not stop streaming. Scene loads preserve session identity; browser refresh records/reuses that identity in the URL.

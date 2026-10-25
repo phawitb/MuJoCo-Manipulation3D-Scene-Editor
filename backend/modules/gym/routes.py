@@ -27,6 +27,13 @@ from ...http import LOCAL, allowed, bounded_body, session
 router = APIRouter()
 
 
+def execute(app, scene_session, cmd):
+    connection = getattr(app.state, "connection", None)
+    if connection is not None and cmd.type in {"load", "example", "reset"}:
+        return connection.replace_scene(scene_session, cmd)
+    return scene_session.execute(cmd)
+
+
 @router.get("/api/health")
 def health():
     return dict(status="ok", engine="MuJoCo", version=mujoco.__version__, apiVersion=3)
@@ -148,7 +155,7 @@ async def delete_session(sid: str, request: Request):
 async def command(sid: str, request: Request):
     s = session(request, sid)
     cmd = Command.model_validate_json(await bounded_body(request, MAX_SCENE))
-    packet = await asyncio.to_thread(s.execute, cmd)
+    packet = await asyncio.to_thread(execute, request.app, s, cmd)
     s.broadcast(packet)
     return packet
 
@@ -224,7 +231,7 @@ async def websocket(ws: WebSocket):
                         raise ValueError("Command must be an object")
                     request_id = value.get("requestId")
                     cmd = Command.model_validate(value)
-                    packet = await asyncio.to_thread(s.execute, cmd)
+                    packet = await asyncio.to_thread(execute, ws.app, s, cmd)
                     s.broadcast(packet, exclude=queue)
                     await ws.send_json({**packet, "requestId": request_id})
                 except (ValueError, TypeError, ValidationError) as exc:

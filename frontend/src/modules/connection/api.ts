@@ -72,3 +72,26 @@ export async function api<T>(
   }
   return r.json();
 }
+export type CameraResult = {
+  index: number;
+  available: boolean;
+  image: string | null;
+  error?: string;
+  role?: string;
+};
+export type ConnectionSettings = {
+  robot_port: string | null;
+  assignments: Assignments;
+};
+export type Verification = {
+  ok: boolean;
+  robot: {
+    ok: boolean;
+    port: string | null;
+    motor_count: number;
+    calibrated: boolean;
+    message: string;
+  };
+  cameras: CameraResult[];
+  unassigned: string[];
+};

@@ -3,7 +3,16 @@
 import base64
 import httpx
 from mcp.types import ImageContent
-from .schemas import Connect, Owner, Calibration, Jog, Sync, Scan, Assignments
+from .schemas import (
+    Connect,
+    Owner,
+    Calibration,
+    Jog,
+    Sync,
+    Scan,
+    Assignments,
+    RobotPort,
+)
 
 
 def register(mcp, request, api_url):
@@ -21,6 +30,16 @@ def register(mcp, request, api_url):
     async def connection_settings() -> dict:
         """Read locally persisted joint mapping and back/front/wrist camera indices."""
         return await request("GET", "/api/connection/settings")
+
+    @mcp.tool()
+    async def configure_robot_port(port: RobotPort) -> dict:
+        """Persist the local serial port used by Gym and verification. No motion."""
+        return await request("PUT", "/api/connection/port", json=port.model_dump())
+
+    @mcp.tool()
+    async def verify_connections() -> dict:
+        """Read all six motors without motion and capture only assigned camera indices. Does not create a Gym session or claim hardware ownership."""
+        return await request("POST", "/api/connection/verify")
 
     @mcp.tool()
     async def connect_robot(connection: Connect) -> dict:

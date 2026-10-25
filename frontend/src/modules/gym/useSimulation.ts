@@ -203,6 +203,10 @@ export function useSimulation() {
         if (first) {
           first = false;
           sessionId.current = p.sessionId;
+          const url = new URL(window.location.href);
+          url.searchParams.set("session", p.sessionId);
+          window.history.replaceState(window.history.state, "", url);
+
           // A newly created session starts its own revision counter. Initialize
           // before restoring retained work or local camera preferences.
           serverRevision.current = p.revision;
