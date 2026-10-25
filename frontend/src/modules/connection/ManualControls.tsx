@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
-import { Line, OrbitControls } from "@react-three/drei";
+import RobotModel from "./RobotModel";
 import { api, jointNames, type ConnectionStatus } from "./api";
 import { LatestTarget } from "./latestTarget";
 
@@ -101,7 +100,6 @@ export default function ManualControls({
     setTarget(q);
     queue.current?.push(q);
   };
-  const preview = status.robot_preview;
   return (
     <section className="connection-card manual-card">
       <h2>
@@ -117,44 +115,7 @@ export default function ManualControls({
         </span>
       </h2>
       <div className="manual-layout">
-        <div className="manual-model" aria-label="Live measured SO-101 model">
-          {preview ? (
-            <Canvas
-              camera={{ position: [0.5, -0.65, 0.4], up: [0, 0, 1], fov: 40 }}
-            >
-              <ambientLight intensity={1.5} />
-              <directionalLight position={[1, -1, 2]} intensity={2} />
-              <mesh position={[0, 0, -0.015]}>
-                <boxGeometry args={[0.12, 0.1, 0.03]} />
-                <meshStandardMaterial color="#384b50" />
-              </mesh>
-              <Line points={preview.points} color="#efc842" lineWidth={12} />
-              {preview.points.map((p, i) => (
-                <mesh key={i} position={p}>
-                  <sphereGeometry args={[0.013, 16, 12]} />
-                  <meshStandardMaterial color="#33464c" />
-                </mesh>
-              ))}
-              {preview.fingers.map((p, i) => (
-                <Line
-                  key={i}
-                  points={[preview.points[preview.points.length - 1], p]}
-                  color="#efc842"
-                  lineWidth={6}
-                />
-              ))}
-              <OrbitControls
-                target={[0, 0, 0.15]}
-                enablePan={false}
-                minDistance={0.3}
-                maxDistance={1.5}
-              />
-            </Canvas>
-          ) : (
-            <p>Connect to view measured pose</p>
-          )}
-          <span>Encoder feedback · simplified model</span>
-        </div>
+        <RobotModel telemetry={status.telemetry} />
         <div className="manual-sliders">
           {jointNames.map((name, i) => {
             const limits = status.control_limits?.[i];
