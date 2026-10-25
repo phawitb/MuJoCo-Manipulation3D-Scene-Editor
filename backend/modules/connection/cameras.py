@@ -5,14 +5,19 @@ import sys
 import threading
 
 CAPTURE = """
-import sys, cv2
+import sys, time, cv2
 cap=cv2.VideoCapture(int(sys.argv[1]))
 try:
  if not cap.isOpened(): raise RuntimeError('Camera unavailable or permission denied')
  cap.set(cv2.CAP_PROP_FRAME_WIDTH,640)
  cap.set(cv2.CAP_PROP_FRAME_HEIGHT,480)
- ok,frame=cap.read()
- if not ok: raise RuntimeError('Camera did not return a frame')
+ # USB cameras can return valid but black frames while auto-exposure starts.
+ # Drain startup frames instead of sleeping with a stale frame in the buffer.
+ started=time.monotonic()
+ while True:
+  ok,frame=cap.read()
+  if not ok: raise RuntimeError('Camera did not return a frame')
+  if time.monotonic()-started >= 0.7: break
  ok,jpeg=cv2.imencode('.jpg',frame,[cv2.IMWRITE_JPEG_QUALITY,75])
  if not ok: raise RuntimeError('JPEG encoding failed')
  sys.stdout.buffer.write(jpeg.tobytes())
