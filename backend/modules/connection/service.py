@@ -331,6 +331,19 @@ class ConnectionService:
                 manual_phase=self.manual.phase if self.manual else None,
                 manual_target=list(self.manual.target) if self.manual else None,
                 control_limits=limits,
+                limit_violations=[
+                    dict(
+                        name=row["name"],
+                        angle_rad=row["position_rad"],
+                        min_rad=lo,
+                        max_rad=hi,
+                        raw=row["raw"],
+                        raw_min=self.calibration.joints[i].raw_min,
+                        raw_max=self.calibration.joints[i].raw_max,
+                    )
+                    for i, (row, (lo, hi)) in enumerate(zip(rows, limits or []))
+                    if not lo <= row["position_rad"] <= hi
+                ],
                 robot_preview=preview,
                 port=self.port,
                 identity=self.identity,
@@ -413,6 +426,8 @@ class ConnectionService:
         for row in rows:
             if (
                 not math.isfinite(row["raw"])
+                or not 0 <= row["raw"] <= 4095
+                or row["raw"] != int(row["raw"])
                 or not 4 <= row["voltage"] <= 14
                 or row["temperature"] >= 65
             ):
@@ -443,9 +458,19 @@ class ConnectionService:
     def _raw(self, q):
         values = []
         for angle, c in zip(q, self.calibration.joints):
+            if not math.isfinite(angle):
+                raise ConnectionError(
+                    f"Invalid angle for {c.name}: finite radians required"
+                )
             raw = round(c.zero_raw + angle / (c.direction * c.radians_per_tick))
-            if not math.isfinite(angle) or not c.raw_min <= raw <= c.raw_max:
-                raise ConnectionError("Calibrated raw encoder limit exceeded")
+            if not c.raw_min <= raw <= c.raw_max:
+                raise ConnectionError(
+                    f"Calibrated raw encoder limit exceeded: {c.name} "
+                    f"at {math.degrees(angle):.2f} degrees (raw {raw}); "
+                    f"allowed raw {c.raw_min}..{c.raw_max}. "
+                    "Reposition the arm within its verified range or review "
+                    "the joint calibration before requesting motion."
+                )
             values.append(raw)
         return values
 

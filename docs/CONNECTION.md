@@ -101,3 +101,23 @@ Read `/api/connection/status` for `control_epoch`, `manual_target`, `manual_phas
 Torque On stages a fresh measured hold before enabling. Torque Off immediately cancels command producers and verifies all six torque states; it never automatically resumes the previous motion. Stop/Off requests do not wait for an outstanding slider HTTP response. Continue heartbeats at least once a second while manually driving or holding a target.
 
 Studio now saves each servo’s original RAM Goal_Velocity before overriding it, and restores those exact values with readback on disconnect/shutdown. Restoration first stages fresh measured positions so removing the cap cannot chase an old goal. If restoration fails, the error is returned and the port is released; no EEPROM is written. This prevents Studio’s former 195 ticks/s cap from carrying into VLA-Benchmark’s LeRobot mimic mode. The legacy cap on the attached arm was explicitly repaired to 0 and verified on all six motors. **0 means uncapped servo speed, not stopped.** See [verification and measurements](verification/2026-10-25-direct-robot-control.md).
+
+### Torque On outside the motion range
+
+Torque On seeds all six servo goal registers with the freshly measured raw
+encoder values before enabling torque. It is a stationary hold, not a request
+to move to Home, Gym, or the nearest calibration boundary. Raw feedback must
+still be finite integer ticks in 0–4095, with valid motor identity, voltage,
+temperature, owner, calibration, and command epoch.
+
+An arm positioned by hand with torque off can lie outside the saved motion
+range. Torque On may hold that exact position, but motion continues to require
+calibrated encoder limits, model joint limits, and whole-arm collision checks.
+No limits are expanded and no encoder or target is silently clamped.
+
+`GET /api/connection/status` (also MCP `connection_status`) includes
+`limit_violations`: an array of `{name, angle_rad, min_rad, max_rad, raw,
+raw_min, raw_max}` for measured angles outside the combined calibration/Gym
+range. The UI shows these values and disables direct motion controls until the
+measured pose is back within range. Support the arm before releasing torque
+and repositioning it. Review joint mapping if the stored calibration is wrong.

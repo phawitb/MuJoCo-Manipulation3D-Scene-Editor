@@ -62,6 +62,7 @@ export default function ManualControls({
   const torqueOn =
     status.telemetry.length === 6 &&
     status.telemetry.every((row) => row.torque);
+  const outsideLimits = (status.limit_violations?.length ?? 0) > 0;
   const allowed =
     owned &&
     status.calibrated &&
@@ -114,6 +115,27 @@ export default function ManualControls({
                 : "Torque off"}
         </span>
       </h2>
+      {outsideLimits && (
+        <div className="manual-limit-warning" role="status">
+          <strong>Arm is outside the motion range</strong>
+          <ul>
+            {status.limit_violations?.map((v) => (
+              <li key={v.name}>
+                {labels[jointNames.indexOf(v.name)] ?? v.name}:{" "}
+                {degrees(v.angle_rad).toFixed(2)}°{" · allowed "}
+                {degrees(v.min_rad).toFixed(2)}° to{" "}
+                {degrees(v.max_rad).toFixed(2)}°{" · encoder "}
+                {v.raw} ({v.raw_min}–{v.raw_max})
+              </li>
+            ))}
+          </ul>
+          <p>
+            Torque On holds the current encoder position. Motion stays blocked.
+            Support the arm before Torque Off, then reposition within the range.
+            If the displayed range is incorrect, review joint mapping.
+          </p>
+        </div>
+      )}
       <div className="manual-layout">
         <RobotModel telemetry={status.telemetry} />
         <div className="manual-sliders">
@@ -140,7 +162,9 @@ export default function ManualControls({
                   max={Math.floor(degrees(limits?.[1] ?? Math.PI) * 10) / 10}
                   step="0.1"
                   value={degrees(value)}
-                  disabled={!allowed || !torqueOn || busy || !limits}
+                  disabled={
+                    !allowed || !torqueOn || busy || !limits || outsideLimits
+                  }
                   onChange={(e) => change(i, Number(e.target.value))}
                 />
                 <small>
@@ -155,13 +179,13 @@ export default function ManualControls({
       </div>
       <div className="connection-actions manual-actions">
         <button
-          disabled={!allowed || !torqueOn || busy}
+          disabled={!allowed || !torqueOn || busy || outsideLimits}
           onClick={() => void act("/home")}
         >
           Home position
         </button>
         <button
-          disabled={!allowed || !torqueOn || busy}
+          disabled={!allowed || !torqueOn || busy || outsideLimits}
           onClick={() => void act("/match-gym")}
         >
           Move robot to Gym pose

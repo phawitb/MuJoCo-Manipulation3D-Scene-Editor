@@ -65,7 +65,12 @@ def _torque(service, session_id, enabled):
             if s._preparing or s.enabled or s.sync_mode != "off":
                 raise ValueError("Stop motion before enabling torque")
             q = s._read()
-            s.driver.goals(s._raw(q))
+            # Torque On is a stationary hold, not a motion target. Seed every
+            # servo with its freshly read integer encoder before enabling it.
+            # A manually positioned arm can be outside the calibrated motion
+            # envelope; never clamp it to that envelope (which would move it).
+            # Subsequent moves still pass _raw() and whole-arm path validation.
+            s.driver.goals([row["raw"] for row in s.telemetry])
             s.driver.torque(
                 [
                     max(1, math.floor(0.8 / c.radians_per_tick))

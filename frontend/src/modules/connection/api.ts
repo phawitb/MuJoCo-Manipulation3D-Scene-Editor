@@ -47,6 +47,15 @@ export type ConnectionStatus = {
   manual_phase?: "moving" | "holding" | null;
   manual_target?: number[] | null;
   control_limits?: [number, number][] | null;
+  limit_violations?: {
+    name: string;
+    angle_rad: number;
+    min_rad: number;
+    max_rad: number;
+    raw: number;
+    raw_min: number;
+    raw_max: number;
+  }[];
   robot_preview?: {
     points: [number, number, number][];
     fingers: [number, number, number][];

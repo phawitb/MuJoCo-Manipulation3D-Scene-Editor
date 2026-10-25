@@ -232,3 +232,39 @@ def test_reference_stays_on_validated_joint_line(control, monkeypatch):
     motion.tick(q)
     delta = np.array(motion.tracker.reference) - q
     assert delta[0] / 0.03 == pytest.approx(delta[4] / 0.09)
+
+
+def test_torque_on_holds_exact_encoder_outside_calibration_without_motion(control):
+    s, _ = control
+    s.driver.powered = False
+    c = s.calibration.joints[1]
+    c.raw_min = 858
+    c.zero_raw = 1990.5
+    s.driver.raw[1] = 850
+    original_raw = list(s.driver.raw)
+    original_calibration = s.calibration.model_dump()
+    s.driver.writes.clear()
+    result = s.torque_control("one", True)
+    assert s.driver.writes[0] == ("goals", original_raw)
+    assert s.driver.writes[1] == ("torque", True)
+    assert s.driver.raw == original_raw
+    assert not result["enabled"] and result["sync_mode"] == "off"
+    assert s.manual is None
+    assert s.calibration.model_dump() == original_calibration
+    assert any(v["name"] == "shoulder_lift" for v in result["limit_violations"])
+    before = list(s.driver.writes)
+    with pytest.raises(ValueError, match=r"shoulder_lift.*850.*858"):
+        s.move("one", preset="home")
+    assert s.driver.writes == before
+
+
+@pytest.mark.parametrize("raw", [-1, 4096, float("nan"), 850.5])
+def test_torque_on_rejects_invalid_raw_measurement_before_any_write(control, raw):
+    s, _ = control
+    s.driver.powered = False
+    s.driver.raw[1] = raw
+    s.driver.writes.clear()
+    with pytest.raises(ValueError, match="encoder"):
+        s.torque_control("one", True)
+    assert s.driver.writes == []
+    assert not s.driver.powered
