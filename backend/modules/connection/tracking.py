@@ -14,6 +14,8 @@ class TrackingController:
     MAX_CORRECTION = 0.12
     PROPORTIONAL_GAIN = 0.8
     INTEGRAL_GAIN = 1.2
+    VELOCITY_FEEDFORWARD = 0.12
+    VELOCITY_FILTER_SECONDS = 0.1
 
     def __init__(self, measured):
         self.bias = [0.0] * 6
@@ -25,6 +27,7 @@ class TrackingController:
         self.reference = list(measured)
         self.output = [q + b for q, b in zip(measured, self.bias)]
         self.velocity = [0.0] * 6
+        self.reference_velocity = [0.0] * 6
 
     def step(self, desired, measured, dt, resolution):
         if not math.isfinite(dt) or not 0 < dt <= 0.2:
@@ -42,6 +45,14 @@ class TrackingController:
             reference = self.reference[i] + clamp(
                 desired[i] - self.reference[i], 0.24 * dt
             )
+            # A filtered reference velocity compensates servo lag without
+            # differentiating noisy encoder readings. Existing correction and
+            # output speed/acceleration limits also bound this feedforward.
+            reference_speed = (reference - self.reference[i]) / dt
+            blend = dt / (self.VELOCITY_FILTER_SECONDS + dt)
+            self.reference_velocity[i] += blend * (
+                reference_speed - self.reference_velocity[i]
+            )
             error = reference - measured[i]
             candidate = self.bias[i]
             if abs(error) > max(0.003, 2 * resolution[i]):
@@ -50,7 +61,10 @@ class TrackingController:
                     self.MAX_BIAS,
                 )
             correction = clamp(
-                candidate + self.PROPORTIONAL_GAIN * error, self.MAX_CORRECTION
+                candidate
+                + self.PROPORTIONAL_GAIN * error
+                + self.VELOCITY_FEEDFORWARD * self.reference_velocity[i],
+                self.MAX_CORRECTION,
             )
             wanted = reference + correction
             distance = wanted - self.output[i]

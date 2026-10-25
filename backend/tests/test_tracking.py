@@ -71,3 +71,25 @@ def test_invalid_or_stale_cycle_does_not_accumulate_correction(dt):
     with pytest.raises(ValueError):
         c.step([0.1] * 6, [0.0] * 6, dt, [0.0015] * 6)
     assert c.bias == [0.0] * 6 and c.output == [0.0] * 6
+
+
+@pytest.mark.parametrize("lag", [0.10, 0.22])
+def test_repeated_direction_changes_track_a_loaded_lagging_servo(lag):
+    controller = TrackingController([0.0] * 6)
+    measured = [0.0] * 6
+    errors = []
+    elapsed = 0.0
+    for n in range(1000):
+        dt = 0.04 if n % 2 else 0.06
+        elapsed += dt
+        desired = [0.18 * math.sin(0.8 * elapsed) if elapsed < 40 else 0.0] * 6
+        command = controller.step(desired, measured, dt, [math.tau / 4096] * 6)
+        # First-order servo response with constant elbow gravity load. The
+        # plant is independent of the controller and runs with variable timing.
+        for i in range(6):
+            equilibrium = command[i] + (0.06 if i == 2 else 0.0)
+            measured[i] += (1 - math.exp(-dt / lag)) * (equilibrium - measured[i])
+        if 8 < elapsed < 38:
+            errors.append(measured[2] - desired[2])
+    assert math.sqrt(sum(error**2 for error in errors) / len(errors)) < 0.005
+    assert max(abs(q) for q in measured) < 0.006
