@@ -10,7 +10,7 @@ Before motion, supply and explicitly confirm six joint mappings: `zero_raw`, `di
 
 Physical motion also requires a valid Gym session, raw and simulation joint bounds, a collision-safe measured pose and commanded path, fresh telemetry, acceptable motor voltage/temperature, and a live controller heartbeat. The simulator can guard the configured scene only; it cannot sense obstacles missing from that scene.
 
-Enable first stages the current measured position as the hold goal, sets a conservative RAM goal velocity of at most 0.3 radians/second under the supplied mapping, and then enables torque. Joint jogs are limited to ±0.05 radians and rate limited. `gym_to_real` requires initial agreement within 0.15 radians, rejects subsequent target jumps greater than 0.3 radians, limits each streamed step, and stops on tracking error above 0.15 radians. `real_to_gym` writes measured pose into the selected Gym session and sends no physical motor commands. Stop the motion mode before starting this read-only mode.
+Enable first stages the current measured position as the hold goal, sets a conservative RAM goal velocity of at most 0.3 radians/second under the supplied mapping, and then enables torque. Joint jogs are limited to ±0.05 radians and rate limited. `gym_to_real` requires initial agreement within 0.15 radians, rejects subsequent target jumps greater than 0.3 radians, ramps from the previous command to cross servo deadband, limits each streamed step, and stops on tracking error above 0.15 radians. `real_to_gym` writes measured pose into the selected Gym session and sends no physical motor commands. Stop the motion mode before starting this read-only mode.
 
 An active controller must renew its lease through `/heartbeat` every second; expiry at three seconds stops streaming. Stop and disconnect attempt to hold fresh measured position if this service enabled motion, then preserve existing torque. **They do not release torque.** If communication fails, a hold cannot be confirmed: new commands stop, the fault remains visible, and motor torque may remain on. There is no automatic recovery or automatic re-enable. No torque-release or EEPROM endpoint is exposed.
 
@@ -24,7 +24,7 @@ All endpoints live under `/api/connection` and inherit the application's localho
 | GET `/status` | Connection, owner, identity, calibration state, measured telemetry and age, target, fault, lease |
 | GET `/settings` | Calibration and camera assignments |
 | POST `/connect` | `{port,session_id}`; reads identities and telemetry |
-| POST `/disconnect`, `/enable`, `/stop`, `/heartbeat` | `{session_id}` |
+| POST `/disconnect`, `/align`, `/enable`, `/stop`, `/heartbeat` | `{session_id}` |
 | PUT `/calibration` | `{session_id,identity,confirmed:true,joints:[{name,zero_raw,direction,raw_min,raw_max,radians_per_tick}]}` |
 | POST `/jog` | `{session_id,joint:0..5,delta_rad:-0.05..0.05}` |
 | POST `/sync` | `{session_id,mode:"off"|"real_to_gym"|"gym_to_real"}` |
@@ -42,11 +42,13 @@ Settings are atomic JSON at `$SO101_SETTINGS_DIR/connection.json`, default `~/.c
 
 ## Verification on 2026-10-25
 
-Read-only probing found `/dev/cu.usbmodem5B141122411` (USB serial `5B14112241`, VID 6790, PID 21971). Motor 1 did not return a status packet at the required baud rate, so the six-motor identity handshake failed and the port was closed. Check motor power, bus cable, and configured IDs before retrying. No motor writes, calibration, or physical movement were performed.
+All six STS3215 motors now verify successfully. A device-specific mapping was installed from the verified existing LeRobot calibration using the upstream `new_calib` midpoint convention; gripper closed position maps to hinge zero. No EEPROM calibration was changed. The application preserves fractional midpoint zeros.
 
-Camera indices 0–3 each exceeded the four-second deadline. Index 4 returned a valid JPEG, and a second capture returned a 53,350-byte image. Visual inspection identified it as an OBS placeholder, so this verifies the capture path but does not establish a working physical-camera view. No assumption was made about why the other devices timed out.
+Bounded physical tests passed for real-to-Gym and outward/return Gym-to-real movement on all six joints. The complete movement test sampled feedback ages up to 63.2 ms and final target errors up to 3.36° (loaded elbow). Encoder-to-Gym mirroring differed by no more than one tick across the sampled runs. This does not establish independent absolute link-angle or millimeter accuracy. Stop and a three-second controller lease expiry were verified with torque preserved. See the [physical test report](verification/2026-10-25-physical-sync.md) for evidence and limitations.
 
-Fake-driver tests exercise ownership, missing/mismatched calibration, explicit enable ordering, limits, velocity, lease expiry, stale telemetry, tracking failure, temperature, camera deadlines, atomic settings persistence, typed routes, and session deletion. A real MuJoCo bridge test verifies measured-pose mirroring and joint bounds. Physical motion remains unverified because the motor handshake and physical calibration prerequisites are unmet.
+Camera 0 produced an overhead arm image; camera 1 was dark. Built-in and virtual sources were also enumerated. A successful capture alone does not establish a useful workspace view. No camera role was assigned by guessing an index.
+
+To send Gym motion to the connected arm, stop existing sync, press **Match Gym to real arm**, then **Enable at current pose**, and select **Gym → Real arm**. Start with small changes; loading an unrelated example can exceed the guarded pose-jump limit. To mirror measured angles without commands, select **Real arm → Gym** while motion is disabled. Calibration persists locally; connection and active movement do not auto-resume after restart.
 
 The browser renews its lease only while the document is visible. Hiding/leaving the browser sends a best-effort Stop & hold; if that request cannot arrive, the lease expires. Switching between the application's Gym and Connection tabs keeps explicit synchronization available. Reloading never adopts an existing owner automatically: select the existing owner session explicitly, or disconnect it.
 

@@ -1,5 +1,4 @@
 import math
-import threading
 import time
 import pytest
 from backend.modules.connection.service import (
@@ -268,6 +267,10 @@ def test_typed_router_validates_and_uses_shared_service(service):
             c.post("/api/connection/enable", json=dict(session_id="one")).status_code
             == 409
         )
+        assert (
+            c.post("/api/connection/align", json={"session_id": "one"}).status_code
+            == 409
+        )
         assert c.get("/api/connection/cameras/10/frame").status_code == 422
 
 
@@ -418,3 +421,94 @@ def test_gym_collision_guard_rechecks_reloaded_scene():
     session.sim.load(scene)
     with pytest.raises(ValueError, match="collision"):
         bridge.validate(current, current)
+
+
+def test_half_tick_calibration_zero_preserves_physical_midpoint(service):
+    s = calibrated(service)
+    value = s.calibration.model_dump()
+    value["joints"][0]["zero_raw"] = 2111.5
+    s.save_calibration(Calibration.model_validate(value))
+    assert s._angle(0, 2111) == pytest.approx(-math.pi / 4096)
+    assert s._angle(0, 2112) == pytest.approx(math.pi / 4096)
+    assert s._raw([s._angle(i, 2048) for i in range(6)]) == [2048] * 6
+
+
+def test_sync_command_ramp_crosses_servo_deadband(service, monkeypatch):
+    s = calibrated(service)
+    clock = [time.monotonic()]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    s.enable("one")
+    s.sync("one", "gym_to_real")
+    s.bridge.q[0] = 0.1
+
+    def deadband_goals(values):
+        s.driver.writes.append(("goals", list(values)))
+        for i, value in enumerate(values):
+            if abs(value - s.driver.raw[i]) >= 15:
+                s.driver.raw[i] = value
+
+    s.driver.goals = deadband_goals
+    for _ in range(30):
+        clock[0] += 0.02
+        s.tick()
+    assert s.enabled and s.sync_mode == "gym_to_real"
+    assert s.driver.raw[0] > 2080
+    assert s.target_rad[0] == pytest.approx(0.1)
+
+
+def test_command_ramp_still_stops_a_stalled_motor(service, monkeypatch):
+    s = calibrated(service)
+    clock = [time.monotonic()]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    s.enable("one")
+    s.sync("one", "gym_to_real")
+    s.bridge.q[0] = 0.2
+    s.driver.goals = lambda values: s.driver.writes.append(("goals", list(values)))
+    for _ in range(40):
+        clock[0] += 0.02
+        s.tick()
+    assert not s.enabled and s.sync_mode == "off"
+    assert "tracking" in s.fault.lower()
+
+
+def test_command_ramp_never_sends_excessive_lead_over_feedback(service, monkeypatch):
+    s = calibrated(service)
+    clock = [time.monotonic()]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    s.enable("one")
+    s.sync("one", "gym_to_real")
+    s.bridge.q[0] = 0.25
+    s.target_rad[0] = 0.14
+    before = len(s.driver.writes)
+    clock[0] += 0.1
+    s.tick()
+    assert not s.enabled and "tracking" in s.fault.lower()
+    assert s.driver.writes[before:] == [("goals", [2048] * 6)]
+
+
+def test_align_gym_uses_measured_pose_without_motor_commands(service):
+    s = calibrated(service)
+    s.driver.raw[0] += 30
+    s.align("one")
+    assert s.bridge.q[0] == pytest.approx(30 * math.tau / 4096)
+    assert s.driver.writes == [] and not s.enabled and s.sync_mode == "off"
+    with pytest.raises(ConnectionError, match="owned"):
+        s.align("another")
+    s.enable("one")
+    with pytest.raises(ConnectionError, match="Stop"):
+        s.align("one")
+
+
+def test_align_rejects_collision_and_active_read_only_sync(service):
+    s = calibrated(service)
+    original = list(s.bridge.q)
+    s.driver.raw[0] += 30
+    s.bridge.collision = True
+    with pytest.raises(ConnectionError, match="collision"):
+        s.align("one")
+    assert s.bridge.q == original and s.driver.writes == []
+    s.bridge.collision = False
+    s.sync("one", "real_to_gym")
+    with pytest.raises(ConnectionError, match="Stop"):
+        s.align("one")
+    assert s.driver.writes == []

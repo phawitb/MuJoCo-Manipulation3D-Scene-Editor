@@ -37,7 +37,8 @@ class JointCalibration(StrictModel):
         "wrist_roll",
         "gripper",
     ]
-    zero_raw: int = Field(ge=-32767, le=32767)
+    # Midpoints of integer encoder limits can be half ticks.
+    zero_raw: float = Field(ge=-32767, le=32767)
     direction: Literal[-1, 1]
     raw_min: int = Field(ge=0, le=4095)
     raw_max: int = Field(ge=0, le=4095)

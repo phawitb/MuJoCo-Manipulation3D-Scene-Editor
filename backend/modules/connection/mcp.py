@@ -37,6 +37,11 @@ def register(mcp, request, api_url):
         )
 
     @mcp.tool()
+    async def align_gym_to_robot(owner: Owner) -> dict:
+        """Match the selected Gym to fresh measured arm angles once. No motor writes. Stop motion/sync first; requires calibration and a collision-free measured pose."""
+        return await request("POST", "/api/connection/align", json=owner.model_dump())
+
+    @mcp.tool()
     async def enable_robot(owner: Owner) -> dict:
         """Enable physical movement at measured current pose, requiring verified calibration and safe pose. Renew heartbeat every second. This moves real hardware on later jog/sync."""
         return await request("POST", "/api/connection/enable", json=owner.model_dump())

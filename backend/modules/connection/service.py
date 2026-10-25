@@ -252,6 +252,19 @@ class ConnectionService:
             self._persist()
             return self.status()
 
+    def align(self, session_id):
+        with self.lock:
+            self._owner(session_id)
+            self._calibrated()
+            if self.enabled or self.sync_mode != "off":
+                raise ConnectionError(
+                    "Stop motion and synchronization before aligning Gym"
+                )
+            q = self._read()
+            self._validate(q, q)
+            self.bridge.set(q)
+            return self.status()
+
     def enable(self, session_id):
         with self.lock:
             self._owner(session_id)
@@ -391,6 +404,8 @@ class ConnectionService:
                     "Stop motion before enabling read-only real-to-Gym synchronization"
                 )
             self.sync_mode = mode
+            self.target_rad = list(q)
+            self.last_command = time.monotonic()
             self.lease_until = time.monotonic() + 3
             self.fault = None
             return self.status()
@@ -426,9 +441,18 @@ class ConnectionService:
                     # Reject a changed/reloaded Gym scene that would otherwise make a large physical move.
                     if max(abs(a - b) for a, b in zip(q, desired)) > 0.3:
                         raise ConnectionError("Gym target jumped beyond 0.3 radians")
+                    # Ramp the command, not each measured reading: otherwise
+                    # sub-deadband steps never accumulate and a stalled servo
+                    # can also evade the command-versus-feedback fault check.
+                    previous = self.target_rad if self.target_rad is not None else q
                     target = [
-                        a + max(-step, min(step, b - a)) for a, b in zip(q, desired)
+                        a + max(-step, min(step, b - a))
+                        for a, b in zip(previous, desired)
                     ]
+                    if max(abs(a - b) for a, b in zip(q, target)) > 0.15:
+                        raise ConnectionError(
+                            "Motor tracking error: command lead exceeds 0.15 radians"
+                        )
                     self._validate(q, target)
                     self.driver.goals(self._raw(target))
                     self.target_rad = target
@@ -437,7 +461,7 @@ class ConnectionService:
                 self._fault(str(exc), hold=fresh)
 
     def _loop(self):
-        while not self._exit.wait(0.1):
+        while not self._exit.wait(0.05):
             self.tick()
 
     def assign_cameras(self, assignments):

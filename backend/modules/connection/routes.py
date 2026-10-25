@@ -50,6 +50,10 @@ def create_router(service=None):
     async def enable(body: Owner, request: Request):
         return await invoke(get(request).enable, body.session_id)
 
+    @router.post("/align")
+    async def align(body: Owner, request: Request):
+        return await invoke(get(request).align, body.session_id)
+
     @router.post("/stop")
     async def stop(body: Owner, request: Request):
         return await invoke(get(request).stop, body.session_id)

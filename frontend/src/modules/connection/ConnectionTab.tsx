@@ -359,6 +359,18 @@ export default function ConnectionTab({
           </p>
           <div className="connection-actions">
             <button
+              disabled={
+                busy ||
+                !owned ||
+                !status?.calibrated ||
+                !!status?.enabled ||
+                status?.sync_mode !== "off"
+              }
+              onClick={() => void command("/align")}
+            >
+              Match Gym to real arm
+            </button>
+            <button
               className="primary"
               disabled={
                 busy || !owned || !status?.calibrated || !!status?.enabled
@@ -388,6 +400,10 @@ export default function ConnectionTab({
               <option value="gym_to_real">Gym → Real arm</option>
             </select>
           </label>
+          <p className="connection-hint">
+            First match Gym to the measured arm pose, then enable movement and
+            choose Gym → Real arm.
+          </p>
           <p className="connection-hint">
             Stop & hold keeps motor torque. It is not a physical emergency power
             switch. Reconnection never resumes motion automatically.
@@ -437,6 +453,7 @@ export default function ConnectionTab({
                       <input
                         aria-label={`${j.name} zero`}
                         type="number"
+                        step="any"
                         value={Number.isNaN(j.zero_raw) ? "" : j.zero_raw}
                         onChange={(e) =>
                           updateJoint(
