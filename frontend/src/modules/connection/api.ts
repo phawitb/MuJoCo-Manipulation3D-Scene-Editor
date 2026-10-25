@@ -42,7 +42,16 @@ export type EpisodeReport = {
     last_gym_deg: number;
   }[];
 };
+export type RobotMount = {
+  table_z: number;
+  quaternion: [number, number, number, number];
+  pedestal: {
+    position: [number, number, number];
+    size: [number, number, number];
+  } | null;
+};
 export type ConnectionStatus = {
+  robot_mount?: RobotMount | null;
   control_epoch: number;
   manual_phase?: "moving" | "holding" | null;
   manual_target?: number[] | null;

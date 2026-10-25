@@ -315,10 +315,12 @@ class ConnectionService:
                 )
                 for i, row in enumerate(self.telemetry)
             ]
-            limits, preview = None, None
+            limits, preview, mount = None, None, None
             if self.connected and self.calibrated and len(rows) == 6:
                 try:
                     limits = self._control_limits()
+                    if hasattr(self.bridge, "mount"):
+                        mount = self.bridge.mount()
                     if hasattr(self.bridge, "preview"):
                         preview = self.bridge.preview([r["position_rad"] for r in rows])
                 except (ValueError, KeyError, ConnectionError):
@@ -345,6 +347,7 @@ class ConnectionService:
                     if not lo <= row["position_rad"] <= hi
                 ],
                 robot_preview=preview,
+                robot_mount=mount,
                 port=self.port,
                 identity=self.identity,
                 owner_session_id=self.owner_session_id,

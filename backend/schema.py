@@ -104,6 +104,8 @@ FOLDED_JOINTS = (0, -1.5, 1.5, -1.5, 0, 0)
 
 
 class Robot(StrictModel):
+    # World-Z mounting lift; zero preserves existing portable scenes.
+    pedestal_height: float = Field(default=0, ge=0, le=0.2)
     model: Literal["so101"] = "so101"
     position: Vec3 = Field(default_factory=lambda: [-0.30, 0, 0.754])
     quaternion: Quat = Field(default_factory=lambda: [1, 0, 0, 0])

@@ -110,7 +110,9 @@ def build_xml(scene):
     root.find("option").set("iterations", "50")
     world = root.find("worldbody")
     base = world.find("body[@name='base']")
-    base.set("pos", numbers(scene.robot.position))
+    base_position = list(scene.robot.position)
+    base_position[2] += scene.robot.pedestal_height
+    base.set("pos", numbers(base_position))
     base.set("quat", numbers(scene.robot.quaternion))
     t = scene.table
     ET.SubElement(
@@ -132,6 +134,23 @@ def build_xml(scene):
         rgba=numbers([int(t.color[i : i + 2], 16) / 255 for i in (1, 3, 5)] + [1]),
         friction=".8 .005 .0001",
     )
+    if scene.robot.pedestal_height > 0:
+        # Support reaches the CAD base foot (2.4 mm below its link origin).
+        # Keep this fixture in world coordinates so it also blocks arm contacts.
+        top = base_position[2] - 0.0024
+        bottom = min(t.height, top - scene.robot.pedestal_height)
+        ET.SubElement(
+            world,
+            "geom",
+            name="robot_pedestal",
+            type="box",
+            pos=numbers(
+                [base_position[0] + 0.021, base_position[1], (top + bottom) / 2]
+            ),
+            size=numbers([0.055, 0.065, (top - bottom) / 2]),
+            rgba=".25 .32 .35 1",
+            friction=".8 .005 .0001",
+        )
     for x in (-1, 1):
         for y in (-1, 1):
             ET.SubElement(
@@ -331,7 +350,10 @@ class Simulation:
             body = int(self.model.geom_bodyid[i])
             name = self.model.geom(i).name or f"geom_{i}"
             owner = reverse.get(
-                body, "robot" if body else ("floor" if name == "floor" else "table")
+                body,
+                "robot"
+                if body or name == "robot_pedestal"
+                else ("floor" if name == "floor" else "table"),
             )
             color = self.model.geom_rgba[i].copy()
             material = self.model.geom_matid[i]

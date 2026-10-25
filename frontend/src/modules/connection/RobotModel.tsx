@@ -3,7 +3,7 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { LoadingManager, Mesh, type Material } from "three";
 import URDFLoader, { type URDFRobot } from "urdf-loader";
-import { type Telemetry } from "./api";
+import { type Telemetry, type RobotMount } from "./api";
 import { measuredRobotPose } from "./robotPose";
 
 function disposeRobot(robot: URDFRobot) {
@@ -35,7 +35,13 @@ function MeasuredArm({
   return <primitive object={robot} dispose={null} />;
 }
 
-export default function RobotModel({ telemetry }: { telemetry: Telemetry[] }) {
+export default function RobotModel({
+  telemetry,
+  mount,
+}: {
+  telemetry: Telemetry[];
+  mount?: RobotMount | null;
+}) {
   const [robot, setRobot] = useState<URDFRobot | null>(null);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -107,7 +113,34 @@ export default function RobotModel({ telemetry }: { telemetry: Telemetry[] }) {
           <ambientLight intensity={1.5} />
           <directionalLight position={[1, -1, 2]} intensity={2} />
           <directionalLight position={[-1, 1, 0.7]} intensity={1} />
-          <MeasuredArm robot={robot} pose={pose} />
+          {mount && (
+            <>
+              <mesh position={[0, 0, mount.table_z - 0.009]}>
+                <boxGeometry args={[0.65, 0.55, 0.018]} />
+                <meshStandardMaterial color="#b8c2bf" />
+              </mesh>
+              {mount.pedestal && (
+                <mesh position={mount.pedestal.position}>
+                  <boxGeometry args={mount.pedestal.size} />
+                  <meshStandardMaterial color="#405259" />
+                </mesh>
+              )}
+            </>
+          )}
+          <group
+            quaternion={
+              mount
+                ? [
+                    mount.quaternion[1],
+                    mount.quaternion[2],
+                    mount.quaternion[3],
+                    mount.quaternion[0],
+                  ]
+                : [0, 0, 0, 1]
+            }
+          >
+            <MeasuredArm robot={robot} pose={pose} />
+          </group>
           <OrbitControls
             target={[0.07, 0, 0.08]}
             enablePan={false}

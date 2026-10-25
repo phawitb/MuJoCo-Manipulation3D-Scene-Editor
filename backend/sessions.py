@@ -171,6 +171,7 @@ class Session:
                 s.load(Scene.model_validate(cmd.scene))
             elif kind == "reset":
                 scene = Scene(cameras=s.scene.cameras)
+                scene.robot.pedestal_height = s.scene.robot.pedestal_height
                 scene.robot.reset_joints = list(s.scene.robot.reset_joints)
                 scene.robot.joints = list(scene.robot.reset_joints)
                 s.load(scene)
@@ -179,6 +180,7 @@ class Session:
                     example_scene(cmd.exampleId) if cmd.exampleId else example_scene()
                 )
                 scene.cameras = s.scene.cameras
+                scene.robot.pedestal_height = s.scene.robot.pedestal_height
                 scene.robot.reset_joints = list(s.scene.robot.reset_joints)
                 scene.robot.joints = list(scene.robot.reset_joints)
                 s.load(scene)

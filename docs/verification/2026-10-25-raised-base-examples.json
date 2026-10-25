@@ -1,0 +1,29 @@
+[
+  {
+    "id": "kalas-cup-front",
+    "verified": true,
+    "message": "Rehearsal succeeded. Inspect the rainbow path, then Run simulation.",
+    "success": true,
+    "sim_time": 17.906999999998902,
+    "status": "succeeded",
+    "wall_seconds": 6.63
+  },
+  {
+    "id": "kalas-cup-left",
+    "verified": true,
+    "message": "Rehearsal succeeded. Inspect the rainbow path, then Run simulation.",
+    "success": true,
+    "sim_time": 17.906999999998902,
+    "status": "succeeded",
+    "wall_seconds": 4.69
+  },
+  {
+    "id": "kalas-cup-right",
+    "verified": true,
+    "message": "Rehearsal succeeded. Inspect the rainbow path, then Run simulation.",
+    "success": true,
+    "sim_time": 17.906999999998902,
+    "status": "succeeded",
+    "wall_seconds": 4.55
+  }
+]

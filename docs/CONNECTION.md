@@ -121,3 +121,25 @@ raw_min, raw_max}` for measured angles outside the combined calibration/Gym
 range. The UI shows these values and disables direct motion controls until the
 measured pose is back within range. Support the arm before releasing torque
 and repositioning it. Review joint mapping if the stored calibration is wrong.
+
+### Base lift and tabletop alignment
+
+Select **SO-101 arm → Base transform → Base lift (mm)** to add a solid support
+under the simulated robot. The value raises the full kinematic chain in world Z;
+joint zeros and encoder calibration are unchanged. The support participates in
+MuJoCo collision checks. Robot connection renders the same support and tabletop
+height through `robot_mount` in connection status.
+
+The portable scene/API field is `robot.pedestal_height`, in metres (0–0.2).
+Set it with the existing `robot` command, e.g.
+`{"type":"robot","patch":{"pedestal_height":0.0222}}` via REST/MCP.
+Changes invalidate the calculated path. Reset and examples retain the lift;
+scene files store it and the browser remembers it for new workspaces. Old scene
+files with no field retain a zero lift; opening a file uses that file's value.
+
+For this arm, 22.2 mm was estimated from the reported tabletop-touching pose and
+its encoder readings. It aligns that pose's lowest jaw CAD vertex with the
+simulated tabletop. This is a mounting correction based on one reported contact
+pose, not independent measurement of the physical mount or calibration of all
+joint angles. The CAD base foot's existing 1.6 mm clearance is filled by the
+support, so its rendered thickness is 23.8 mm with the default base transform.

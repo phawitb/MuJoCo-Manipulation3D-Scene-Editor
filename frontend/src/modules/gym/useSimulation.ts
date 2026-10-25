@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { readCameras } from "./math";
-import { readResetJoints } from "./robotPreferences";
+import { readResetJoints, readPedestalHeight } from "./robotPreferences";
 import {
   mergePacket,
   visiblePacket,
@@ -237,13 +237,14 @@ export function useSimulation() {
           command("load", {
             scene: {
               ...p.scene,
-              robot: resetJoints
-                ? {
-                    ...p.scene.robot,
-                    joints: resetJoints,
-                    reset_joints: resetJoints,
-                  }
-                : p.scene.robot,
+              robot: {
+                ...p.scene.robot,
+                pedestal_height:
+                  readPedestalHeight() ?? p.scene.robot.pedestal_height ?? 0,
+                ...(resetJoints
+                  ? { joints: resetJoints, reset_joints: resetJoints }
+                  : {}),
+              },
               cameras: {
                 main: cameras.main,
                 top: cameras.top,

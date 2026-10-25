@@ -25,7 +25,10 @@ import { CameraEditor } from "./CameraEditor";
 import { ImportDialog } from "./ImportDialog";
 import { Library, type PlacementCursor } from "./Library";
 import { Inspector } from "./Inspector";
-import { rememberResetJoints } from "./robotPreferences";
+import {
+  rememberResetJoints,
+  rememberPedestalHeight,
+} from "./robotPreferences";
 import { Viewport } from "./Viewport";
 import { useSimulation } from "./useSimulation";
 import { nudgePosition, objectDimensions } from "./interaction";
@@ -149,6 +152,20 @@ export default function App({
         back: cameraRef.current.back,
       };
       await sim.command("load", { scene });
+    });
+  };
+  const savePedestalHeight = (height: number) => {
+    if (!editableRef.current) return;
+    void safe(async () => {
+      await sim.command("robot", { patch: { pedestal_height: height } });
+      try {
+        rememberPedestalHeight(height);
+        notify("Base lift saved");
+      } catch {
+        notify(
+          "Base lift saved in this scene. Save the scene file to keep it.",
+        );
+      }
     });
   };
   const saveResetPose = (joints: number[], apply = false) => {
@@ -912,6 +929,7 @@ export default function App({
             patchObject={patchObject}
             editScene={editScene}
             saveResetPose={saveResetPose}
+            savePedestalHeight={savePedestalHeight}
             remove={remove}
             duplicate={duplicate}
             frame={frame}

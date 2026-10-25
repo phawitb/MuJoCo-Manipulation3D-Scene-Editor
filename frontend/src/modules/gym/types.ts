@@ -35,6 +35,7 @@ export interface Scene {
   table: Table;
   robot: {
     model: "so101";
+    pedestal_height?: number;
     position: Vec3;
     quaternion: Quat;
     joints: number[];

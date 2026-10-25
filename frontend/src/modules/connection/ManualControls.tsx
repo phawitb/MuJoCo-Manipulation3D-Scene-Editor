@@ -137,7 +137,7 @@ export default function ManualControls({
         </div>
       )}
       <div className="manual-layout">
-        <RobotModel telemetry={status.telemetry} />
+        <RobotModel telemetry={status.telemetry} mount={status.robot_mount} />
         <div className="manual-sliders">
           {jointNames.map((name, i) => {
             const limits = status.control_limits?.[i];

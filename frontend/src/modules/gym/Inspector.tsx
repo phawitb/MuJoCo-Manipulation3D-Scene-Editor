@@ -159,6 +159,7 @@ interface Props {
   patchObject: (id: string, patch: Partial<SceneObject>) => void;
   editScene: (fn: (s: Scene) => void) => void;
   saveResetPose: (joints: number[], apply?: boolean) => void;
+  savePedestalHeight: (height: number) => void;
   remove: () => void;
   duplicate: () => void;
   frame: () => void;
@@ -486,6 +487,20 @@ export function Inspector(p: Props) {
             </section>
             <section className="inspector-section">
               <h4>Base transform</h4>
+              <NumberField
+                label="Base lift (mm)"
+                value={(p.scene.robot.pedestal_height ?? 0) * 1000}
+                step={0.1}
+                min={0}
+                max={200}
+                disabled={disabled}
+                onCommit={(mm) => p.savePedestalHeight(mm / 1000)}
+              />
+              <p className="reset-pose-hint">
+                Raises the arm on a solid support. Remembered for reset,
+                examples and new workspaces; saved in scene files. Does not move
+                the real arm.
+              </p>
               <VectorFields
                 label="Base position"
                 value={p.scene.robot.position}

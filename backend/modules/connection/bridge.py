@@ -105,3 +105,21 @@ class GymBridge:
                 points=(np.asarray(points) - base).tolist(),
                 fingers=np.asarray(fingers).tolist(),
             )
+
+    def mount(self):
+        """Geometry shared by the Gym and encoder-only URDF viewport."""
+        s = self.session()
+        with s.lock:
+            base = s.sim.data.body("base")
+            pedestal = None
+            if s.sim.scene.robot.pedestal_height > 0:
+                geom = s.sim.model.geom("robot_pedestal")
+                pedestal = dict(
+                    position=(s.sim.data.geom_xpos[geom.id] - base.xpos).tolist(),
+                    size=(geom.size * 2).tolist(),
+                )
+            return dict(
+                table_z=float(s.sim.scene.table.height - base.xpos[2]),
+                quaternion=base.xquat.tolist(),
+                pedestal=pedestal,
+            )

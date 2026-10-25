@@ -27,3 +27,23 @@ export function readResetJoints(limits: JointInfo[]): number[] | null {
 export function rememberResetJoints(joints: number[]) {
   localStorage.setItem(key, JSON.stringify(joints));
 }
+
+const pedestalKey = "so101.robot-pedestal-height";
+export function readPedestalHeight(): number | null {
+  try {
+    const value: unknown = JSON.parse(
+      localStorage.getItem(pedestalKey) || "null",
+    );
+    return typeof value === "number" &&
+      Number.isFinite(value) &&
+      value >= 0 &&
+      value <= 0.2
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+}
+export function rememberPedestalHeight(height: number) {
+  localStorage.setItem(pedestalKey, JSON.stringify(height));
+}
