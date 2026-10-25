@@ -1,0 +1,263 @@
+{
+  "date": "2026-10-25",
+  "scope": "Physical encoder-relative commissioning only; not a verified Gym trajectory or angular calibration.",
+  "goal_velocity_ticks_per_second": 50,
+  "joint_order": [
+    "shoulder_pan",
+    "shoulder_lift",
+    "elbow_flex",
+    "wrist_flex",
+    "wrist_roll",
+    "gripper"
+  ],
+  "cases": [
+    {
+      "initial_raw": [
+        2056,
+        1068,
+        3120,
+        2676,
+        1129,
+        2038
+      ],
+      "stages": [
+        {
+          "name": "hold_initial",
+          "target_raw": [
+            2056,
+            1068,
+            3120,
+            2676,
+            1129,
+            2038
+          ],
+          "measured_raw": [
+            2056,
+            1068,
+            3120,
+            2676,
+            1129,
+            2038
+          ],
+          "error_ticks": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "max_error_degrees": 0.0,
+          "all_torque_enabled": true
+        },
+        {
+          "name": "shoulder_pan_out",
+          "target_raw": [
+            2068,
+            1068,
+            3120,
+            2676,
+            1129,
+            2038
+          ],
+          "measured_raw": [
+            2056,
+            1068,
+            3120,
+            2676,
+            1129,
+            2038
+          ],
+          "error_ticks": [
+            -12,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "max_error_degrees": 1.055,
+          "all_torque_enabled": true
+        }
+      ],
+      "precision_passed": false,
+      "error": "Target tracking error"
+    },
+    {
+      "initial_raw": [
+        2056,
+        1068,
+        3120,
+        2676,
+        1129,
+        2038
+      ],
+      "stages": [
+        {
+          "name": "hold_initial",
+          "target_raw": [
+            2056,
+            1068,
+            3120,
+            2676,
+            1129,
+            2038
+          ],
+          "measured_raw": [
+            2056,
+            1068,
+            3120,
+            2676,
+            1129,
+            2038
+          ],
+          "error_ticks": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "max_error_degrees": 0.0,
+          "all_torque_enabled": true
+        },
+        {
+          "name": "shoulder_pan_out",
+          "target_raw": [
+            2084,
+            1068,
+            3120,
+            2676,
+            1129,
+            2038
+          ],
+          "measured_raw": [
+            2070,
+            1068,
+            3120,
+            2676,
+            1129,
+            2038
+          ],
+          "error_ticks": [
+            -14,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "max_error_degrees": 1.23,
+          "all_torque_enabled": true
+        }
+      ],
+      "precision_passed": false,
+      "error": "Target tracking error"
+    },
+    {
+      "initial_raw": [
+        2070,
+        1068,
+        3120,
+        2676,
+        1129,
+        2038
+      ],
+      "stages": [
+        {
+          "name": "hold_initial",
+          "target_raw": [
+            2070,
+            1068,
+            3120,
+            2676,
+            1129,
+            2038
+          ],
+          "measured_raw": [
+            2070,
+            1068,
+            3120,
+            2676,
+            1129,
+            2038
+          ],
+          "error_ticks": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "max_error_degrees": 0.0,
+          "all_torque_enabled": true
+        },
+        {
+          "name": "gripper_out",
+          "target_raw": [
+            2070,
+            1068,
+            3120,
+            2676,
+            1129,
+            2066
+          ],
+          "measured_raw": [
+            2070,
+            1068,
+            3120,
+            2676,
+            1129,
+            2053
+          ],
+          "error_ticks": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            -13
+          ],
+          "max_error_degrees": 1.143,
+          "all_torque_enabled": true
+        },
+        {
+          "name": "gripper_return",
+          "target_raw": [
+            2070,
+            1068,
+            3120,
+            2676,
+            1129,
+            2038
+          ],
+          "measured_raw": [
+            2070,
+            1068,
+            3120,
+            2676,
+            1129,
+            2052
+          ],
+          "error_ticks": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            14
+          ],
+          "max_error_degrees": 1.23,
+          "all_torque_enabled": true
+        }
+      ],
+      "precision_passed": false,
+      "error": null
+    }
+  ],
+  "final_state": "Read-only connection; Gym sync off; motor torque preserved. Initial raw pan/gripper were 2056/2038; final measured values were 2070/2052.",
+  "limits_finding": "Elbow read 3120, above stored calibration maximum 3109. No elbow movement commanded.",
+  "configuration": "No EEPROM or calibration writes. RAM goals, goal velocity and torque enable were written."
+}
