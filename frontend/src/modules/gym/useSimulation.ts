@@ -95,17 +95,20 @@ export function useSimulation() {
         busyRef.current = true;
         setBusy(true);
         setError("");
-        const timer = setTimeout(() => {
-          pending.current = null;
-          busyRef.current = false;
-          setBusy(false);
-          socket.current?.close();
-          reject(
-            new Error(
-              "Server update timed out; reconnecting with your last acknowledged scene",
-            ),
-          );
-        }, 15000);
+        const timer = setTimeout(
+          () => {
+            pending.current = null;
+            busyRef.current = false;
+            setBusy(false);
+            socket.current?.close();
+            reject(
+              new Error(
+                "Server update timed out; reconnecting with your last acknowledged scene",
+              ),
+            );
+          },
+          type === "real_run" ? 60000 : 15000,
+        );
         pending.current = { id, resolve, reject, timer };
         socket.current.send(
           JSON.stringify({

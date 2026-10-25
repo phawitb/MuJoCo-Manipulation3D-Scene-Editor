@@ -16,6 +16,10 @@ class Packet:
         payload = [0] * max(30, self.length)
         raw = 2048 + motor if motor != 6 else 0x8005
         payload[0] = 1
+        payload[2:4] = [100, 8]
+        payload[6:10] = [195, 0, 232, 3]
+        payload[18:22] = [4, 0, 84, 0]
+        payload[25:27] = [0, 1]
         payload[16:18] = [raw & 255, raw >> 8]
         payload[22:24] = [122, next(self.temperatures, 35 + motor)]
         packet = [255, 255, motor, self.length + 2, self.error] + payload[: self.length]
@@ -47,6 +51,9 @@ def test_feedback_is_one_coherent_frame_per_motor():
     assert [r["raw"] for r in rows] == [2049, 2050, 2051, 2052, 2053, -5]
     assert [r["temperature"] for r in rows] == [36, 37, 38, 39, 40, 41]
     assert all(r["voltage"] == 12.2 and r["torque"] for r in rows)
+    assert all(r["goal_raw"] == 2148 and r["goal_velocity_raw"] == 195 for r in rows)
+    assert all(r["torque_limit_raw"] == 1000 and r["servo_status_raw"] == 0 for r in rows)
+    assert all(r["present_speed_raw"] == 4 and r["present_load_raw"] == 84 and r["moving"] for r in rows)
 
 
 @pytest.mark.parametrize("length", [0, 1, 2, 8, 29, 31])

@@ -854,6 +854,25 @@ export default function App({
                       ? "Run simulation"
                       : "Calculate path"}
               </button>
+              {RobotControls && (
+                <button
+                  className="run-real-button"
+                  disabled={
+                    sim.busy ||
+                    sim.status !== "connected" ||
+                    !!sim.state?.running ||
+                    !sim.state?.realRun?.ready
+                  }
+                  title={
+                    sim.state?.realRun?.ready
+                      ? "Rehearse from measured angles, then move the real arm"
+                      : "Complete Run simulation successfully first"
+                  }
+                  onClick={() => void safe(() => sim.command("real_run"))}
+                >
+                  <Play size={15} /> Run Realrobot
+                </button>
+              )}
               <button
                 aria-label="Step simulation"
                 title="Advance 20 ms"

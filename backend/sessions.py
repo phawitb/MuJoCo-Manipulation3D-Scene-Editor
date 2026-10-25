@@ -30,6 +30,7 @@ class Command(BaseModel):
         "reset",
         "example",
         "run",
+        "real_run",
         "plan",
         "pause",
         "stop",
@@ -69,6 +70,8 @@ class Session:
         self.sequence = 0
         self.mode = "policy"
         self.closed = False
+        self.successful_trial = None
+        self.trial_start = None
         self.external_clock = False
         self.runner = None
         self.plan = idle_plan()
@@ -77,6 +80,8 @@ class Session:
         self.plan_dirty = False
 
     def invalidate_plan(self):
+        self.successful_trial = None
+        self.trial_start = None
         self.plan_cancel.set()
         if self.plan_future:
             self.plan_future.cancel()
@@ -114,6 +119,7 @@ class Session:
                 for k, v in self.plan.items()
                 if k not in ("configuration", "fingerprint")
             }
+            p["realRun"] = {"ready": self.successful_trial is not None}
             return p
 
     def validate_run(self):
@@ -206,9 +212,14 @@ class Session:
             elif kind == "run":
                 self.validate_run()
                 if s.policy.status != "running":
+                    if not self.external_clock:
+                        self.successful_trial = None
+                        self.trial_start = clone_simulation(s)
                     s.policy.configuration = self.plan["configuration"]
                 s.start_policy()
                 self.mode = "policy"
+            elif kind == "real_run":
+                raise ValueError("Connect a calibrated robot to run the real arm")
             elif kind == "pause":
                 s.running = False
             elif kind == "stop":
@@ -305,6 +316,9 @@ class Session:
             try:
                 self.sim.step(count)
                 if not self.sim.running:
+                    if self.sim.policy.success and self.trial_start is not None:
+                        self.successful_trial = self.trial_start
+                    self.trial_start = None
                     self.plan.update(
                         status="idle",
                         verified=False,

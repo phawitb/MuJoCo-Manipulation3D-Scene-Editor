@@ -24,8 +24,31 @@ export type Telemetry = {
   temperature: number;
   torque: boolean;
 };
+export type EpisodeReport = {
+  id: string;
+  session_id: string;
+  outcome: "completed" | "stopped";
+  reason: string;
+  samples: number;
+  duration_s: number;
+  simulation_time_s: number | null;
+  last_sample_age_s: number | null;
+  joints: {
+    name: string;
+    rmse_deg: number;
+    max_abs_error_deg: number;
+    last_error_deg: number;
+    last_measured_deg: number;
+    last_gym_deg: number;
+  }[];
+};
 export type ConnectionStatus = {
-  gym_execution?: { phase: string; message: string; session_id: string | null };
+  gym_execution?: {
+    phase: string;
+    message: string;
+    session_id: string | null;
+    report?: EpisodeReport | null;
+  };
   connected: boolean;
   port: string | null;
   identity: string | null;

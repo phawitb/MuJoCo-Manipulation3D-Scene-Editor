@@ -94,6 +94,7 @@ export interface TaskExample {
   description: string;
 }
 export interface StatePacket {
+  realRun?: { ready: boolean };
   plan?: PathPlan;
   type: "state" | "snapshot";
   revision: number;

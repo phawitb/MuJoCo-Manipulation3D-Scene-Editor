@@ -14,13 +14,13 @@ Enable first stages the current measured position, including a validated load co
 
 An active controller must renew its lease through `/heartbeat` every second; expiry at three seconds stops streaming. Stop and disconnect attempt to hold fresh measured position with validated learned load compensation if this service enabled motion, then preserve existing torque. Normal stop/start retains that compensation in memory; faults, failed holds, calibration changes and reconnection clear it. Stale collision validation falls back to a fresh uncompensated hold. Compensation is never saved as calibration. **They do not release torque.** If communication fails, a hold cannot be confirmed: new commands stop, the fault remains visible, and motor torque may remain on. There is no automatic recovery or automatic re-enable. No torque-release or EEPROM endpoint is exposed.
 
-## Connected Run simulation
+## Separate simulation and physical execution
 
-Connect a calibrated arm in Gym, load an example, and press **Calculate path**. Calculation reads the current physical angles into the scene before its isolated rehearsal; it does not move the real arm. Press **Run simulation** to enable the current hold and start both systems. A moved starting pose invalidates this action until recalculated.
+Connect a calibrated arm in Gym, load an example, and press **Calculate path**, then **Run simulation**. Neither action starts physical motion. A successful simulation saves its initial task for the separate **Run Realrobot** button. That button reads measured physical angles and rehearses the saved task again with full collision checks before enabling physical following. An invalid initial pose, failed rehearsal, stale controller heartbeat or changed scene prevents motor commands. Editing the scene invalidates approval; simulate again. Starting a physical attempt consumes its approval, including when that attempt later stops. Manual mapping, alignment, enable and sync controls are locked during preparation; Stop remains available.
 
 The hardware feedback loop owns the connected simulation clock. It advances at most ten 1 ms physics steps per feedback cycle, pauses advancement when measured joint error exceeds 0.035 rad, and stops if the arm cannot catch up. Physics timesteps are unchanged; wall-clock playback is deliberately slower than simulation-only execution. Pause, Stop task, Stop robot, a fault, or scene replacement stops both systems. Successful completion waits for five measured frames within 0.015 rad of the final pose before stopping streaming with torque held. The header reports Following Gym, Catching up, Paused or Run complete; faults remain accessible in Robot connection.
 
-The same behavior applies to HTTP/WebSocket/MCP scene commands. A different session cannot silently run simulation while this robot is owned elsewhere. With no connected robot, Run remains simulation-only. Manual jogging and the explicit realtime direction controls remain available in Robot connection.
+The same behavior applies to HTTP/WebSocket/MCP scene commands: `run` is always simulation-only, `real_run` requires the owning calibrated connection and a successful simulation. Renew `/heartbeat` throughout preparation and execution; leaving the controlling browser cancels preparation and stops streaming. Manual jogging and the explicit realtime direction controls remain available in Robot connection.
 
 ## API
 
@@ -66,8 +66,18 @@ A broader repeat subsequently covered 11 poses plus simultaneous multi-axis moti
 
 Camera 0 produced an overhead arm image; camera 1 was dark. Built-in and virtual sources were also enumerated. A successful capture alone does not establish a useful workspace view. No camera role was assigned by guessing an index.
 
-For manual Gym motion outside a task, stop existing sync, press **Match Gym to real arm**, then **Enable at current pose**, and select **Gym → Real arm**. Loading an example stops manual streaming; use Calculate path and Run simulation for a linked task. To mirror measured angles without commands, select **Real arm → Gym** while motion is disabled. Calibration persists locally; connection and active movement do not auto-resume after restart.
+For manual Gym motion outside a task, stop existing sync, press **Match Gym to real arm**, then **Enable at current pose**, and select **Gym → Real arm**. Loading an example stops manual streaming; complete Calculate path and Run simulation, then use Run Realrobot for a linked task. To mirror measured angles without commands, select **Real arm → Gym** while motion is disabled. Calibration persists locally; connection and active movement do not auto-resume after restart.
 
 The browser renews its lease only while the document is visible. Hiding/leaving the browser sends a best-effort Stop & hold; if that request cannot arrive, the lease expires. Switching between the application's Gym and Connection tabs keeps explicit synchronization available. Reloading preserves the session URL but never resumes motion automatically.
 
 Protocol references: [official LeRobot SO-101 setup and calibration](https://huggingface.co/docs/lerobot/so101), [Feetech register and model tables](https://github.com/huggingface/lerobot/blob/main/src/lerobot/motors/feetech/tables.py). The installed Feetech SDK signatures were inspected before the read-only probe.
+
+### Shallow table departure
+
+`POST /retreat` with `session_id` (MCP `lift_robot_clear_of_table`) only supports an empty scene and an existing jaw/table overlap up to 8 mm. It prefers a small elbow lift and checks monotonic separation of every table contact, hard joint limits, other collisions, measured progress and the controller lease. It does not disable collision geometry or change calibration. Unchanged joints retain their held goals; a stalled joint is not driven harder. This is a recovery operation, not permission to run tasks from intersecting poses.
+
+### End-of-episode angle report
+
+After a physical episode completes or stops, Robot connection shows **Last real episode** with six joint comparisons: last Gym angle, last encoder angle, signed last error, peak absolute error and RMS error in degrees. Samples are paired with the Gym pose at the time feedback is processed, before advancing simulation. The report also gives sample count, elapsed duration and age of the last measurement at the end. A stopped episode is never labelled completed; missing measurements are not invented. These are encoder/model comparisons, not independent geometric or object-placement validation.
+
+HTTP and MCP `connection_status` expose the same data as `gym_execution.report`; it remains null while the current episode runs and is reset on a new connection or scene replacement. Statistics use bounded memory. The existing live tracking, collision, temperature and lease guards remain active. Connection itself remains read-only.

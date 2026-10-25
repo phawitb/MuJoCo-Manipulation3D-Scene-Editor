@@ -18,7 +18,7 @@ from .schemas import (
 def register(mcp, request, api_url):
     @mcp.tool()
     async def connection_status() -> dict:
-        """Read physical SO101 identity, measured telemetry, calibration, owner and faults. No motion."""
+        """Read physical SO101 identity, measured telemetry, calibration, owner, faults and gym_execution.report after each completed/stopped real episode. Report includes per-joint last/peak/RMS errors in degrees and measurement age. No motion."""
         return await request("GET", "/api/connection/status")
 
     @mcp.tool()
@@ -59,6 +59,11 @@ def register(mcp, request, api_url):
     async def align_gym_to_robot(owner: Owner) -> dict:
         """Match the selected Gym to fresh measured arm angles once. No motor writes. Stop motion/sync first; requires calibration and a collision-free measured pose."""
         return await request("POST", "/api/connection/align", json=owner.model_dump())
+
+    @mcp.tool()
+    async def lift_robot_clear_of_table(owner: Owner) -> dict:
+        """Move the real arm slowly away from an existing shallow jaw/table overlap. Requires an empty verified workspace, no scene objects, torque already on, calibration and heartbeat. Rejects deeper or new collisions; never disables contact checking."""
+        return await request("POST", "/api/connection/retreat", json=owner.model_dump())
 
     @mcp.tool()
     async def enable_robot(owner: Owner) -> dict:

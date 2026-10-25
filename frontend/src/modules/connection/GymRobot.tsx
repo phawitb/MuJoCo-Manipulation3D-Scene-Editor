@@ -8,8 +8,10 @@ import {
   type ConnectionStatus,
 } from "./api";
 import "./connection.css";
+import EpisodeSummary from "./EpisodeSummary";
 import type { RobotControlProps } from "../types";
 const executionLabels: Record<string, string> = {
+  preparing: "Checking real path",
   running: "Following Gym",
   waiting: "Catching up",
   paused: "Paused",
@@ -75,7 +77,9 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
           document.visibilityState === "visible" &&
           !stopped &&
           s?.connected &&
-          (s.enabled || s.sync_mode !== "off") &&
+          (s.enabled ||
+            s.sync_mode !== "off" ||
+            s.gym_execution?.phase === "preparing") &&
           s.owner_session_id === sid
         )
           await api("/heartbeat", "POST", { session_id: sid });
@@ -100,7 +104,9 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
       if (
         !state?.connected ||
         state.owner_session_id !== sid ||
-        (!state.enabled && state.sync_mode === "off")
+        (!state.enabled &&
+          state.sync_mode === "off" &&
+          state.gym_execution?.phase !== "preparing")
       )
         return;
       // Keep internal Gym navigation usable; leaving the browser ends physical control.
@@ -184,7 +190,7 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
             {status.fault
               ? "Stopped · check connection"
               : executionLabels[status.gym_execution?.phase || "idle"] ||
-                "Run linked"}
+                "Ready for real run"}
           </span>
         )}
       </button>
@@ -210,8 +216,9 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                   <p className="connection-eyebrow">GYM / REAL ARM</p>
                   <h1>Robot connection</h1>
                   <p>
-                    Calculate from the measured arm pose, then Run simulation
-                    moves both Gym and this robot.
+                    Run simulation tests the task without moving the arm. After
+                    it succeeds, Run Realrobot checks the measured starting pose
+                    and runs the real arm.
                   </p>
                 </div>
                 <button
@@ -347,6 +354,19 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                       Enable at current pose
                     </button>
                     <button
+                      disabled={
+                        busy ||
+                        !owned ||
+                        !status?.calibrated ||
+                        !!status?.enabled ||
+                        status?.sync_mode !== "off"
+                      }
+                      title="Only for a shallow jaw/table overlap in an empty scene. Checks the entire separating path."
+                      onClick={() => void command("/retreat")}
+                    >
+                      Lift clear of table
+                    </button>
+                    <button
                       className="connection-stop"
                       disabled={!status?.connected}
                       onClick={stop}
@@ -412,6 +432,9 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                   </div>
                 </section>
               </div>
+              {status?.gym_execution?.report?.session_id === sid && (
+                <EpisodeSummary report={status.gym_execution.report} />
+              )}
               {calOpen && (
                 <section className="connection-card connection-calibration">
                   <h2>Joint mapping</h2>

@@ -34,6 +34,7 @@ def execute(app, scene_session, cmd):
     if connection is not None and cmd.type in {
         "plan",
         "run",
+        "real_run",
         "pause",
         "stop",
         "physics",

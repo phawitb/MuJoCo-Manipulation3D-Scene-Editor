@@ -37,6 +37,9 @@ class ConnectionService:
         self.bridge_factory = bridge_factory
         self.lock = threading.RLock()
         self.execution = LinkedExecution(self)
+        self._real_cancel = threading.Event()
+        self._preparing = False
+        self.recovering = False
         self.driver = None
         self.bridge = None
         self.connected = False
@@ -172,44 +175,108 @@ class ConnectionService:
         )
 
     def scene_command(self, session, command):
+        if command.type == "real_run":
+            return self.run_real(session)
         with self.lock:
-            if not self.connected:
-                return session.execute(command)
-            if self.owner_session_id != session.id:
-                if command.type == "run":
-                    raise ConnectionError(
-                        "Hardware is owned by another Gym session. Connect this Gym or disconnect the robot for simulation-only Run."
-                    )
-                return session.execute(command)
-            if command.type == "plan":
-                with session.lock:
-                    if session.sim.running or session.sim.policy.status == "running":
-                        raise ConnectionError(
-                            "Stop the current task before calculating a connected path"
-                        )
-                    if session.plan_future is None:
-                        if self.enabled or self.sync_mode != "off":
-                            self.stop(session.id)
-                        self._calibrated()
-                        q = self._read()
-                        self._validate(q, q)
-                        self.bridge.set(q)
-                    return session.execute(command)
-            if command.type == "run":
-                self._owner(session.id)
-                self._calibrated()
-                return self.execution.start(session, command)
-            if command.type in {"pause", "stop", "physics"}:
+            owns_robot = self.connected and self.owner_session_id == session.id
+            if owns_robot and command.type in {
+                "run",
+                "pause",
+                "stop",
+                "physics",
+                "plan",
+            }:
+                self._real_cancel.set()
                 if self.enabled or self.sync_mode != "off":
                     self.stop(session.id)
-                return session.execute(command)
+            # A simulation command never enables or follows physical hardware.
             return session.execute(command)
+
+    def run_real(self, session):
+        from ...planning import clone_simulation, calculate_plan
+        from ...sessions import Command
+        import mujoco
+
+        with self.lock, session.lock:
+            self._owner(session.id)
+            self._calibrated()
+            if self._preparing or session.sim.running or self.execution.active:
+                raise ConnectionError(
+                    "Stop the current run before starting the real robot"
+                )
+            approved = session.successful_trial
+            if approved is None:
+                raise ConnectionError(
+                    "Run a successful simulation before Run Realrobot"
+                )
+            if self.enabled or self.sync_mode != "off":
+                self.stop(session.id)
+            q = self._read()
+            self._validate(q, q)
+            trial = clone_simulation(approved)
+            trial.data.qpos[:6] = q
+            trial.data.qvel[:6] = 0
+            trial.data.ctrl[:6] = q
+            mujoco.mj_forward(trial.model, trial.data)
+            cancel = self._real_cancel = threading.Event()
+            self._preparing = True
+            self.lease_until = time.monotonic() + 3
+            self.execution.phase = "preparing"
+            self.execution.message = (
+                "Checking the successful task from measured arm angles."
+            )
+        try:
+            plan = calculate_plan(trial, cancel)
+            with self.lock, session.lock:
+                if (
+                    cancel.is_set()
+                    or time.monotonic() > self.lease_until
+                    or session.closed
+                    or session.successful_trial is not approved
+                ):
+                    raise ConnectionError(
+                        "Real robot preparation cancelled; run simulation again"
+                    )
+                self._owner(session.id)
+                if not plan.get("verified"):
+                    raise ConnectionError(
+                        "Physical start rehearsal: " + plan["message"]
+                    )
+                current = self._read()
+                self._validate(current, current)
+                if max(abs(a - b) for a, b in zip(current, q)) > 0.01:
+                    raise ConnectionError(
+                        "Arm moved during preparation; retry Run Realrobot"
+                    )
+                trial.scene.cameras = session.sim.scene.cameras
+                trial.revision = session.sim.revision + 1
+                session.sim = trial
+                session.plan = plan
+                session.sequence += 1
+                session.trial_start = None
+                # A physical attempt consumes this approval: object positions
+                # may change even if the attempt later stops part-way through.
+                session.successful_trial = None
+                self._preparing = False
+                result = self.execution.start(session, Command(type="run"))
+                session.broadcast(result)
+                return result
+        except Exception as exc:
+            with self.lock:
+                self.execution.phase = "paused"
+                self.execution.message = str(exc)
+            raise
+        finally:
+            with self.lock:
+                self._preparing = False
 
     def replace_scene(self, session, command):
         # Same lock order as the streaming worker: hardware before Gym session.
         # Keep the lock until the replacement is complete, preventing a concurrent enable.
         with self.lock:
             owns_robot = self.connected and self.owner_session_id == session.id
+            if owns_robot:
+                self._real_cancel.set()
             if owns_robot and (self.enabled or self.sync_mode != "off"):
                 self.stop(session.id)
             result = session.execute(command)
@@ -391,6 +458,8 @@ class ConnectionService:
     def save_calibration(self, value):
         with self.lock:
             self._owner(value.session_id)
+            if self._preparing:
+                raise ConnectionError("Stop real-run preparation before changing robot controls")
             if self.enabled or self.sync_mode != "off":
                 raise ConnectionError(
                     "Stop motion and synchronization before editing calibration"
@@ -405,9 +474,16 @@ class ConnectionService:
             self._persist()
             return self.status()
 
+    def retreat(self, session_id):
+        from .retreat import retreat
+
+        return retreat(self, session_id)
+
     def align(self, session_id):
         with self.lock:
             self._owner(session_id)
+            if self._preparing:
+                raise ConnectionError("Stop real-run preparation before changing robot controls")
             self._calibrated()
             if self.enabled or self.sync_mode != "off":
                 raise ConnectionError(
@@ -421,6 +497,8 @@ class ConnectionService:
     def enable(self, session_id):
         with self.lock:
             self._owner(session_id)
+            if self._preparing:
+                raise ConnectionError("Stop real-run preparation before changing robot controls")
             self._calibrated()
             if self.enabled or self.sync_mode != "off":
                 raise ConnectionError(
@@ -458,6 +536,9 @@ class ConnectionService:
     def heartbeat(self, session_id):
         with self.lock:
             self._owner(session_id)
+            if self._preparing and time.monotonic() > self.lease_until:
+                self._fault("Controller heartbeat expired during preparation")
+                raise ConnectionError(self.fault)
             self.lease_until = time.monotonic() + 3
             return self.status()
 
@@ -465,6 +546,16 @@ class ConnectionService:
         if self.enabled and self.calibrated:
             q = self._read()
             hold = list(q)
+            if (
+                not preserve_compensation
+                and self.target_rad
+                and max(abs(a - b) for a, b in zip(q, self.target_rad)) <= 0.05
+            ):
+                try:
+                    self.bridge.validate(self.target_rad, self.target_rad)
+                    hold = list(self.target_rad)
+                except Exception:
+                    pass
             if preserve_compensation and self.tracker:
                 self.tracker.reset(q, preserve_bias=True)
                 candidate = list(self.tracker.output)
@@ -482,6 +573,8 @@ class ConnectionService:
             self.desired_rad = list(q)
 
     def _fault(self, message, hold=True, preserve_compensation=False):
+        self.recovering = False
+        self._real_cancel.set()
         self.execution.halt(message)
         try:
             if hold:
@@ -573,6 +666,8 @@ class ConnectionService:
             self._owner(session_id)
             if mode == "off":
                 return self.stop(session_id)
+            if self._preparing:
+                raise ConnectionError("Stop real-run preparation before changing robot controls")
             if mode not in ("real_to_gym", "gym_to_real"):
                 raise ConnectionError("Unknown sync mode")
             self._calibrated()
@@ -603,6 +698,8 @@ class ConnectionService:
 
     def tick(self):
         with self.lock:
+            if self.recovering:
+                return
             if not self.connected:
                 return
             fresh = False
@@ -610,6 +707,9 @@ class ConnectionService:
                 q = self._read()
                 fresh = True
                 self.bridge.check_alive()
+                if self._preparing and time.monotonic() > self.lease_until:
+                    self._fault("Controller heartbeat expired during preparation")
+                    return
                 if self.enabled or self.sync_mode != "off":
                     if time.monotonic() > self.lease_until:
                         self._fault("Controller heartbeat expired")

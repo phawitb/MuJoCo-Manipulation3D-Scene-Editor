@@ -1,6 +1,7 @@
 """Feedback-paced Gym policy execution. The service owns the hardware lock."""
 
 import time
+from .episode_report import EpisodeReport
 
 
 class LinkedExecution:
@@ -18,6 +19,8 @@ class LinkedExecution:
         self.last_progress = 0.0
         self.settling_since = None
         self.settled_frames = 0
+        self._report = None
+        self.report = None
 
     @property
     def active(self):
@@ -28,6 +31,7 @@ class LinkedExecution:
             phase=self.phase,
             message=self.message,
             session_id=self.session.id if self.session else None,
+            report=self.report,
         )
 
     def start(self, session, command):
@@ -48,6 +52,9 @@ class LinkedExecution:
                 service.enable(session.id)
                 service.sync(session.id, "gym_to_real")
                 self.session = session
+                self._report = EpisodeReport(session.id)
+                self.report = None
+                self._report.observe(q, session.sim.data.qpos[:6], getattr(session.sim.data, "time", 0.0))
                 session.external_clock = True
                 self.phase = "running"
                 self.message = (
@@ -66,11 +73,17 @@ class LinkedExecution:
         if session is None:
             return
         with session.lock:
+            self._finish_report("stopped", message)
             session.sim.running = False
             session.external_clock = False
             self.phase = "paused"
             self.message = message
             session.broadcast(session.packet())
+
+    def _finish_report(self, outcome, reason):
+        if self._report is not None:
+            self.report = self._report.finish(outcome, reason)
+            self._report = None
 
     def advance(self, measured):
         session = self.session
@@ -82,6 +95,8 @@ class LinkedExecution:
             sim = session.sim
             if sim.policy.status not in {"running", "succeeded"}:
                 raise ValueError("Gym task stopped: " + sim.policy.message)
+            if self._report is not None:
+                self._report.observe(measured, sim.data.qpos[:6], getattr(sim.data, "time", 0.0))
             error = max(abs(a - b) for a, b in zip(measured, sim.data.qpos[:6]))
             if not sim.running:
                 if sim.policy.status != "succeeded":
@@ -96,6 +111,7 @@ class LinkedExecution:
                     self.message = (
                         "Gym task succeeded and real arm reached the final joint pose."
                     )
+                    self._finish_report("completed", self.message)
                     self.service.stop(session.id)
                 elif time.monotonic() - self.settling_since > 8:
                     raise ValueError("Real arm did not settle at the final Gym pose")

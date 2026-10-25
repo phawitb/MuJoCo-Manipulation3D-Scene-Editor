@@ -59,7 +59,7 @@ def linked(tmp_path):
 
 def test_run_connected_enables_sync_and_external_clock(linked):
     service, session = linked
-    service.scene_command(session, Command(type="run"))
+    service.execution.start(session, Command(type="run"))
     assert service.enabled and service.sync_mode == "gym_to_real"
     assert session.external_clock and session.sim.running
     assert service.status()["gym_execution"]["phase"] == "running"
@@ -69,14 +69,14 @@ def test_invalid_plan_never_enables_hardware(linked):
     service, session = linked
     session.ready = False
     with pytest.raises(ValueError, match="Calculate"):
-        service.scene_command(session, Command(type="run"))
+        service.execution.start(session, Command(type="run"))
     assert service.driver.writes == []
     assert not session.external_clock and not service.enabled
 
 
 def test_linked_clock_waits_for_measured_angles_and_advances_in_small_steps(linked):
     service, session = linked
-    service.scene_command(session, Command(type="run"))
+    service.execution.start(session, Command(type="run"))
     session.sim.data.qpos[0] = 0.1
     service.execution.advance([0] * 6)
     assert session.steps == 0
@@ -89,11 +89,11 @@ def test_linked_clock_waits_for_measured_angles_and_advances_in_small_steps(link
 
 def test_fault_and_global_stop_pause_simulation_too(linked):
     service, session = linked
-    service.scene_command(session, Command(type="run"))
+    service.execution.start(session, Command(type="run"))
     service.stop("one")
     assert not session.sim.running and not session.external_clock
     assert not service.enabled and service.sync_mode == "off"
-    service.scene_command(session, Command(type="run"))
+    service.execution.start(session, Command(type="run"))
     service.driver.broken = True
     service.tick()
     assert not session.sim.running and not session.external_clock
@@ -104,7 +104,7 @@ def test_other_session_run_cannot_claim_connected_robot(linked):
     service, session = linked
     session.id = "other"
     with pytest.raises(ConnectionError, match="another Gym"):
-        service.scene_command(session, Command(type="run"))
+        service.scene_command(session, Command(type="real_run"))
     assert not session.sim.running and service.driver.writes == []
 
 
@@ -121,13 +121,13 @@ def test_start_pose_difference_rejected_before_any_motor_write(linked):
     service, session = linked
     session.sim.data.qpos[2] = 0.1
     with pytest.raises(ValueError, match="moved since"):
-        service.scene_command(session, Command(type="run"))
+        service.execution.start(session, Command(type="run"))
     assert service.driver.writes == []
 
 
 def test_final_pose_settles_before_linked_run_completes(linked):
     service, session = linked
-    service.scene_command(session, Command(type="run"))
+    service.execution.start(session, Command(type="run"))
     session.sim.running = False
     session.sim.policy.status = "succeeded"
     for _ in range(4):
@@ -135,13 +135,17 @@ def test_final_pose_settles_before_linked_run_completes(linked):
     assert service.execution.active and service.enabled
     service.execution.advance([0] * 6)
     assert service.execution.phase == "completed"
+    report = service.execution.report
+    assert report["outcome"] == "completed"
+    assert report["samples"] == 6
+    assert all(j["last_error_deg"] == 0 for j in report["joints"])
     assert not service.enabled and service.sync_mode == "off"
     assert not session.external_clock
 
 
 def test_stalled_robot_pauses_instead_of_advancing_simulation(linked):
     service, session = linked
-    service.scene_command(session, Command(type="run"))
+    service.execution.start(session, Command(type="run"))
     session.sim.data.qpos[0] = 0.1
     service.execution.last_progress = 0
     with pytest.raises(ValueError, match="cannot follow"):
@@ -151,7 +155,7 @@ def test_stalled_robot_pauses_instead_of_advancing_simulation(linked):
 
 def test_connected_pause_stops_both_clocks(linked):
     service, session = linked
-    service.scene_command(session, Command(type="run"))
+    service.execution.start(session, Command(type="run"))
     service.scene_command(session, Command(type="pause"))
     assert not session.sim.running and not session.external_clock
     assert not service.enabled
@@ -162,7 +166,7 @@ def test_failed_policy_stops_hardware_before_passive_open_gripper_settling(
     linked, during_step
 ):
     service, session = linked
-    service.scene_command(session, Command(type="run"))
+    service.execution.start(session, Command(type="run"))
     if during_step:
 
         def fail_tick(count, **kwargs):
@@ -193,7 +197,7 @@ def test_physics_command_stops_linked_hardware_before_switching_mode(linked):
     from backend.modules.gym.routes import execute
 
     service, session = linked
-    service.scene_command(session, Command(type="run"))
+    service.execution.start(session, Command(type="run"))
     app = SimpleNamespace(state=SimpleNamespace(connection=service))
     execute(app, session, Command(type="physics"))
     assert not service.enabled and not service.execution.active
@@ -202,9 +206,22 @@ def test_physics_command_stops_linked_hardware_before_switching_mode(linked):
 
 def test_scene_replacement_clears_previous_execution_status(linked):
     service, session = linked
-    service.scene_command(session, Command(type="run"))
+    service.execution.start(session, Command(type="run"))
     service.stop("one")
     assert service.execution.phase == "paused"
     service.replace_scene(session, Command(type="example"))
     assert service.execution.phase == "idle"
+    assert not service.enabled
+
+
+def test_episode_report_is_published_after_stop_with_last_measured_error(linked):
+    service, session = linked
+    service.execution.start(session, Command(type='run'))
+    session.sim.data.qpos[0] = 0.02
+    service.execution.advance([0] * 6)
+    assert service.status()['gym_execution']['report'] is None
+    service.stop('one')
+    report = service.status()['gym_execution']['report']
+    assert report['outcome'] == 'stopped' and report['samples'] >= 2
+    assert report['joints'][0]['last_error_deg'] == pytest.approx(-0.02 * 180 / np.pi)
     assert not service.enabled
