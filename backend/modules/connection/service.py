@@ -10,6 +10,7 @@ import time
 from .schemas import Calibration, Assignments, JOINT_NAMES
 from .driver import SerialDriver
 from .bridge import GymBridge
+from .tracking import TrackingController
 
 
 class ConnectionError(ValueError):
@@ -46,6 +47,8 @@ class ConnectionService:
         self.telemetry = []
         self.measured_at = 0.0
         self.target_rad = None
+        self.tracker = None
+        self.desired_rad = None
         self.lease_until = 0.0
         self.last_command = 0.0
         self.last_jog = 0.0
@@ -137,6 +140,17 @@ class ConnectionService:
                     else None
                 ),
                 target_rad=self.target_rad,
+                desired_rad=self.desired_rad,
+                tracking_error_rad=(
+                    [r["position_rad"] - q for r, q in zip(rows, self.desired_rad)]
+                    if self.calibrated and self.desired_rad and len(rows) == 6
+                    else None
+                ),
+                compensation_rad=list(self.tracker.bias) if self.tracker else None,
+                temperature_rechecks=getattr(self.driver, "temperature_rechecks", 0),
+                last_temperature_check=getattr(
+                    self.driver, "last_temperature_check", None
+                ),
                 lease_remaining_s=max(0, self.lease_until - time.monotonic()),
             )
 
@@ -177,6 +191,8 @@ class ConnectionService:
             self.telemetry = rows
             self.measured_at = time.monotonic()
             self.target_rad = None
+            self.tracker = None
+            self.desired_rad = None
             return self.status()
 
     def _validate_rows(self, rows):
@@ -193,7 +209,9 @@ class ConnectionService:
                 or row["temperature"] >= 65
             ):
                 raise ConnectionError(
-                    "Unsafe motor encoder, voltage or temperature telemetry"
+                    "Unsafe motor encoder, voltage or temperature telemetry: "
+                    f"motor {row['id']}, raw={row['raw']}, "
+                    f"voltage={row['voltage']}, temperature={row['temperature']}"
                 )
 
     def _read(self):
@@ -249,6 +267,8 @@ class ConnectionService:
                     "Calibration identity does not match connected device"
                 )
             self.calibration = value
+            self.tracker = None
+            self.desired_rad = None
             self._persist()
             return self.status()
 
@@ -275,9 +295,15 @@ class ConnectionService:
                 )
             q = self._read()
             self._validate(q, q)
-            # Stage measured position before enabling torque so an old goal cannot snap the arm.
+            if self.tracker is None:
+                self.tracker = TrackingController(q)
+            else:
+                self.tracker.reset(q, preserve_bias=True)
+            hold = list(self.tracker.output)
+            self._validate(q, hold)
+            # Stage the current pose plus validated hold bias before enabling torque.
             try:
-                self.driver.goals(self._raw(q))
+                self.driver.goals(self._raw(hold))
                 self.driver.torque(
                     [
                         max(1, math.floor(0.3 / c.radians_per_tick))
@@ -288,7 +314,8 @@ class ConnectionService:
                 self._fault(str(exc), hold=False)
                 raise ConnectionError(str(exc)) from exc
             self.last_jog = 0.0
-            self.target_rad = list(q)
+            self.target_rad = hold
+            self.desired_rad = list(q)
             self.enabled = True
             self.fault = None
             self.last_command = time.monotonic()
@@ -301,35 +328,60 @@ class ConnectionService:
             self.lease_until = time.monotonic() + 3
             return self.status()
 
-    def _hold(self):
+    def _hold(self, preserve_compensation=False):
         if self.enabled and self.calibrated:
             q = self._read()
-            self.driver.goals(self._raw(q))
-            self.target_rad = list(q)
+            hold = list(q)
+            if preserve_compensation and self.tracker:
+                self.tracker.reset(q, preserve_bias=True)
+                candidate = list(self.tracker.output)
+                try:
+                    self._validate(q, candidate)
+                    hold = candidate
+                except Exception:
+                    self.tracker.reset(q)
+            if time.monotonic() - self.measured_at > 0.2:
+                q = self._read()
+                hold = list(q)
+                self.tracker = None
+            self.driver.goals(self._raw(hold))
+            self.target_rad = hold
+            self.desired_rad = list(q)
 
-    def _fault(self, message, hold=True):
+    def _fault(self, message, hold=True, preserve_compensation=False):
         try:
             if hold:
-                self._hold()
+                self._hold(preserve_compensation)
         except Exception as exc:
             message += "; hold could not be confirmed: " + str(exc)
+            preserve_compensation = False
         self.enabled = False
         self.sync_mode = "off"
         self.fault = message
+        if not preserve_compensation:
+            self.tracker = None
 
     def stop(self, session_id):
         with self.lock:
             # The owner can stop after its Gym session is deleted.
             if session_id != self.owner_session_id:
                 raise ConnectionError("Hardware is owned by another Gym session")
-            self._fault("Stopped; existing motor torque is preserved", hold=True)
+            self._fault(
+                "Stopped; existing motor torque is preserved",
+                hold=True,
+                preserve_compensation=True,
+            )
             return self.status()
 
     def disconnect(self, session_id):
         with self.lock:
             if session_id != self.owner_session_id:
                 raise ConnectionError("Hardware is owned by another Gym session")
-            self._fault("Disconnected; existing motor torque is preserved", hold=True)
+            self._fault(
+                "Disconnected; existing motor torque is preserved",
+                hold=True,
+                preserve_compensation=True,
+            )
             if self.driver:
                 self.driver.close()
             self.driver = None
@@ -404,7 +456,12 @@ class ConnectionService:
                     "Stop motion before enabling read-only real-to-Gym synchronization"
                 )
             self.sync_mode = mode
-            self.target_rad = list(q)
+            if self.tracker is None:
+                self.tracker = TrackingController(q)
+            else:
+                self.tracker.reset(q, preserve_bias=True)
+            self.target_rad = list(self.tracker.output)
+            self.desired_rad = list(q)
             self.last_command = time.monotonic()
             self.lease_until = time.monotonic() + 3
             self.fault = None
@@ -436,24 +493,26 @@ class ConnectionService:
                     self.bridge.set(q)
                 elif self.sync_mode == "gym_to_real":
                     desired = self.bridge.get()
-                    dt = min(0.2, max(0.001, time.monotonic() - self.last_command))
-                    step = 0.3 * dt
+                    dt = max(0.001, time.monotonic() - self.last_command)
                     # Reject a changed/reloaded Gym scene that would otherwise make a large physical move.
                     if max(abs(a - b) for a, b in zip(q, desired)) > 0.3:
                         raise ConnectionError("Gym target jumped beyond 0.3 radians")
-                    # Ramp the command, not each measured reading: otherwise
-                    # sub-deadband steps never accumulate and a stalled servo
-                    # can also evade the command-versus-feedback fault check.
-                    previous = self.target_rad if self.target_rad is not None else q
-                    target = [
-                        a + max(-step, min(step, b - a))
-                        for a, b in zip(previous, desired)
-                    ]
+                    self.desired_rad = list(desired)
+                    target = self.tracker.step(
+                        desired,
+                        q,
+                        dt,
+                        [c.radians_per_tick for c in self.calibration.joints],
+                    )
                     if max(abs(a - b) for a, b in zip(q, target)) > 0.15:
                         raise ConnectionError(
                             "Motor tracking error: command lead exceeds 0.15 radians"
                         )
                     self._validate(q, target)
+                    if time.monotonic() - self.measured_at > 0.2:
+                        raise ConnectionError(
+                            "Stale feedback after collision validation"
+                        )
                     self.driver.goals(self._raw(target))
                     self.target_rad = target
                     self.last_command = time.monotonic()

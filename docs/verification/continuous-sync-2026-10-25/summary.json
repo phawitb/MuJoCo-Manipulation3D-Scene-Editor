@@ -1,0 +1,341 @@
+{
+  "baseline": {
+    "passed": true,
+    "profile": {
+      "center": [
+        0.028378644575884363,
+        -1.431971065491246,
+        1.3715633171888395,
+        0.9464661461254406,
+        -1.3828836802789055,
+        0.22
+      ],
+      "amps": [
+        0.12,
+        0.06,
+        0.08,
+        0.08,
+        0.15,
+        0.12
+      ]
+    },
+    "start": [
+      0.028378644575884363,
+      -1.431971065491246,
+      1.257097255672283,
+      0.9464661461254406,
+      -1.3828836802789055,
+      0.044485442848683596
+    ],
+    "samples": 542,
+    "last_sample_s": 45.929556041024625,
+    "analysis_window_s": [
+      7,
+      41
+    ],
+    "metrics": [
+      {
+        "joint": "shoulder_pan",
+        "rms_deg": 1.3322228263289921,
+        "peak_abs_deg": 2.1180463621921923,
+        "final_error_deg": -1.318359375
+      },
+      {
+        "joint": "shoulder_lift",
+        "rms_deg": 1.3643590157150434,
+        "peak_abs_deg": 2.5004545570695074,
+        "final_error_deg": -0.9667968749999999
+      },
+      {
+        "joint": "elbow_flex",
+        "rms_deg": 2.8739607734573815,
+        "peak_abs_deg": 4.320189570659735,
+        "final_error_deg": 1.175952777616462
+      },
+      {
+        "joint": "wrist_flex",
+        "rms_deg": 1.3895810724355064,
+        "peak_abs_deg": 2.1620644094260095,
+        "final_error_deg": -0.878906249999997
+      },
+      {
+        "joint": "wrist_roll",
+        "rms_deg": 1.462903882554373,
+        "peak_abs_deg": 2.145708347917245,
+        "final_error_deg": -0.9667968749999999
+      },
+      {
+        "joint": "gripper",
+        "rms_deg": 1.3572221684175951,
+        "peak_abs_deg": 2.0979874032087653,
+        "final_error_deg": -1.2671808678781113
+      }
+    ],
+    "max_feedback_age_ms": 58.413000078871846,
+    "mean_request_ms": 16.797861287531845,
+    "max_request_ms": 38.811041973531246,
+    "temperature_confirmations": []
+  },
+  "final-comparison": {
+    "passed": true,
+    "profile": {
+      "center": [
+        0.028378644575884363,
+        -1.431971065491246,
+        1.3715633171888395,
+        0.9464661461254406,
+        -1.3828836802789055,
+        0.22
+      ],
+      "amps": [
+        0.12,
+        0.06,
+        0.08,
+        0.08,
+        0.15,
+        0.12
+      ]
+    },
+    "start": [
+      -0.0007669903939428206,
+      -1.2018739473084,
+      1.1481846197324024,
+      0.701029220063738,
+      -1.38134969949102,
+      0.29605829206192874
+    ],
+    "samples": 523,
+    "last_sample_s": 45.94326641596854,
+    "analysis_window_s": [
+      7,
+      41
+    ],
+    "metrics": [
+      {
+        "joint": "shoulder_pan",
+        "rms_deg": 0.670859057059567,
+        "peak_abs_deg": 1.6820001882564488,
+        "final_error_deg": 0.2636718749999999
+      },
+      {
+        "joint": "shoulder_lift",
+        "rms_deg": 0.583005989856013,
+        "peak_abs_deg": 1.4655437575901944,
+        "final_error_deg": -0.17578124999999303
+      },
+      {
+        "joint": "elbow_flex",
+        "rms_deg": 0.5809441057801861,
+        "peak_abs_deg": 1.5631869076659517,
+        "final_error_deg": 0.033374652616456314
+      },
+      {
+        "joint": "wrist_flex",
+        "rms_deg": 0.5792180196696042,
+        "peak_abs_deg": 1.4207803102824021,
+        "final_error_deg": 0.0
+      },
+      {
+        "joint": "wrist_roll",
+        "rms_deg": 0.7281811454213923,
+        "peak_abs_deg": 1.7304399508072423,
+        "final_error_deg": 0.0
+      },
+      {
+        "joint": "gripper",
+        "rms_deg": 0.6133658651571295,
+        "peak_abs_deg": 1.4550404311345597,
+        "final_error_deg": -0.12460274287811055
+      }
+    ],
+    "max_feedback_age_ms": 63.09641606640071,
+    "mean_request_ms": 17.43616377507438,
+    "max_request_ms": 100.46324995346367,
+    "temperature_confirmations": []
+  },
+  "endurance-confirmed": {
+    "passed": true,
+    "profile": {
+      "center": [
+        0.0,
+        -1.2,
+        1.15,
+        0.7,
+        -1.38,
+        0.3
+      ],
+      "amps": [
+        0.28,
+        0.1,
+        0.12,
+        0.12,
+        0.28,
+        0.2
+      ],
+      "periods": [
+        14,
+        17,
+        16,
+        19,
+        13,
+        18
+      ],
+      "phases": [
+        0,
+        0.7,
+        1.1,
+        1.6,
+        2.1,
+        2.6
+      ]
+    },
+    "start": [
+      0.21092235833427567,
+      -1.1113690808231471,
+      1.1221069463383466,
+      0.5783107570328867,
+      -1.4764565083399297,
+      0.4908738521234052
+    ],
+    "samples": 1355,
+    "last_sample_s": 116.92191674991045,
+    "analysis_window_s": [
+      10,
+      98
+    ],
+    "metrics": [
+      {
+        "joint": "shoulder_pan",
+        "rms_deg": 0.9367475054906492,
+        "peak_abs_deg": 2.101953781524304,
+        "final_error_deg": -0.0439453125
+      },
+      {
+        "joint": "shoulder_lift",
+        "rms_deg": 0.5782665837133152,
+        "peak_abs_deg": 1.852744163164335,
+        "final_error_deg": -0.10736927180121814
+      },
+      {
+        "joint": "elbow_flex",
+        "rms_deg": 0.5478258506182034,
+        "peak_abs_deg": 1.3708632419121178,
+        "final_error_deg": -0.10401362754466863
+      },
+      {
+        "joint": "wrist_flex",
+        "rms_deg": 0.4705967871516901,
+        "peak_abs_deg": 1.311368462979042,
+        "final_error_deg": 0.05896996584237686
+      },
+      {
+        "joint": "wrist_roll",
+        "rms_deg": 0.945278954707232,
+        "peak_abs_deg": 2.034004036232771,
+        "final_error_deg": -0.07733208444640365
+      },
+      {
+        "joint": "gripper",
+        "rms_deg": 0.5443505884472112,
+        "peak_abs_deg": 1.3738491679473523,
+        "final_error_deg": -0.13795260392469688
+      }
+    ],
+    "max_feedback_age_ms": 78.86829203926027,
+    "mean_request_ms": 17.561922717334298,
+    "max_request_ms": 60.5486249551177,
+    "temperature_confirmations": [
+      {
+        "t": 26.41926495800726,
+        "count": 1,
+        "confirmation": {
+          "motor": 6,
+          "readings": [
+            53,
+            38,
+            38,
+            38
+          ]
+        }
+      },
+      {
+        "t": 42.188549832906574,
+        "count": 2,
+        "confirmation": {
+          "motor": 5,
+          "readings": [
+            62,
+            36,
+            36,
+            36
+          ]
+        }
+      },
+      {
+        "t": 49.834039582987316,
+        "count": 3,
+        "confirmation": {
+          "motor": 6,
+          "readings": [
+            55,
+            38,
+            38,
+            38
+          ]
+        }
+      },
+      {
+        "t": 56.14490441698581,
+        "count": 4,
+        "confirmation": {
+          "motor": 6,
+          "readings": [
+            50,
+            38,
+            38,
+            38
+          ]
+        }
+      },
+      {
+        "t": 68.31549804192036,
+        "count": 5,
+        "confirmation": {
+          "motor": 5,
+          "readings": [
+            51,
+            36,
+            36,
+            36
+          ]
+        }
+      },
+      {
+        "t": 99.74786737491377,
+        "count": 6,
+        "confirmation": {
+          "motor": 1,
+          "readings": [
+            56,
+            36,
+            36,
+            36
+          ]
+        }
+      },
+      {
+        "t": 104.46974787500221,
+        "count": 7,
+        "confirmation": {
+          "motor": 6,
+          "readings": [
+            50,
+            38,
+            38,
+            38
+          ]
+        }
+      }
+    ]
+  }
+}

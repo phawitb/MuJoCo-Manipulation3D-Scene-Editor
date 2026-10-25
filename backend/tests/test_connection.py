@@ -453,7 +453,8 @@ def test_sync_command_ramp_crosses_servo_deadband(service, monkeypatch):
         s.tick()
     assert s.enabled and s.sync_mode == "gym_to_real"
     assert s.driver.raw[0] > 2080
-    assert s.target_rad[0] == pytest.approx(0.1)
+    assert s.desired_rad[0] == pytest.approx(0.1)
+    assert abs(s._read()[0] - 0.1) < 0.03
 
 
 def test_command_ramp_still_stops_a_stalled_motor(service, monkeypatch):
@@ -479,6 +480,8 @@ def test_command_ramp_never_sends_excessive_lead_over_feedback(service, monkeypa
     s.sync("one", "gym_to_real")
     s.bridge.q[0] = 0.25
     s.target_rad[0] = 0.14
+    s.tracker.output[0] = s.tracker.reference[0] = 0.14
+    s.tracker.velocity[0] = 0.3
     before = len(s.driver.writes)
     clock[0] += 0.1
     s.tick()
@@ -512,3 +515,97 @@ def test_align_rejects_collision_and_active_read_only_sync(service):
     with pytest.raises(ConnectionError, match="Stop"):
         s.align("one")
     assert s.driver.writes == []
+
+
+def test_sync_rejects_load_error_and_stop_retains_gravity_hold(service, monkeypatch):
+    s = calibrated(service)
+    clock = [time.monotonic()]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    s.enable("one")
+    s.sync("one", "gym_to_real")
+    s.bridge.q[2] = -0.1
+
+    def loaded_goals(values):
+        s.driver.writes.append(("goals", list(values)))
+        for i, value in enumerate(values):
+            equilibrium = value + (39 if i == 2 else 0)
+            s.driver.raw[i] += round(0.4 * (equilibrium - s.driver.raw[i]))
+
+    s.driver.goals = loaded_goals
+    for _ in range(240):
+        clock[0] += 0.05
+        s.heartbeat("one")
+        s.tick()
+    assert s.enabled, s.fault
+    measured = s._read()
+    assert abs(measured[2] + 0.1) < 0.008
+    status = s.status()
+    assert abs(status["tracking_error_rad"][2]) < 0.008
+    assert status["desired_rad"] == s.bridge.q
+    s.stop("one")
+    hold = s.driver.writes[-1][1][2]
+    # Holding at raw feedback loses gravity compensation and sags again.
+    assert hold < s.driver.raw[2] - 25
+    s.align("one")
+    s.enable("one")
+    assert s.target_rad[2] < s._read()[2] - 0.04
+
+
+def test_slow_collision_validation_never_writes_stale_motion(service, monkeypatch):
+    s = calibrated(service)
+    clock = [time.monotonic()]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    s.enable("one")
+    s.sync("one", "gym_to_real")
+    s.bridge.q[0] = 0.1
+    before = len(s.driver.writes)
+    original = s.bridge.validate
+
+    def slow_validate(start, end):
+        original(start, end)
+        clock[0] += 0.25
+
+    s.bridge.validate = slow_validate
+    s.tick()
+    assert not s.enabled and "stale" in s.fault.lower()
+    assert s.driver.writes[before:] == [("goals", [2048] * 6)]
+
+
+@pytest.mark.parametrize("failure", ["read", "write"])
+def test_unconfirmed_stop_discards_learned_compensation(service, failure):
+    s = calibrated(service)
+    s.enable("one")
+    s.tracker.bias[2] = 0.08
+    old_goals = s.driver.goals
+    if failure == "read":
+        s.driver.broken = True
+    else:
+
+        def failed_write(values):
+            raise IOError("write failed")
+
+        s.driver.goals = failed_write
+    s.stop("one")
+    assert "hold could not be confirmed" in s.fault
+    assert s.tracker is None
+    s.driver.broken = False
+    s.driver.goals = old_goals
+    s.enable("one")
+    assert s.target_rad == [0.0] * 6
+
+
+def test_slow_stop_validation_uses_new_feedback_and_clears_bias(service, monkeypatch):
+    s = calibrated(service)
+    clock = [time.monotonic()]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    s.enable("one")
+    s.tracker.bias[2] = 0.06
+
+    def slow_validate(start, end):
+        clock[0] += 0.25
+        s.driver.raw[2] += 20
+
+    s.bridge.validate = slow_validate
+    s.stop("one")
+    assert s.tracker is None
+    assert s.driver.writes[-1] == ("goals", [2048, 2048, 2068, 2048, 2048, 2048])

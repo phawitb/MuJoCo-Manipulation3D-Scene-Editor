@@ -37,6 +37,10 @@ export type ConnectionStatus = {
   telemetry: Telemetry[];
   telemetry_age_s: number | null;
   target_rad: number[] | null;
+  desired_rad: number[] | null;
+  tracking_error_rad: number[] | null;
+  compensation_rad: number[] | null;
+  temperature_rechecks: number;
   lease_remaining_s: number;
 };
 export type Assignments = {

@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 
 
 def canonical_port(path):
@@ -37,6 +38,8 @@ class SerialDriver:
         self.guard = None
         self.models = []
         self.identity = None
+        self.temperature_rechecks = 0
+        self.last_temperature_check = None
 
     def open(self):
         try:
@@ -113,10 +116,54 @@ class SerialDriver:
         self._check(result, error)
         return value
 
+    def _feedback_frame(self, motor):
+        # SDK txRxPacket checks checksum/device errors. Inspect the raw length:
+        # readTxRx slices the response and may include a short packet's checksum.
+        request = [0, 0, motor, 4, 2, 40, 30, 0]  # READ RAM 40..69
+        packet, result, error = self.packet.txRxPacket(self.port, request)
+        self._check(result, error)
+        if len(packet) != 36 or packet[3] != 32 or packet[2] != motor:
+            raise IOError(f"Incomplete feedback frame from motor {motor}")
+        frame = packet[5:-1]
+        if not 40 <= frame[22] <= 140:
+            raise IOError(
+                f"Unsafe voltage feedback from motor {motor}: {frame[22] / 10}"
+            )
+        return frame
+
     def read(self):
         rows = []
         for motor in range(1, 7):
-            raw = self._read(motor, 56, 2)
+            frame = self._feedback_frame(motor)
+            if frame[23] >= 50:
+                # Physical probes observed isolated 36→78→36 C spikes. No goal
+                # writes occur during confirmation. Require three agreeing
+                # samples out of at most five; two hot samples always fault.
+                readings = [frame[23]]
+                self.temperature_rechecks += 1
+                self.last_temperature_check = {"motor": motor, "readings": readings}
+                confirmed = None
+                for _ in range(4):
+                    time.sleep(0.002)
+                    frame = self._feedback_frame(motor)
+                    readings.append(frame[23])
+                    if sum(value >= 65 for value in readings) >= 2:
+                        break
+                    ordered = sorted(value for value in readings if value < 65)
+                    clusters = [
+                        ordered[i : i + 3]
+                        for i in range(len(ordered) - 2)
+                        if ordered[i + 2] - ordered[i] <= 3
+                    ]
+                    if clusters:
+                        confirmed = max(max(cluster) for cluster in clusters)
+                        break
+                if confirmed is None:
+                    raise IOError(
+                        f"Unsafe or inconsistent temperature on motor {motor}: {readings}"
+                    )
+                frame[23] = confirmed
+            raw = frame[16] | frame[17] << 8
             if raw & 0x8000:
                 raw = -(raw & 0x7FFF)
             rows.append(
@@ -124,9 +171,9 @@ class SerialDriver:
                     id=motor,
                     model=self.models[motor - 1],
                     raw=raw,
-                    voltage=self._read(motor, 62) / 10.0,
-                    temperature=self._read(motor, 63),
-                    torque=bool(self._read(motor, 40)),
+                    voltage=frame[22] / 10.0,
+                    temperature=frame[23],
+                    torque=bool(frame[0]),
                 )
             )
         return rows

@@ -411,6 +411,15 @@ export default function ConnectionTab({
           {status?.fault && <p className="connection-error">{status.fault}</p>}
           <div className="connection-metrics">
             <span>
+              Largest angle error{" "}
+              <strong>
+                {status?.sync_mode !== "gym_to_real" ||
+                !status.tracking_error_rad
+                  ? "—"
+                  : `${((Math.max(...status.tracking_error_rad.map(Math.abs)) * 180) / Math.PI).toFixed(2)}°`}
+              </strong>
+            </span>
+            <span>
               Feedback age{" "}
               <strong>
                 {status?.telemetry_age_s == null
@@ -421,6 +430,10 @@ export default function ConnectionTab({
             <span>
               Owner{" "}
               <strong>{status?.owner_session_id?.slice(0, 8) || "—"}</strong>
+            </span>
+            <span>
+              Temperature rechecks{" "}
+              <strong>{status?.temperature_rechecks ?? 0}</strong>
             </span>
           </div>
         </section>
@@ -565,6 +578,8 @@ export default function ConnectionTab({
                 <th>Joint</th>
                 <th>Encoder</th>
                 <th>Measured angle</th>
+                <th>Gym target</th>
+                <th>Difference</th>
                 <th>Voltage</th>
                 <th>Temperature</th>
                 <th>Torque</th>
@@ -582,6 +597,17 @@ export default function ConnectionTab({
                       {t?.position_rad == null
                         ? "Unmapped"
                         : `${((t.position_rad * 180) / Math.PI).toFixed(1)}°`}
+                    </td>
+                    <td>
+                      {status?.sync_mode === "gym_to_real" && status.desired_rad
+                        ? `${((status.desired_rad[i] * 180) / Math.PI).toFixed(2)}°`
+                        : "—"}
+                    </td>
+                    <td>
+                      {status?.sync_mode === "gym_to_real" &&
+                      status.tracking_error_rad
+                        ? `${((status.tracking_error_rad[i] * 180) / Math.PI).toFixed(2)}°`
+                        : "—"}
                     </td>
                     <td>{t ? `${t.voltage.toFixed(1)} V` : "—"}</td>
                     <td>{t ? `${t.temperature} °C` : "—"}</td>
