@@ -15,6 +15,7 @@ from .schemas import (
     ManualOwner,
     JointTarget,
     Torque,
+    ToolTarget,
 )
 from .service import ConnectionError
 from .driver import discover_ports
@@ -76,6 +77,10 @@ def create_router(service=None):
             get(request).move, body.session_id, body.joints, None, body.control_epoch
         )
 
+    @router.post("/tool-target")
+    async def tool_target(body: ToolTarget, request: Request):
+        return await invoke(get(request).move_tool, body)
+
     @router.post("/home")
     async def home(body: ManualOwner, request: Request):
         return await invoke(
@@ -95,6 +100,12 @@ def create_router(service=None):
             body.session_id,
             body.enabled,
             body.control_epoch,
+        )
+
+    @router.post("/recover-limits")
+    async def recover_limits(body: ManualOwner, request: Request):
+        return await invoke(
+            get(request).recover_limits, body.session_id, body.control_epoch
         )
 
     @router.post("/retreat")

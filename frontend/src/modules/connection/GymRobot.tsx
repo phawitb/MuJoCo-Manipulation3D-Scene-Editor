@@ -9,14 +9,15 @@ import {
 } from "./api";
 import "./connection.css";
 import ManualControls from "./ManualControls";
+import CartesianControls from "./CartesianControls";
 import EpisodeSummary from "./EpisodeSummary";
 import type { RobotControlProps } from "../types";
 const executionLabels: Record<string, string> = {
   preparing: "Checking real path",
-  running: "Following Gym",
+  running: "Moving to tool goals",
   waiting: "Catching up",
   paused: "Paused",
-  completed: "Run complete",
+  completed: "Tool goals reached",
 };
 
 export default function GymRobot({ sessionId }: RobotControlProps) {
@@ -194,8 +195,12 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
             ·{" "}
             {status.fault
               ? "Stopped · check connection"
-              : executionLabels[status.gym_execution?.phase || "idle"] ||
-                "Ready for real run"}
+              : status.limit_recovery_active
+                ? "Returning inside limits"
+                : status.limit_violations?.length
+                  ? "Joint limit · check controls"
+                  : executionLabels[status.gym_execution?.phase || "idle"] ||
+                    "Ready for real run"}
           </span>
         )}
       </button>
@@ -243,6 +248,15 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                   {notice}
                 </div>
               )}
+              {status?.connected && status.tool && (
+                <CartesianControls
+                  sid={sid}
+                  status={status}
+                  owned={owned}
+                  onError={setError}
+                  refresh={refreshStatus}
+                />
+              )}
               {status?.connected && (
                 <ManualControls
                   sid={sid}
@@ -278,24 +292,15 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                       disabled={busy || !port || !sid || !!status?.connected}
                       onClick={() =>
                         void run(async () => {
-                          const connected = await api<ConnectionStatus>(
-                            "/connect",
-                            "POST",
-                            {
-                              session_id: sid,
-                              port,
-                            },
-                          );
-                          await refreshStatus();
-                          await api("/match-gym", "POST", {
+                          await api<ConnectionStatus>("/connect", "POST", {
                             session_id: sid,
-                            control_epoch: connected.control_epoch,
+                            port,
                           });
                           await refreshStatus();
                         })
                       }
                     >
-                      Connect & match Gym
+                      Connect robot
                     </button>
                     <button
                       disabled={busy || !status?.connected}
@@ -309,9 +314,8 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                     </button>
                   </div>
                   <p className="connection-hint">
-                    Connect & match Gym reads the motors, validates the path,
-                    then moves the arm to the current Gym pose. Torque must
-                    already be on.
+                    Connect reads the arm without moving it. Use Tool position
+                    or Run Realrobot to move after checking the target.
                   </p>
                   {status?.identity && (
                     <p className="connection-device-id">
@@ -348,7 +352,7 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                 </section>
                 <section className="connection-card">
                   <h2>
-                    Motion controls{" "}
+                    Joint diagnostics{" "}
                     <span
                       className={`connection-badge ${status?.enabled ? "ok" : ""}`}
                     >
@@ -356,9 +360,8 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                     </span>
                   </h2>
                   <p className="connection-hint">
-                    Use measured angles to match Gym, or send Gym motion to the
-                    real arm. The connection stops streaming if feedback or the
-                    controller heartbeat is lost.
+                    Optional joint synchronization for diagnostics. Run
+                    Realrobot uses tool goals independently of Gym joint angles.
                   </p>
                   <div className="connection-actions">
                     <button
@@ -672,6 +675,7 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                                   !owned ||
                                   !status?.enabled ||
                                   !!status.manual_target ||
+                                  !!status.limit_recovery_active ||
                                   status.sync_mode !== "off"
                                 }
                                 onClick={() =>
@@ -690,6 +694,7 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                                   !owned ||
                                   !status?.enabled ||
                                   !!status.manual_target ||
+                                  !!status.limit_recovery_active ||
                                   status.sync_mode !== "off"
                                 }
                                 onClick={() =>

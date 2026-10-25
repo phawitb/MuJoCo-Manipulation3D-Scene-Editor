@@ -68,6 +68,8 @@ def test_mcp_handshake_tools_and_shared_scene():
                     "robot_home",
                     "match_robot_to_gym",
                     "robot_torque",
+                    "recover_robot_limits",
+                    "robot_tool_target",
                     "configure_robot_port",
                     "verify_connections",
                     "stop_robot",

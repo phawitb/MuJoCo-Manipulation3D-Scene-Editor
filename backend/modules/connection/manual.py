@@ -20,11 +20,14 @@ class MotionGuard:
                 "Starting overlap exceeds 8 mm; reposition the arm before manual motion"
             )
 
-    def depths(self, q):
+    def validate_angles(self, q):
         if len(q) != 6 or not all(math.isfinite(v) for v in q):
             raise ValueError("Six finite angles required")
         if any(not lo <= v <= hi for v, (lo, hi) in zip(q, self.model.jnt_range[:6])):
             raise ValueError("Manual target exceeds robot joint limits")
+
+    def depths(self, q):
+        self.validate_angles(q)
         self.data.qpos[:6] = q
         mujoco.mj_fwdPosition(self.model, self.data)
         depths = {}
@@ -62,9 +65,9 @@ class MotionGuard:
 
 
 class ManualMotion:
-    def __init__(self, service, session, measured, target):
+    def __init__(self, service, session, measured, target, guard=None):
         self.service, self.session = service, session
-        self.guard = MotionGuard(session.sim, measured)
+        self.guard = guard or MotionGuard(session.sim, measured)
         self.guard.path(measured, target)
         self.target = list(target)
         self.tracker = TrackingController(measured, limits=service._control_limits())
@@ -144,10 +147,12 @@ class ManualMotion:
             )
             if max(abs(a - b) for a, b in zip(measured, target)) > 0.15:
                 raise ValueError("Manual tracking error exceeds 0.15 radians")
+            raw = s._raw(target)
+            target = [s._angle(i, v) for i, v in enumerate(raw)]
             self.guard.path(measured, target)
             if time.monotonic() - s.measured_at > 0.2:
                 raise ValueError("Stale feedback after manual path validation")
-            s.driver.goals(s._raw(target))
+            s.driver.goals(raw)
             s.target_rad = target
             s.desired_rad = list(self.target)
             s.tracker = self.tracker

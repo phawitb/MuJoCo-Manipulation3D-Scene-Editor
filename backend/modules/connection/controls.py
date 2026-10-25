@@ -33,7 +33,9 @@ def _move(service, session_id, joints=None, preset=None):
                 raise ValueError("Six finite target angles required")
             s._raw(q)
             s._raw(joints)
-            if s.manual:
+            # Cartesian controllers retain a tool-space arrival goal; a joint
+            # command must replace that controller rather than only its target.
+            if type(s.manual) is ManualMotion:
                 s.manual.replace(q, joints)
             else:
                 motion = ManualMotion(s, session, q, joints)

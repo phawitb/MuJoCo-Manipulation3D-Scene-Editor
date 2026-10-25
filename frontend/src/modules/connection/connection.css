@@ -419,3 +419,19 @@
 .manual-limit-warning p {
   margin: 8px 0 0;
 }
+
+.tool-coordinate-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.tool-coordinate-grid small {
+  color: var(--muted, #91a6ad);
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .tool-coordinate-grid {
+    grid-template-columns: 1fr;
+  }
+}

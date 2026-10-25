@@ -44,6 +44,19 @@ def driver(packet):
     return d
 
 
+def test_recovery_deadbands_are_read_only_and_use_both_directions(monkeypatch):
+    d = SerialDriver("/not-opened")
+    calls = []
+
+    def read(motor, address, size=1):
+        calls.append((motor, address, size))
+        return 10 if address == 26 else 12
+
+    monkeypatch.setattr(d, "_read", read)
+    assert d.position_deadbands() == [12] * 6
+    assert calls == [(i, a, 1) for i in range(1, 7) for a in (26, 27)]
+
+
 def test_feedback_is_one_coherent_frame_per_motor():
     packet = Packet()
     rows = driver(packet).read()

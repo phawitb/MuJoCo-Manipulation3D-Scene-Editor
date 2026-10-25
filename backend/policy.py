@@ -207,11 +207,11 @@ class PickPlacePolicy:
         width = (
             sp["thickness"]
             if rim_grasp
-            else 0.014
-            if src.asset == "kalas_spoon"
-            else 0.006
-            if src.asset == "spoon"
-            else sp["dimensions"][1]
+            else (
+                0.014
+                if src.asset == "kalas_spoon"
+                else 0.006 if src.asset == "spoon" else sp["dimensions"][1]
+            )
         ) * src.scale
         if width > 0.065:
             raise ValueError(
@@ -221,11 +221,11 @@ class PickPlacePolicy:
             [
                 -0.008 + width / 2,
                 0,
-                -0.1025
-                if src.asset == "spoon"
-                else -0.104
-                if sp["family"] == "spoon"
-                else -0.098,
+                (
+                    -0.1025
+                    if src.asset == "spoon"
+                    else -0.104 if sp["family"] == "spoon" else -0.098
+                ),
             ]
         )
         pinch[2] += self.configuration.get("grasp_depth_offset", 0)
@@ -579,6 +579,14 @@ class PickPlacePolicy:
             self.fail(
                 "Arm did not reach the commanded pose. Motion stopped; check obstacles and joint limits."
             )
+            return
+        # Contact can prevent closing, but retreat must wait for an opening
+        # jaw. Starting the retreat early can sweep a finger into the object.
+        if label == "Release" and abs(s.data.qpos[5] - q[5]) > 0.03:
+            if elapsed >= duration + 1.5:
+                self.fail(
+                    "Gripper did not open before retreat. Check the grasp and obstructions."
+                )
             return
         if label == "Descend":
             source = next(o for o in s.scene.objects if o.id == self.source)

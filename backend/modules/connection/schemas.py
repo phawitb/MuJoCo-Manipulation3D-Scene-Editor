@@ -103,3 +103,18 @@ class JointTarget(ManualOwner):
 
 class Torque(ManualOwner):
     enabled: bool
+
+
+class ToolTarget(ManualOwner):
+    # World metres; quaternion is xyzw. Omission preserves measured orientation.
+    position: list[float] = Field(min_length=3, max_length=3)
+    quaternion: list[float] | None = Field(default=None, min_length=4, max_length=4)
+    opening_rad: float | None = Field(default=None, ge=0, le=1.745329252)
+
+    @model_validator(mode="after")
+    def rotation(self):
+        if self.quaternion is not None:
+            norm = math.sqrt(sum(v * v for v in self.quaternion))
+            if abs(norm - 1) > 0.001:
+                raise ValueError("Quaternion must be normalized (xyzw)")
+        return self

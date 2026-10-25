@@ -15,13 +15,14 @@ from .schemas import (
     ManualOwner,
     JointTarget,
     Torque,
+    ToolTarget,
 )
 
 
 def register(mcp, request, api_url):
     @mcp.tool()
     async def connection_status() -> dict:
-        """Read physical SO101 identity, measured telemetry, calibration, owner, faults and gym_execution.report after each completed/stopped real episode. Report includes per-joint last/peak/RMS errors in degrees and measurement age. No motion."""
+        """Read physical SO101 identity, measured telemetry, calibration, owner, faults and gym_execution.report after each completed/stopped real episode. Report includes endpoint errors in mm/degrees, measurement source, and explicit object_verified=false without external observation. No motion."""
         return await request("GET", "/api/connection/status")
 
     @mcp.tool()
@@ -79,6 +80,13 @@ def register(mcp, request, api_url):
         return await request("POST", "/api/connection/target", json=target.model_dump())
 
     @mcp.tool()
+    async def robot_tool_target(target: ToolTarget) -> dict:
+        """Move gripperframe to world XYZ metres with optional xyzw orientation and jaw angle in radians. Omitted orientation/opening preserve measured values. Solves IK from encoders, checks the whole arm and swept path. Requires torque, current control_epoch, paused Gym and heartbeat. Status tool is encoder_fk, not independent physical measurement; endpoint arrival does not verify grasp."""
+        return await request(
+            "POST", "/api/connection/tool-target", json=target.model_dump()
+        )
+
+    @mcp.tool()
     async def robot_home(owner: ManualOwner) -> dict:
         """Move to this Gym scene's saved reset pose after validating the complete joint path. Requires torque on and heartbeat."""
         return await request("POST", "/api/connection/home", json=owner.model_dump())
@@ -94,6 +102,13 @@ def register(mcp, request, api_url):
     async def robot_torque(torque: Torque) -> dict:
         """Explicit torque on/off. On stages fresh measured hold before enabling. Off cancels all movement and releases motors; physically support the arm first. Never restarts a cancelled target."""
         return await request("POST", "/api/connection/torque", json=torque.model_dump())
+
+    @mcp.tool()
+    async def recover_robot_limits(owner: ManualOwner) -> dict:
+        """Slowly recover up to two joints, one at a time, inside verified limits. Maximum initial excess 0.5 degrees, travel 1.5 degrees per joint. Reads servo deadbands without changing EEPROM. Requires stationary torque hold, paused Gym, current control_epoch and heartbeat. Each path is checked against whole-arm collisions using actual measured feedback; calibration is unchanged. Stop remains available."""
+        return await request(
+            "POST", "/api/connection/recover-limits", json=owner.model_dump()
+        )
 
     @mcp.tool()
     async def robot_heartbeat(owner: Owner) -> dict:

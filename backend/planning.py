@@ -70,6 +70,26 @@ def initial_overlap(sim):
     return None
 
 
+def tool_waypoint(sim):
+    """Task-space reference plus explicitly predicted collision-world state."""
+    from scipy.spatial.transform import Rotation
+
+    scratch = mujoco.MjData(sim.model)
+    scratch.qpos[:] = sim.data.qpos
+    scratch.qpos[:6] = np.clip(scratch.qpos[:6], *sim.model.jnt_range[:6].T)
+    mujoco.mj_kinematics(sim.model, scratch)
+    tool = scratch.site("gripperframe")
+    return dict(
+        position=tool.xpos.tolist(),
+        quaternion=Rotation.from_matrix(tool.xmat.reshape(3, 3)).as_quat().tolist(),
+        opening_rad=max(0.0, float(scratch.qpos[5])),
+        phase=sim.policy.phase,
+        object_qpos=scratch.qpos[6:].tolist(),
+        held=sim.policy.held,
+        contents=list(sim.policy.contents),
+    )
+
+
 def calculate_plan(sim, cancel=None):
     cancel = cancel or threading.Event()
     if cancel.is_set():
@@ -130,6 +150,7 @@ def calculate_plan(sim, cancel=None):
         )
         try:
             trial.start_policy()
+            waypoints = [tool_waypoint(trial)]
             for step in range(int(30 / (10 * trial.model.opt.timestep))):
                 if cancel.is_set():
                     return idle_plan("Calculation cancelled.")
@@ -137,7 +158,14 @@ def calculate_plan(sim, cancel=None):
                     raise ValueError(
                         "Calculation time limit reached. Simplify the scene and try again."
                     )
+                previous_phase = trial.policy.phase
                 trial.step(10)
+                if (
+                    step % 10 == 0
+                    or trial.policy.phase != previous_phase
+                    or "Release" in (previous_phase, trial.policy.phase)
+                ):
+                    waypoints.append(tool_waypoint(trial))
                 max_z = max(
                     max_z,
                     float(trial.data.xpos[trial.object_bodies[trial.policy.source], 2]),
@@ -162,6 +190,7 @@ def calculate_plan(sim, cancel=None):
                 configuration=configuration,
                 fingerprint=physics_fingerprint(sim),
                 maxSourceHeight=max_z,
+                cartesian_waypoints=waypoints + [tool_waypoint(trial)],
                 attempts=len(failures) + 1,
             )
         except ValueError as exc:

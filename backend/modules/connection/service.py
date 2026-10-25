@@ -12,7 +12,7 @@ from .schemas import Calibration, Assignments, RobotPort, JOINT_NAMES
 from .driver import SerialDriver
 from .bridge import GymBridge
 from .tracking import TrackingController
-from .execution import LinkedExecution
+from .execution import CartesianExecution
 
 
 class ConnectionError(ValueError):
@@ -37,10 +37,11 @@ class ConnectionService:
         self.driver_factory = driver_factory
         self.bridge_factory = bridge_factory
         self.lock = threading.RLock()
-        self.execution = LinkedExecution(self)
+        self.execution = CartesianExecution(self)
         self._real_cancel = threading.Event()
         self._preparing = False
         self.recovering = False
+        self.limit_recovery_active = False
         self.manual = None
         self.control_epoch = secrets.randbits(48)
         self.driver = None
@@ -198,7 +199,7 @@ class ConnectionService:
 
     def run_real(self, session):
         from ...planning import clone_simulation, calculate_plan
-        from ...sessions import Command
+        from .execution import TaskGuard
         import mujoco
 
         with self.lock, session.lock:
@@ -216,8 +217,9 @@ class ConnectionService:
             if self.enabled or self.sync_mode != "off":
                 self.stop(session.id)
             q = self._read()
-            self._validate(q, q)
+            self._raw(q)
             trial = clone_simulation(approved)
+            TaskGuard(trial).observe(q)
             trial.data.qpos[:6] = q
             trial.data.qvel[:6] = 0
             trial.data.ctrl[:6] = q
@@ -247,22 +249,19 @@ class ConnectionService:
                         "Physical start rehearsal: " + plan["message"]
                     )
                 current = self._read()
-                self._validate(current, current)
+                self._raw(current)
+                TaskGuard(trial).observe(current)
                 if max(abs(a - b) for a, b in zip(current, q)) > 0.01:
                     raise ConnectionError(
                         "Arm moved during preparation; retry Run Realrobot"
                     )
-                trial.scene.cameras = session.sim.scene.cameras
-                trial.revision = session.sim.revision + 1
-                session.sim = trial
-                session.plan = plan
-                session.sequence += 1
-                session.trial_start = None
-                # A physical attempt consumes this approval: object positions
-                # may change even if the attempt later stops part-way through.
+                # Rehearsal is a private collision/task estimate. Live Gym is
+                # not advanced or overwritten by physical execution.
                 session.successful_trial = None
                 self._preparing = False
-                result = self.execution.start(session, Command(type="run"))
+                result = self.execution.start(
+                    session, trial, plan.get("cartesian_waypoints", [])
+                )
                 session.broadcast(result)
                 return result
         except Exception as exc:
@@ -285,7 +284,7 @@ class ConnectionService:
                 self.stop(session.id)
             result = session.execute(command)
             if owns_robot:
-                self.execution = LinkedExecution(self)
+                self.execution = CartesianExecution(self)
             return result
 
     def _persist(self):
@@ -330,7 +329,9 @@ class ConnectionService:
                 connected=self.connected,
                 gym_execution=self.execution.status(),
                 control_epoch=self.control_epoch,
+                tool=self.tool_status(rows),
                 manual_phase=self.manual.phase if self.manual else None,
+                limit_recovery_active=self.limit_recovery_active,
                 manual_target=list(self.manual.target) if self.manual else None,
                 control_limits=limits,
                 limit_violations=[
@@ -377,6 +378,37 @@ class ConnectionService:
                 lease_remaining_s=max(0, self.lease_until - time.monotonic()),
             )
 
+    def tool_status(self, rows):
+        from .cartesian import CartesianMotion, ToolKinematics
+
+        if isinstance(self.manual, CartesianMotion):
+            return self.manual.status()
+        if (
+            not self.connected
+            or not self.calibrated
+            or len(rows) != 6
+            or not hasattr(self.bridge, "session")
+        ):
+            return None
+        try:
+            session = self.bridge.session()
+            with session.lock:
+                pose = ToolKinematics(session.sim).pose(
+                    [r["position_rad"] for r in rows]
+                )
+            return dict(
+                phase="idle",
+                frame="world",
+                tool_frame="gripperframe",
+                measurement_source="encoder_fk",
+                object_verified=False,
+                measured=pose,
+                target=None,
+                error=None,
+            )
+        except (ValueError, KeyError):
+            return None
+
     def _owner(self, session_id):
         if not self.connected:
             raise ConnectionError("Connect the arm first")
@@ -402,7 +434,7 @@ class ConnectionService:
             except Exception as exc:
                 driver.close()
                 raise ConnectionError(str(exc)) from exc
-            self.execution = LinkedExecution(self)
+            self.execution = CartesianExecution(self)
             self.driver = driver
             self.bridge = bridge
             self.port = port
@@ -522,6 +554,11 @@ class ConnectionService:
             self._persist()
             return self.status()
 
+    def move_tool(self, request):
+        from .cartesian import move_tool
+
+        return move_tool(self, request)
+
     def move(self, session_id, joints=None, preset=None, control_epoch=None):
         from .controls import move
 
@@ -536,6 +573,11 @@ class ConnectionService:
         from .retreat import retreat
 
         return retreat(self, session_id)
+
+    def recover_limits(self, session_id, control_epoch):
+        from .limit_recovery import recover_limits
+
+        return recover_limits(self, session_id, control_epoch)
 
     def align(self, session_id):
         with self.lock:
@@ -605,12 +647,13 @@ class ConnectionService:
             self.lease_until = time.monotonic() + 3
             return self.status()
 
-    def _hold(self, preserve_compensation=False):
+    def _hold(self, preserve_compensation=False, measured_only=False):
         if self.enabled and self.calibrated:
             q = self._read()
             hold = list(q)
             if (
-                not preserve_compensation
+                not measured_only
+                and not preserve_compensation
                 and self.target_rad
                 and max(abs(a - b) for a, b in zip(q, self.target_rad)) <= 0.05
             ):
@@ -619,7 +662,7 @@ class ConnectionService:
                     hold = list(self.target_rad)
                 except Exception:
                     pass
-            if preserve_compensation and self.tracker:
+            if not measured_only and preserve_compensation and self.tracker:
                 self.tracker.reset(q, preserve_bias=True)
                 candidate = list(self.tracker.output)
                 try:
@@ -631,19 +674,33 @@ class ConnectionService:
                 q = self._read()
                 hold = list(q)
                 self.tracker = None
-            self.driver.goals(self._raw(hold))
+            # A stationary measured hold is valid even when the encoder has
+            # drifted just outside calibration. Never clamp it into a move.
+            self.driver.goals(
+                [row["raw"] for row in self.telemetry]
+                if hold == list(q)
+                else self._raw(hold)
+            )
             self.target_rad = hold
             self.desired_rad = list(q)
 
     def _fault(self, message, hold=True, preserve_compensation=False):
+        from .cartesian import CartesianMotion
+
         self.control_epoch += 1
+        measured_only = self.limit_recovery_active or isinstance(
+            self.manual, CartesianMotion
+        )
+        if measured_only:
+            preserve_compensation = False
         self.manual = None
+        self.limit_recovery_active = False
         self.recovering = False
         self._real_cancel.set()
         self.execution.halt(message)
         try:
             if hold:
-                self._hold(preserve_compensation)
+                self._hold(preserve_compensation, measured_only=measured_only)
         except Exception as exc:
             message += "; hold could not be confirmed: " + str(exc)
             preserve_compensation = False
@@ -688,6 +745,8 @@ class ConnectionService:
     def jog(self, session_id, joint, delta_rad):
         with self.lock:
             self._owner(session_id)
+            if self.recovering:
+                raise ConnectionError("Stop recovery before jogging")
             if self.manual is not None:
                 raise ConnectionError(
                     "Stop manual movement before jogging or synchronization"
@@ -735,6 +794,8 @@ class ConnectionService:
     def sync(self, session_id, mode):
         with self.lock:
             self._owner(session_id)
+            if self.recovering and mode != "off":
+                raise ConnectionError("Stop recovery before synchronization")
             if self.manual is not None:
                 raise ConnectionError(
                     "Stop manual movement before jogging or synchronization"
@@ -792,7 +853,10 @@ class ConnectionService:
                     if time.monotonic() > self.lease_until:
                         self._fault("Controller heartbeat expired")
                         return
+                    self._raw(q)
                     self.manual.tick(q)
+                    if self.execution.active:
+                        self.execution.advance(q)
                     return
                 if self.enabled or self.sync_mode != "off":
                     if time.monotonic() > self.lease_until:
@@ -810,10 +874,6 @@ class ConnectionService:
                 if self.sync_mode == "real_to_gym":
                     self.bridge.set(q)
                 elif self.sync_mode == "gym_to_real":
-                    if self.execution.active:
-                        self.execution.advance(q)
-                        if self.sync_mode != "gym_to_real":
-                            return
                     desired = self.bridge.get()
                     dt = max(0.001, time.monotonic() - self.last_command)
                     # Reject a changed/reloaded Gym scene that would otherwise make a large physical move.

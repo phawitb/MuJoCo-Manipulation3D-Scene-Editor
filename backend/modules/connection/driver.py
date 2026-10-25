@@ -187,6 +187,11 @@ class SerialDriver:
             )
         return rows
 
+    def position_deadbands(self):
+        # Read-only EEPROM fields from the STS3215 control table. Recovery must
+        # account for these without changing settings shared with other apps.
+        return [max(self._read(i, 26), self._read(i, 27)) for i in range(1, 7)]
+
     def goals(self, values):
         for motor, value in enumerate(values, 1):
             if not 0 <= value <= 4095:

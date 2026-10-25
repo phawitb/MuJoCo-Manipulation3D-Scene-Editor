@@ -72,7 +72,6 @@ class Session:
         self.closed = False
         self.successful_trial = None
         self.trial_start = None
-        self.external_clock = False
         self.runner = None
         self.plan = idle_plan()
         self.plan_future = None
@@ -214,9 +213,8 @@ class Session:
             elif kind == "run":
                 self.validate_run()
                 if s.policy.status != "running":
-                    if not self.external_clock:
-                        self.successful_trial = None
-                        self.trial_start = clone_simulation(s)
+                    self.successful_trial = None
+                    self.trial_start = clone_simulation(s)
                     s.policy.configuration = self.plan["configuration"]
                 s.start_policy()
                 self.mode = "policy"
@@ -309,10 +307,8 @@ class Session:
             if latest is not snapshot:
                 queue.put_nowait(latest)
 
-    def tick(self, count, *, external=False):
+    def tick(self, count):
         with self.lock:
-            if self.external_clock and not external:
-                return None
             if not self.sim.running:
                 return None
             try:
@@ -351,7 +347,7 @@ class Session:
                 if self.plan_dirty:
                     self.plan_dirty = False
                     self.broadcast(self.packet())
-            if self.sim.running and not self.external_clock:
+            if self.sim.running:
                 accum += min(now - last, 0.1)
                 dt = self.sim.model.opt.timestep
                 count = min(int(accum / dt), int(0.1 / dt))

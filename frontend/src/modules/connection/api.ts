@@ -31,16 +31,13 @@ export type EpisodeReport = {
   reason: string;
   samples: number;
   duration_s: number;
-  simulation_time_s: number | null;
   last_sample_age_s: number | null;
-  joints: {
-    name: string;
-    rmse_deg: number;
-    max_abs_error_deg: number;
-    last_error_deg: number;
-    last_measured_deg: number;
-    last_gym_deg: number;
-  }[];
+  measurement_source: "encoder_fk";
+  environment_source: "simulation_rehearsal";
+  object_verified: false;
+  last_error: ToolError | null;
+  peak_target_distance_mm: number;
+  rms_target_distance_mm: number | null;
 };
 export type RobotMount = {
   table_z: number;
@@ -50,10 +47,32 @@ export type RobotMount = {
     size: [number, number, number];
   } | null;
 };
+export type ToolPose = {
+  position: [number, number, number];
+  quaternion: [number, number, number, number];
+  opening_rad: number;
+};
+export type ToolError = {
+  position_mm: number;
+  orientation_deg: number;
+  opening_deg: number;
+};
+export type ToolStatus = {
+  phase: string;
+  frame: "world";
+  tool_frame: "gripperframe";
+  measurement_source: "encoder_fk";
+  object_verified: false;
+  measured: ToolPose;
+  target: ToolPose | null;
+  error: ToolError | null;
+};
 export type ConnectionStatus = {
+  tool?: ToolStatus | null;
   robot_mount?: RobotMount | null;
   control_epoch: number;
   manual_phase?: "moving" | "holding" | null;
+  limit_recovery_active?: boolean;
   manual_target?: number[] | null;
   control_limits?: [number, number][] | null;
   limit_violations?: {

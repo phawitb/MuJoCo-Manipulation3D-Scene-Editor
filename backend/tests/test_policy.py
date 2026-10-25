@@ -5,6 +5,32 @@ from backend.simulation import Simulation
 from backend.examples import example_scene
 
 
+@pytest.mark.parametrize("elapsed", [0.81, 2.4])
+def test_release_waits_for_open_jaw_or_fails_without_retreat(elapsed):
+    sim = Simulation(example_scene())
+    sim.start_policy()
+    policy = sim.policy
+    target = sim.data.qpos[:6].copy()
+    target[5] = 0.8
+    policy.steps = [("Release", target, 0.8), ("Retreat", target, 1.7)]
+    policy.index = 0
+    policy.phase = "Release"
+    policy.started = float(sim.data.time) - elapsed
+    policy.start_q = sim.data.qpos[:6].copy()
+    sim.data.qpos[5] = 0.1
+    policy.update()
+    assert policy.index == 0
+    assert sim.data.ctrl[5] == pytest.approx(0.8)
+    if elapsed > 2.3:
+        assert policy.status == "failed"
+        assert "open" in policy.message.lower()
+    else:
+        assert policy.status == "running"
+        sim.data.qpos[5] = 0.8
+        policy.update()
+        assert policy.index == 1
+
+
 def test_example_physically_lifts_releases_and_settles():
     sim = Simulation(example_scene())
     start = sim.data.qpos[:6].copy()

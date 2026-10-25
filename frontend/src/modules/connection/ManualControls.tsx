@@ -66,6 +66,7 @@ export default function ManualControls({
   const allowed =
     owned &&
     status.calibrated &&
+    !status.limit_recovery_active &&
     status.sync_mode === "off" &&
     status.gym_execution?.phase !== "preparing" &&
     status.gym_execution?.phase !== "running";
@@ -106,13 +107,15 @@ export default function ManualControls({
       <h2>
         Direct robot control{" "}
         <span className={`connection-badge ${torqueOn ? "ok" : ""}`}>
-          {status.manual_phase === "holding"
-            ? "Holding target"
-            : status.manual_phase === "moving"
-              ? "Moving"
-              : torqueOn
-                ? "Torque on"
-                : "Torque off"}
+          {status.limit_recovery_active
+            ? "Returning inside limits"
+            : status.manual_phase === "holding"
+              ? "Holding target"
+              : status.manual_phase === "moving"
+                ? "Moving"
+                : torqueOn
+                  ? "Torque on"
+                  : "Torque off"}
         </span>
       </h2>
       {outsideLimits && (
@@ -131,8 +134,20 @@ export default function ManualControls({
           </ul>
           <p>
             Torque On holds the current encoder position. Motion stays blocked.
-            Support the arm before Torque Off, then reposition within the range.
-            If the displayed range is incorrect, review joint mapping.
+            For a small boundary error, return slowly inside the verified range.
+            Larger errors require repositioning or a review of joint mapping.
+          </p>
+          <button
+            disabled={!allowed || !torqueOn || busy || status.enabled}
+            onClick={() => void act("/recover-limits")}
+          >
+            {status.limit_recovery_active
+              ? "Returning inside limits…"
+              : "Return inside limits"}
+          </button>
+          <p>
+            Checks the full arm path. Moves one joint at a time, at most 1.5°
+            each; Stop &amp; hold remains available.
           </p>
         </div>
       )}

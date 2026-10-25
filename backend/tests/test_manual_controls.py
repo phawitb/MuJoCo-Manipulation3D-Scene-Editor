@@ -268,3 +268,18 @@ def test_torque_on_rejects_invalid_raw_measurement_before_any_write(control, raw
         s.torque_control("one", True)
     assert s.driver.writes == []
     assert not s.driver.powered
+
+
+def test_collision_guard_checks_exact_quantized_command(control, monkeypatch):
+    s,session=control
+    q=s._read();q[4]+=.03
+    s.move('one',q)
+    checked=[]
+    original=s.manual.guard.path
+    def observe(start,end):
+        checked.append(list(end));return original(start,end)
+    monkeypatch.setattr(s.manual.guard,'path',observe)
+    s.manual.last-=.1;s.tick()
+    sent=[w[1] for w in s.driver.writes if w[0]=='goals'][-1]
+    exact=[s._angle(i,raw) for i,raw in enumerate(sent)]
+    assert any(np.array_equal(end,exact) for end in checked)
