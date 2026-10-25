@@ -60,7 +60,7 @@ async def get_scene(session_id: str) -> dict:
 
 @mcp.tool()
 async def scene_command(session_id: str, command: Command) -> dict:
-    """Control the entire editor through typed commands. load takes a full scene; example loads spoon-to-cup; task takes source/target IDs; run/pause/stop/physics/step control execution. object_add takes object; object_update takes id/patch; object_remove takes id; robot takes joints or patch; camera takes camera/main|top|front|back and value/position,target,zoom,fov. Include revision on edits to reject stale changes. reset clears scene. run is asynchronous: poll get_scene until task.status succeeded/failed."""
+    """Control the entire editor through typed commands. load takes a full scene; example loads spoon-to-cup; task takes source/target IDs; run/pause/stop/physics/step control execution. object_add takes object; object_update takes id/patch; object_remove takes id; robot takes joints or patch; camera takes camera/main|top|front|back and value/position,target,zoom,fov. Include revision on edits to reject stale changes. reset clears scene. run is asynchronous. When this session owns a connected calibrated robot, plan reads its measured starting pose and run enables physical following automatically; simulation waits for measured feedback. Pause, stop, physics or faults stop linked motion. Poll get_scene for task.status and connection_status gym_execution for physical completion or a paused fault. Disconnected run is simulation-only."""
     return compact(
         await request(
             "POST",

@@ -25,6 +25,7 @@ export type Telemetry = {
   torque: boolean;
 };
 export type ConnectionStatus = {
+  gym_execution?: { phase: string; message: string; session_id: string | null };
   connected: boolean;
   port: string | null;
   identity: string | null;

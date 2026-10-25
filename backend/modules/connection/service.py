@@ -11,6 +11,7 @@ from .schemas import Calibration, Assignments, RobotPort, JOINT_NAMES
 from .driver import SerialDriver
 from .bridge import GymBridge
 from .tracking import TrackingController
+from .execution import LinkedExecution
 
 
 class ConnectionError(ValueError):
@@ -35,6 +36,7 @@ class ConnectionService:
         self.driver_factory = driver_factory
         self.bridge_factory = bridge_factory
         self.lock = threading.RLock()
+        self.execution = LinkedExecution(self)
         self.driver = None
         self.bridge = None
         self.connected = False
@@ -169,14 +171,51 @@ class ConnectionService:
             ok=robot["ok"] and all(c["available"] for c in cameras),
         )
 
+    def scene_command(self, session, command):
+        with self.lock:
+            if not self.connected:
+                return session.execute(command)
+            if self.owner_session_id != session.id:
+                if command.type == "run":
+                    raise ConnectionError(
+                        "Hardware is owned by another Gym session. Connect this Gym or disconnect the robot for simulation-only Run."
+                    )
+                return session.execute(command)
+            if command.type == "plan":
+                with session.lock:
+                    if session.sim.running or session.sim.policy.status == "running":
+                        raise ConnectionError(
+                            "Stop the current task before calculating a connected path"
+                        )
+                    if session.plan_future is None:
+                        if self.enabled or self.sync_mode != "off":
+                            self.stop(session.id)
+                        self._calibrated()
+                        q = self._read()
+                        self._validate(q, q)
+                        self.bridge.set(q)
+                    return session.execute(command)
+            if command.type == "run":
+                self._owner(session.id)
+                self._calibrated()
+                return self.execution.start(session, command)
+            if command.type in {"pause", "stop", "physics"}:
+                if self.enabled or self.sync_mode != "off":
+                    self.stop(session.id)
+                return session.execute(command)
+            return session.execute(command)
+
     def replace_scene(self, session, command):
         # Same lock order as the streaming worker: hardware before Gym session.
         # Keep the lock until the replacement is complete, preventing a concurrent enable.
         with self.lock:
-            if self.connected and self.owner_session_id == session.id:
-                if self.enabled or self.sync_mode != "off":
-                    self.stop(session.id)
-            return session.execute(command)
+            owns_robot = self.connected and self.owner_session_id == session.id
+            if owns_robot and (self.enabled or self.sync_mode != "off"):
+                self.stop(session.id)
+            result = session.execute(command)
+            if owns_robot:
+                self.execution = LinkedExecution(self)
+            return result
 
     def _persist(self):
         self.settings_dir.mkdir(parents=True, exist_ok=True)
@@ -207,6 +246,7 @@ class ConnectionService:
             ]
             return dict(
                 connected=self.connected,
+                gym_execution=self.execution.status(),
                 port=self.port,
                 identity=self.identity,
                 owner_session_id=self.owner_session_id,
@@ -261,6 +301,7 @@ class ConnectionService:
             except Exception as exc:
                 driver.close()
                 raise ConnectionError(str(exc)) from exc
+            self.execution = LinkedExecution(self)
             self.driver = driver
             self.bridge = bridge
             self.port = port
@@ -323,6 +364,16 @@ class ConnectionService:
             values.append(raw)
         return values
 
+    def _control_limits(self):
+        limits = []
+        for i, (lo, hi) in enumerate(self.bridge.limits()):
+            c = self.calibration.joints[i]
+            raw_lo, raw_hi = sorted(
+                (self._angle(i, c.raw_min), self._angle(i, c.raw_max))
+            )
+            limits.append((max(lo, raw_lo), min(hi, raw_hi)))
+        return limits
+
     def _calibrated(self):
         if not self.calibrated:
             raise ConnectionError(
@@ -378,7 +429,7 @@ class ConnectionService:
             q = self._read()
             self._validate(q, q)
             if self.tracker is None:
-                self.tracker = TrackingController(q)
+                self.tracker = TrackingController(q, limits=self._control_limits())
             else:
                 self.tracker.reset(q, preserve_bias=True)
             hold = list(self.tracker.output)
@@ -431,6 +482,7 @@ class ConnectionService:
             self.desired_rad = list(q)
 
     def _fault(self, message, hold=True, preserve_compensation=False):
+        self.execution.halt(message)
         try:
             if hold:
                 self._hold(preserve_compensation)
@@ -539,7 +591,7 @@ class ConnectionService:
                 )
             self.sync_mode = mode
             if self.tracker is None:
-                self.tracker = TrackingController(q)
+                self.tracker = TrackingController(q, limits=self._control_limits())
             else:
                 self.tracker.reset(q, preserve_bias=True)
             self.target_rad = list(self.tracker.output)
@@ -574,6 +626,10 @@ class ConnectionService:
                 if self.sync_mode == "real_to_gym":
                     self.bridge.set(q)
                 elif self.sync_mode == "gym_to_real":
+                    if self.execution.active:
+                        self.execution.advance(q)
+                        if self.sync_mode != "gym_to_real":
+                            return
                     desired = self.bridge.get()
                     dt = max(0.001, time.monotonic() - self.last_command)
                     # Reject a changed/reloaded Gym scene that would otherwise make a large physical move.

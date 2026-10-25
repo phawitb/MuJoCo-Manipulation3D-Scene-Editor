@@ -31,6 +31,14 @@ def execute(app, scene_session, cmd):
     connection = getattr(app.state, "connection", None)
     if connection is not None and cmd.type in {"load", "example", "reset"}:
         return connection.replace_scene(scene_session, cmd)
+    if connection is not None and cmd.type in {
+        "plan",
+        "run",
+        "pause",
+        "stop",
+        "physics",
+    }:
+        return connection.scene_command(scene_session, cmd)
     return scene_session.execute(cmd)
 
 

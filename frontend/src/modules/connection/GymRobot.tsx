@@ -9,6 +9,13 @@ import {
 } from "./api";
 import "./connection.css";
 import type { RobotControlProps } from "../types";
+const executionLabels: Record<string, string> = {
+  running: "Following Gym",
+  waiting: "Catching up",
+  paused: "Paused",
+  completed: "Run complete",
+};
+
 export default function GymRobot({ sessionId }: RobotControlProps) {
   const sid = sessionId || "";
   const [open, setOpen] = useState(false);
@@ -167,7 +174,27 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
       <button className="btn btn-ghost" onClick={() => setOpen(true)}>
         <Cable size={17} />
         {status?.connected ? "Robot connection" : "Connect robot"}
+        {status?.connected && owned && (
+          <span
+            className="robot-run-state"
+            title={status.gym_execution?.message}
+          >
+            {" "}
+            ·{" "}
+            {status.fault
+              ? "Stopped · check connection"
+              : executionLabels[status.gym_execution?.phase || "idle"] ||
+                "Run linked"}
+          </span>
+        )}
       </button>
+      {status?.fault && owned && (
+        <div role="alert">
+          <button className="robot-fault-banner" onClick={() => setOpen(true)}>
+            Robot stopped · {status.fault}
+          </button>
+        </div>
+      )}
       {open &&
         createPortal(
           <div className="robot-dialog-backdrop" onClick={() => setOpen(false)}>
@@ -182,7 +209,10 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                 <div>
                   <p className="connection-eyebrow">GYM / REAL ARM</p>
                   <h1>Robot connection</h1>
-                  <p>Control the real arm from this scene.</p>
+                  <p>
+                    Calculate from the measured arm pose, then Run simulation
+                    moves both Gym and this robot.
+                  </p>
                 </div>
                 <button
                   aria-label="Close robot controls"

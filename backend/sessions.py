@@ -69,6 +69,7 @@ class Session:
         self.sequence = 0
         self.mode = "policy"
         self.closed = False
+        self.external_clock = False
         self.runner = None
         self.plan = idle_plan()
         self.plan_future = None
@@ -114,6 +115,18 @@ class Session:
                 if k not in ("configuration", "fingerprint")
             }
             return p
+
+    def validate_run(self):
+        with self.lock:
+            self.collect_plan()
+            if self.sim.policy.status != "running":
+                if not self.plan.get("verified") or self.plan.get(
+                    "fingerprint"
+                ) != physics_fingerprint(self.sim):
+                    self.invalidate_plan()
+                    raise ValueError(
+                        "Calculate a successful path for this scene before running."
+                    )
 
     def execute(self, cmd: Command):
         with self.lock:
@@ -191,14 +204,8 @@ class Session:
                     PLANNING_SLOTS.release()
                     raise
             elif kind == "run":
+                self.validate_run()
                 if s.policy.status != "running":
-                    if not self.plan.get("verified") or self.plan.get(
-                        "fingerprint"
-                    ) != physics_fingerprint(s):
-                        self.invalidate_plan()
-                        raise ValueError(
-                            "Calculate a successful path for this scene before running."
-                        )
                     s.policy.configuration = self.plan["configuration"]
                 s.start_policy()
                 self.mode = "policy"
@@ -289,8 +296,10 @@ class Session:
             if latest is not snapshot:
                 queue.put_nowait(latest)
 
-    def tick(self, count):
+    def tick(self, count, *, external=False):
         with self.lock:
+            if self.external_clock and not external:
+                return None
             if not self.sim.running:
                 return None
             try:
@@ -326,7 +335,7 @@ class Session:
                 if self.plan_dirty:
                     self.plan_dirty = False
                     self.broadcast(self.packet())
-            if self.sim.running:
+            if self.sim.running and not self.external_clock:
                 accum += min(now - last, 0.1)
                 dt = self.sim.model.opt.timestep
                 count = min(int(accum / dt), int(0.1 / dt))

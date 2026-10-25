@@ -17,7 +17,8 @@ class TrackingController:
     VELOCITY_FEEDFORWARD = 0.12
     VELOCITY_FILTER_SECONDS = 0.1
 
-    def __init__(self, measured):
+    def __init__(self, measured, *, limits=None):
+        self.limits = limits or [(-math.inf, math.inf)] * 6
         self.bias = [0.0] * 6
         self.reset(measured)
 
@@ -25,7 +26,10 @@ class TrackingController:
         if not preserve_bias:
             self.bias = [0.0] * 6
         self.reference = list(measured)
-        self.output = [q + b for q, b in zip(measured, self.bias)]
+        self.output = [
+            max(lo, min(hi, q + b))
+            for q, b, (lo, hi) in zip(measured, self.bias, self.limits)
+        ]
         self.velocity = [0.0] * 6
         self.reference_velocity = [0.0] * 6
 
@@ -40,6 +44,8 @@ class TrackingController:
             for v in values
         ):
             raise ValueError("Six finite joint measurements and targets are required")
+        if any(not lo <= q <= hi for q, (lo, hi) in zip(desired, self.limits)):
+            raise ValueError("Requested target exceeds joint limit")
         for i in range(6):
             # Reserve part of the output speed for gentle feedback corrections.
             reference = self.reference[i] + clamp(
@@ -67,14 +73,34 @@ class TrackingController:
                 self.MAX_CORRECTION,
             )
             wanted = reference + correction
-            distance = wanted - self.output[i]
+            lo, hi = self.limits[i]
+            # Keep rounded encoder goals inside the physical/model intersection.
+            lower, upper = lo + resolution[i] * 0.51, hi - resolution[i] * 0.51
+            bounded_wanted = max(lower, min(upper, wanted))
+            distance = bounded_wanted - self.output[i]
             braking_speed = math.sqrt(2 * self.MAX_ACCELERATION * abs(distance))
             velocity = clamp(distance / dt, min(self.MAX_SPEED, braking_speed))
+
+            # Reserve stopping distance for the longest accepted cycle (200 ms),
+            # including its discrete step. This brakes before output saturation.
+            def safe_speed(distance):
+                reserve = self.MAX_ACCELERATION * 0.2
+                return (
+                    math.sqrt(reserve**2 + 2 * self.MAX_ACCELERATION * max(0, distance))
+                    - reserve
+                )
+
+            velocity = max(
+                -safe_speed(self.output[i] - lower),
+                min(safe_speed(upper - self.output[i]), velocity),
+            )
             velocity = self.velocity[i] + clamp(
                 velocity - self.velocity[i], self.MAX_ACCELERATION * dt
             )
             output = self.output[i] + velocity * dt
-            # Do not integrate farther into output rate saturation.
+            if not lo <= output <= hi:
+                raise ValueError("Controller cannot brake within joint limits")
+            # Do not integrate farther into position or rate saturation.
             if (wanted - output) * (candidate - self.bias[i]) <= 0 or abs(
                 wanted - output
             ) < 0.003:

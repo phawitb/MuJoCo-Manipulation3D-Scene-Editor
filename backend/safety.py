@@ -6,6 +6,7 @@ is allowed; sustained body collisions are never a valid way to reach a target.
 
 import numpy as np
 
+JOINT_TOLERANCE = 0.002  # MuJoCo compliant joint-stop tolerance, radians
 SELF_TOLERANCE = 0.00002  # 20 micrometres, numerical contact tolerance
 BODY_TOLERANCE = 0.0001
 GRASP_TOLERANCE = 0.0015
@@ -75,7 +76,9 @@ def joint_issue(sim):
     limits = sim.model.jnt_range[:6]
     if not np.isfinite(q).all():
         return "Robot joint state is not finite."
-    outside = np.flatnonzero((q < limits[:, 0] - 0.002) | (q > limits[:, 1] + 0.002))
+    outside = np.flatnonzero(
+        (q < limits[:, 0] - JOINT_TOLERANCE) | (q > limits[:, 1] + JOINT_TOLERANCE)
+    )
     if len(outside):
         return f"Joint limit reached: {sim.model.joint(int(outside[0])).name}."
     return None

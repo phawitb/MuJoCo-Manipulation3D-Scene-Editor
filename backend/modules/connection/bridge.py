@@ -3,6 +3,19 @@
 import math
 
 
+def hardware_target(values, limits):
+    from ...safety import JOINT_TOLERANCE
+
+    # MuJoCo joint stops are compliant. Project only the already permitted
+    # numerical residual; physical goals and measured-pose guards stay strict.
+    if any(
+        not math.isfinite(q) or not lo - JOINT_TOLERANCE <= q <= hi + JOINT_TOLERANCE
+        for q, (lo, hi) in zip(values, limits)
+    ):
+        raise ValueError("Simulation joint limit exceeded")
+    return [max(lo, min(hi, q)) for q, (lo, hi) in zip(values, limits)]
+
+
 class GymBridge:
     def __init__(self, registry, session_id):
         self.registry = registry
@@ -21,7 +34,12 @@ class GymBridge:
     def get(self):
         s = self.session()
         with s.lock:
-            return s.sim.data.qpos[:6].tolist()
+            return hardware_target(s.sim.data.qpos[:6], s.sim.model.jnt_range[:6])
+
+    def limits(self):
+        s = self.session()
+        with s.lock:
+            return s.sim.model.jnt_range[:6].tolist()
 
     def validate(self, start, end):
         import mujoco
@@ -31,11 +49,12 @@ class GymBridge:
         s = self.session()
         with s.lock:
             m = s.sim.model
-            if any(
-                not math.isfinite(v) or v < lo or v > hi
-                for v, (lo, hi) in zip(end, m.jnt_range[:6])
-            ):
-                raise ValueError("Simulation joint limit exceeded")
+            for i, (v, (lo, hi)) in enumerate(zip(end, m.jnt_range[:6])):
+                if not math.isfinite(v) or not lo <= v <= hi:
+                    raise ValueError(
+                        f"Simulation joint limit exceeded: joint {i + 1}, "
+                        f"requested {v:.5f}, allowed {lo:.5f} to {hi:.5f} rad"
+                    )
             scratch = mujoco.MjData(m)
             scratch.qpos[:] = s.sim.data.qpos
             count = max(

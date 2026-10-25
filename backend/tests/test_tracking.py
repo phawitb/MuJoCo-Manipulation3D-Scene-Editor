@@ -93,3 +93,38 @@ def test_repeated_direction_changes_track_a_loaded_lagging_servo(lag):
             errors.append(measured[2] - desired[2])
     assert math.sqrt(sum(error**2 for error in errors) / len(errors)) < 0.005
     assert max(abs(q) for q in measured) < 0.006
+
+
+@pytest.mark.parametrize("sign", [-1, 1])
+def test_compensation_brakes_inside_joint_limits_without_windup(sign):
+    c = TrackingController([0.0] * 6, limits=[(-0.3, 0.3)] * 6)
+    measured = [0.0] * 6
+    previous = c.output.copy()
+    velocity = [0.0] * 6
+    for n in range(600):
+        dt = [0.03, 0.07, 0.15][n % 3]
+        desired = [sign * (0.299 if n < 350 else -0.299)] * 6
+        output = c.step(desired, measured, dt, [0.0015] * 6)
+        speed = [(a - b) / dt for a, b in zip(output, previous)]
+        assert all(-0.3 <= q <= 0.3 for q in output)
+        assert max(abs(v) for v in speed) <= 0.3 + 1e-9
+        assert max(abs(a - b) / dt for a, b in zip(speed, velocity)) <= 1.2 + 1e-9
+        measured = [q - sign * 0.008 for q in output]
+        previous, velocity = output, speed
+    assert abs(output[0] + sign * 0.299) < 0.02
+
+
+def test_invalid_desired_pose_is_rejected_not_clamped():
+    c = TrackingController([0.0] * 6, limits=[(-0.3, 0.3)] * 6)
+    with pytest.raises(ValueError, match="target.*limit"):
+        c.step([0.4] * 6, [0.0] * 6, 0.05, [0.0015] * 6)
+    assert c.output == [0.0] * 6
+
+
+def test_mujoco_compliant_limit_is_projected_only_within_physics_tolerance():
+    from backend.modules.connection.bridge import hardware_target
+
+    assert hardware_target([1.0005] * 6, [(-1, 1)] * 6) == [1] * 6
+    assert hardware_target([-1.0005] * 6, [(-1, 1)] * 6) == [-1] * 6
+    with pytest.raises(ValueError, match="Simulation joint limit"):
+        hardware_target([1.003] * 6, [(-1, 1)] * 6)

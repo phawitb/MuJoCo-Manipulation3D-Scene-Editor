@@ -53,6 +53,9 @@ class Bridge:
         self.check_alive()
         return list(self.q)
 
+    def limits(self):
+        return [(-2, 2)] * 6
+
     def validate(self, start, end):
         self.check_alive()
         if self.collision:
