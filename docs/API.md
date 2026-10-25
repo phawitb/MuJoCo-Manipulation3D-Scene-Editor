@@ -156,3 +156,8 @@ To save a reset pose through HTTP or MCP, send `{"type":"robot","patch":{"reset_
 - `POST /api/connection/cameras/scan` retains `{max_index}` and now includes the same image data in every available result. MCP: `scan_physical_cameras`.
 
 Camera checks do not hold the serial lock, so Stop and heartbeat remain available during capture. Setup does not create Gym sessions. The optional connection module contributes robot controls to Gym without a static dependency from the Gym module. Physical scene `load`, `example` and `reset` commands stop the owning controller before replacing the current scene, through both HTTP and WebSocket (and therefore MCP). Camera-only commands do not stop streaming. Scene loads preserve session identity; browser refresh records/reuses that identity in the URL.
+
+
+### Direct robot controls
+
+The new `target`, `home`, `match-gym`, and `torque` connection endpoints share calibrated ownership and current `control_epoch` checks; retrieve the epoch from `GET /api/connection/status`. Stop/disconnect invalidate delayed motion commands. Targets replace unsent older targets rather than accumulating. The HTTP connect endpoint remains read-only; the Gym UI explicitly chains connect and match-gym. Full schemas are in OpenAPI; body examples, limits, holding behavior, torque release and corresponding MCP tools are in [Connection guide](CONNECTION.md#direct-controls-and-application-handoff).

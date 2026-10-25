@@ -12,6 +12,9 @@ from .schemas import (
     Scan,
     Assignments,
     RobotPort,
+    ManualOwner,
+    JointTarget,
+    Torque,
 )
 
 
@@ -69,6 +72,28 @@ def register(mcp, request, api_url):
     async def enable_robot(owner: Owner) -> dict:
         """Enable physical movement at measured current pose, requiring verified calibration and safe pose. Renew heartbeat every second. This moves real hardware on later jog/sync."""
         return await request("POST", "/api/connection/enable", json=owner.model_dump())
+
+    @mcp.tool()
+    async def robot_joint_target(target: JointTarget) -> dict:
+        """Replace the manual six-joint target in radians. Include control_epoch from connection_status; Stop invalidates older commands. Fresh encoder feedback, calibrated limits, collision checks and a 3-second heartbeat lease apply. Requires torque on; does not queue old targets."""
+        return await request("POST", "/api/connection/target", json=target.model_dump())
+
+    @mcp.tool()
+    async def robot_home(owner: ManualOwner) -> dict:
+        """Move to this Gym scene's saved reset pose after validating the complete joint path. Requires torque on and heartbeat."""
+        return await request("POST", "/api/connection/home", json=owner.model_dump())
+
+    @mcp.tool()
+    async def match_robot_to_gym(owner: ManualOwner) -> dict:
+        """Move physical arm to Gym's current joint pose along a validated path. Requires torque on and heartbeat. Unlike align_gym_to_robot, this moves hardware."""
+        return await request(
+            "POST", "/api/connection/match-gym", json=owner.model_dump()
+        )
+
+    @mcp.tool()
+    async def robot_torque(torque: Torque) -> dict:
+        """Explicit torque on/off. On stages fresh measured hold before enabling. Off cancels all movement and releases motors; physically support the arm first. Never restarts a cancelled target."""
+        return await request("POST", "/api/connection/torque", json=torque.model_dump())
 
     @mcp.tool()
     async def robot_heartbeat(owner: Owner) -> dict:

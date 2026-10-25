@@ -284,6 +284,9 @@ def test_driver_limits_speed_before_any_torque_enable():
         def __init__(self):
             self.writes = []
 
+        def read2ByteTxRx(self, port, motor, address):
+            return 0, 0, 0
+
         def write1ByteTxRx(self, port, motor, address, value):
             self.writes.append((motor, address, value))
             return 0, 0

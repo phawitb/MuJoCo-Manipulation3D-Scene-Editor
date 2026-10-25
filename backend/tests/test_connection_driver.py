@@ -52,8 +52,13 @@ def test_feedback_is_one_coherent_frame_per_motor():
     assert [r["temperature"] for r in rows] == [36, 37, 38, 39, 40, 41]
     assert all(r["voltage"] == 12.2 and r["torque"] for r in rows)
     assert all(r["goal_raw"] == 2148 and r["goal_velocity_raw"] == 195 for r in rows)
-    assert all(r["torque_limit_raw"] == 1000 and r["servo_status_raw"] == 0 for r in rows)
-    assert all(r["present_speed_raw"] == 4 and r["present_load_raw"] == 84 and r["moving"] for r in rows)
+    assert all(
+        r["torque_limit_raw"] == 1000 and r["servo_status_raw"] == 0 for r in rows
+    )
+    assert all(
+        r["present_speed_raw"] == 4 and r["present_load_raw"] == 84 and r["moving"]
+        for r in rows
+    )
 
 
 @pytest.mark.parametrize("length", [0, 1, 2, 8, 29, 31])
@@ -97,3 +102,59 @@ def test_two_thermal_outliers_need_three_agreeing_low_samples():
 def test_two_hot_samples_always_fault_even_with_cold_samples_between():
     with pytest.raises(IOError, match="temperature"):
         driver(Packet(temperatures=[78, 36, 77, 36, 36])).read()
+
+
+class RegisterPacket:
+    def __init__(self):
+        self.speed = [0, 500, 600, 0, 700, 0]
+        self.writes = []
+
+    def read2ByteTxRx(self, port, motor, address):
+        return self.speed[motor - 1], 0, 0
+
+    def write2ByteTxRx(self, port, motor, address, value):
+        self.writes.append((motor, address, value))
+        if address == 46:
+            self.speed[motor - 1] = value
+        return 0, 0
+
+    def write1ByteTxRx(self, port, motor, address, value):
+        self.writes.append((motor, address, value))
+        return 0, 0
+
+
+def test_speed_override_restores_original_after_staging_measured_hold():
+    packet = RegisterPacket()
+    d = driver(packet)
+    d.read = lambda: [dict(raw=2000 + i) for i in range(6)]
+    d.torque([195] * 6)
+    assert packet.speed == [195] * 6
+    d.restore_speed()
+    assert packet.speed == [0, 500, 600, 0, 700, 0]
+    assert packet.writes[-12:-6] == [(i + 1, 42, 2000 + i) for i in range(6)]
+    assert not d.speed_overridden
+
+
+def test_explicit_legacy_repair_restores_zero_without_torque_writes():
+    packet = RegisterPacket()
+    packet.speed = [195] * 6
+    d = driver(packet)
+    d.read = lambda: [dict(raw=2000 + i) for i in range(6)]
+    d.restore_speed(default=True)
+    assert packet.speed == [0] * 6
+    assert all(address != 40 for _, address, _ in packet.writes)
+
+
+def test_close_releases_port_even_when_profile_restoration_fails():
+    from unittest.mock import Mock
+
+    d = driver(RegisterPacket())
+    port, guard = Mock(), Mock()
+    d.port, d.guard = port, guard
+    d.torque()
+    d.read = Mock(side_effect=IOError("lost feedback"))
+    with pytest.raises(IOError, match="lost feedback"):
+        d.close()
+    port.closePort.assert_called_once()
+    guard.close.assert_called_once()
+    assert d.port is None and d.guard is None

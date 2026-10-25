@@ -1,6 +1,6 @@
 # Local SO-101 and camera connections
 
-Setting Connection saves the port and camera assignments. Connect the arm from Gym; one serialized serial owner is shared by the UI and MCP. Connection only reads motor identity and telemetry. It never calibrates motors, writes EEPROM, enables torque, or starts synchronization automatically.
+Setting Connection saves the port and camera assignments. Connect the arm from Gym; one serialized serial owner is shared by the UI and MCP. The HTTP/MCP connect operation only reads identity and telemetry. The Gym button **Connect & match Gym** explicitly follows that operation with a validated move to Gym’s current pose; existing torque must be on. Opening the controls panel alone never moves the arm. Neither operation changes calibration or EEPROM.
 
 ## Hardware requirements and calibration
 
@@ -12,7 +12,7 @@ Physical motion also requires a valid Gym session, raw and simulation joint boun
 
 Enable first stages the current measured position, including a validated load compensation retained from a normal stop in the same connection, as the hold goal, sets a conservative RAM goal velocity of at most 0.3 radians/second under the supplied mapping, and then enables torque. Joint jogs are limited to ±0.05 radians and rate limited. `gym_to_real` requires initial agreement within 0.15 radians, rejects subsequent target jumps greater than 0.3 radians, uses bounded proportional/integral feedback to reduce load and deadband error, limits command speed to 0.3 rad/s and acceleration to 1.2 rad/s², and stops on tracking error above 0.15 radians. `real_to_gym` writes measured pose into the selected Gym session and sends no physical motor commands. Stop the motion mode before starting this read-only mode.
 
-An active controller must renew its lease through `/heartbeat` every second; expiry at three seconds stops streaming. Stop and disconnect attempt to hold fresh measured position with validated learned load compensation if this service enabled motion, then preserve existing torque. Normal stop/start retains that compensation in memory; faults, failed holds, calibration changes and reconnection clear it. Stale collision validation falls back to a fresh uncompensated hold. Compensation is never saved as calibration. **They do not release torque.** If communication fails, a hold cannot be confirmed: new commands stop, the fault remains visible, and motor torque may remain on. There is no automatic recovery or automatic re-enable. No torque-release or EEPROM endpoint is exposed.
+An active controller must renew its lease through `/heartbeat` every second; expiry at three seconds stops streaming. Stop and disconnect attempt to hold fresh measured position with validated learned load compensation if this service enabled motion, then preserve existing torque. Normal stop/start retains that compensation in memory; faults, failed holds, calibration changes and reconnection clear it. Stale collision validation falls back to a fresh uncompensated hold. Compensation is never saved as calibration. **They do not release torque.** If communication fails, a hold cannot be confirmed: new commands stop, the fault remains visible, and motor torque may remain on. There is no automatic recovery or automatic re-enable. Torque release is available only through the explicit **Torque Off** control; support the arm before releasing it. No EEPROM endpoint is exposed.
 
 ## Separate simulation and physical execution
 
@@ -80,4 +80,24 @@ Protocol references: [official LeRobot SO-101 setup and calibration](https://hug
 
 After a physical episode completes or stops, Robot connection shows **Last real episode** with six joint comparisons: last Gym angle, last encoder angle, signed last error, peak absolute error and RMS error in degrees. Samples are paired with the Gym pose at the time feedback is processed, before advancing simulation. The report also gives sample count, elapsed duration and age of the last measurement at the end. A stopped episode is never labelled completed; missing measurements are not invented. These are encoder/model comparisons, not independent geometric or object-placement validation.
 
-HTTP and MCP `connection_status` expose the same data as `gym_execution.report`; it remains null while the current episode runs and is reset on a new connection or scene replacement. Statistics use bounded memory. The existing live tracking, collision, temperature and lease guards remain active. Connection itself remains read-only.
+HTTP and MCP `connection_status` expose the same data as `gym_execution.report`; it remains null while the current episode runs and is reset on a new connection or scene replacement. Statistics use bounded memory. The existing live tracking, collision, temperature and lease guards remain active. The HTTP/MCP connect operation remains read-only; the UI labels its combined action Connect & match Gym.
+
+
+## Direct controls and application handoff
+
+Robot connection includes six sliders in degrees, measured and target angles, a simplified live model driven only by encoder feedback, **Home position**, **Move robot to Gym pose**, **Torque On**, **Torque Off**, and **Stop & hold**. Home uses the selected scene’s saved `robot.reset_joints`. Manual targets replace the previous target; mouse events do not build a movement queue. A bounded outer feedback loop continues holding the target until Stop, a scene change, disconnect, or lease expiry. “Holding target” requires settled feedback within 1° for arm joints and 1.5° for the gripper; measured residuals stay visible. This is not a claim of perfect geometric alignment.
+
+Manual movement has separate 0.24 rad/s reference, 0.8 rad/s output, and 2.4 rad/s² acceleration bounds. Normal Gym synchronization retains its original slower profile. Every proposed path and measured update checks joint limits and collisions. To leave a shallow pre-existing overlap (up to 8 mm), manual motion permits unchanged or separating contacts only, without allowing deeper or new collisions. Physical task execution still requires its original collision-free preflight. Scene stepping also stops manual control before moving simulated objects.
+
+Read `/api/connection/status` for `control_epoch`, `manual_target`, `manual_phase`, `control_limits`, and `robot_preview`. New motion commands must carry the current epoch; Stop, torque release, disconnect, and server restart invalidate delayed requests. All joint targets use radians at the API boundary:
+
+| POST endpoint | Body beyond `session_id` | MCP tool |
+|---|---|---|
+| `/api/connection/target` | `control_epoch`, `joints` (six radians) | `robot_joint_target` |
+| `/api/connection/home` | `control_epoch` | `robot_home` |
+| `/api/connection/match-gym` | `control_epoch` | `match_robot_to_gym` |
+| `/api/connection/torque` | `control_epoch`, `enabled` | `robot_torque` |
+
+Torque On stages a fresh measured hold before enabling. Torque Off immediately cancels command producers and verifies all six torque states; it never automatically resumes the previous motion. Stop/Off requests do not wait for an outstanding slider HTTP response. Continue heartbeats at least once a second while manually driving or holding a target.
+
+Studio now saves each servo’s original RAM Goal_Velocity before overriding it, and restores those exact values with readback on disconnect/shutdown. Restoration first stages fresh measured positions so removing the cap cannot chase an old goal. If restoration fails, the error is returned and the port is released; no EEPROM is written. This prevents Studio’s former 195 ticks/s cap from carrying into VLA-Benchmark’s LeRobot mimic mode. The legacy cap on the attached arm was explicitly repaired to 0 and verified on all six motors. **0 means uncapped servo speed, not stopped.** See [verification and measurements](verification/2026-10-25-direct-robot-control.md).

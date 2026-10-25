@@ -82,3 +82,26 @@ class GymBridge:
             mujoco.mj_forward(s.sim.model, s.sim.data)
             s.sequence += 1
             s.plan_dirty = True
+
+    def preview(self, q):
+        import mujoco
+        import numpy as np
+
+        s = self.session()
+        with s.lock:
+            m = s.sim.model
+            scratch = mujoco.MjData(m)
+            scratch.qpos[:] = s.sim.data.qpos
+            scratch.qpos[:6] = q
+            mujoco.mj_fwdPosition(m, scratch)
+            base = scratch.body("base").xpos.copy()
+            points = [base.tolist()] + scratch.xanchor[:5].tolist()
+            points.append(scratch.site("gripperframe").xpos.tolist())
+            fingers = [
+                scratch.geom(name).xpos - base
+                for name in ("fixed_jaw_sph_tip1", "moving_jaw_sph_tip1")
+            ]
+            return dict(
+                points=(np.asarray(points) - base).tolist(),
+                fingers=np.asarray(fingers).tolist(),
+            )

@@ -12,6 +12,9 @@ from .schemas import (
     Scan,
     Assignments,
     RobotPort,
+    ManualOwner,
+    JointTarget,
+    Torque,
 )
 from .service import ConnectionError
 from .driver import discover_ports
@@ -66,6 +69,33 @@ def create_router(service=None):
     @router.post("/enable")
     async def enable(body: Owner, request: Request):
         return await invoke(get(request).enable, body.session_id)
+
+    @router.post("/target")
+    async def target(body: JointTarget, request: Request):
+        return await invoke(
+            get(request).move, body.session_id, body.joints, None, body.control_epoch
+        )
+
+    @router.post("/home")
+    async def home(body: ManualOwner, request: Request):
+        return await invoke(
+            get(request).move, body.session_id, None, "home", body.control_epoch
+        )
+
+    @router.post("/match-gym")
+    async def match_gym(body: ManualOwner, request: Request):
+        return await invoke(
+            get(request).move, body.session_id, None, "gym", body.control_epoch
+        )
+
+    @router.post("/torque")
+    async def torque(body: Torque, request: Request):
+        return await invoke(
+            get(request).torque_control,
+            body.session_id,
+            body.enabled,
+            body.control_epoch,
+        )
 
     @router.post("/retreat")
     async def retreat(body: Owner, request: Request):

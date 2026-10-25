@@ -2,6 +2,7 @@
 
 import json
 import math
+import secrets
 import os
 from pathlib import Path
 import tempfile
@@ -40,6 +41,8 @@ class ConnectionService:
         self._real_cancel = threading.Event()
         self._preparing = False
         self.recovering = False
+        self.manual = None
+        self.control_epoch = secrets.randbits(48)
         self.driver = None
         self.bridge = None
         self.connected = False
@@ -185,6 +188,7 @@ class ConnectionService:
                 "stop",
                 "physics",
                 "plan",
+                "step",
             }:
                 self._real_cancel.set()
                 if self.enabled or self.sync_mode != "off":
@@ -311,9 +315,23 @@ class ConnectionService:
                 )
                 for i, row in enumerate(self.telemetry)
             ]
+            limits, preview = None, None
+            if self.connected and self.calibrated and len(rows) == 6:
+                try:
+                    limits = self._control_limits()
+                    if hasattr(self.bridge, "preview"):
+                        preview = self.bridge.preview([r["position_rad"] for r in rows])
+                except (ValueError, KeyError, ConnectionError):
+                    # A removed scene must not make Stop/Disconnect status unreadable.
+                    pass
             return dict(
                 connected=self.connected,
                 gym_execution=self.execution.status(),
+                control_epoch=self.control_epoch,
+                manual_phase=self.manual.phase if self.manual else None,
+                manual_target=list(self.manual.target) if self.manual else None,
+                control_limits=limits,
+                robot_preview=preview,
                 port=self.port,
                 identity=self.identity,
                 owner_session_id=self.owner_session_id,
@@ -459,7 +477,9 @@ class ConnectionService:
         with self.lock:
             self._owner(value.session_id)
             if self._preparing:
-                raise ConnectionError("Stop real-run preparation before changing robot controls")
+                raise ConnectionError(
+                    "Stop real-run preparation before changing robot controls"
+                )
             if self.enabled or self.sync_mode != "off":
                 raise ConnectionError(
                     "Stop motion and synchronization before editing calibration"
@@ -474,6 +494,16 @@ class ConnectionService:
             self._persist()
             return self.status()
 
+    def move(self, session_id, joints=None, preset=None, control_epoch=None):
+        from .controls import move
+
+        return move(self, session_id, joints, preset, control_epoch)
+
+    def torque_control(self, session_id, enabled, control_epoch=None):
+        from .controls import torque
+
+        return torque(self, session_id, enabled, control_epoch)
+
     def retreat(self, session_id):
         from .retreat import retreat
 
@@ -483,7 +513,9 @@ class ConnectionService:
         with self.lock:
             self._owner(session_id)
             if self._preparing:
-                raise ConnectionError("Stop real-run preparation before changing robot controls")
+                raise ConnectionError(
+                    "Stop real-run preparation before changing robot controls"
+                )
             self._calibrated()
             if self.enabled or self.sync_mode != "off":
                 raise ConnectionError(
@@ -498,7 +530,9 @@ class ConnectionService:
         with self.lock:
             self._owner(session_id)
             if self._preparing:
-                raise ConnectionError("Stop real-run preparation before changing robot controls")
+                raise ConnectionError(
+                    "Stop real-run preparation before changing robot controls"
+                )
             self._calibrated()
             if self.enabled or self.sync_mode != "off":
                 raise ConnectionError(
@@ -509,6 +543,7 @@ class ConnectionService:
             if self.tracker is None:
                 self.tracker = TrackingController(q, limits=self._control_limits())
             else:
+                self.tracker.default_rates()
                 self.tracker.reset(q, preserve_bias=True)
             hold = list(self.tracker.output)
             self._validate(q, hold)
@@ -573,6 +608,8 @@ class ConnectionService:
             self.desired_rad = list(q)
 
     def _fault(self, message, hold=True, preserve_compensation=False):
+        self.control_epoch += 1
+        self.manual = None
         self.recovering = False
         self._real_cancel.set()
         self.execution.halt(message)
@@ -609,18 +646,24 @@ class ConnectionService:
                 hold=True,
                 preserve_compensation=True,
             )
-            if self.driver:
-                self.driver.close()
-            self.driver = None
-            self.connected = False
-            self.owner_session_id = None
-            self.telemetry = []
-            self.measured_at = 0
+            try:
+                if self.driver:
+                    self.driver.close()
+            finally:
+                self.driver = None
+                self.connected = False
+                self.owner_session_id = None
+                self.telemetry = []
+                self.measured_at = 0
             return self.status()
 
     def jog(self, session_id, joint, delta_rad):
         with self.lock:
             self._owner(session_id)
+            if self.manual is not None:
+                raise ConnectionError(
+                    "Stop manual movement before jogging or synchronization"
+                )
             self._calibrated()
             if not self.enabled:
                 raise ConnectionError("Explicitly enable motion first")
@@ -664,10 +707,16 @@ class ConnectionService:
     def sync(self, session_id, mode):
         with self.lock:
             self._owner(session_id)
+            if self.manual is not None:
+                raise ConnectionError(
+                    "Stop manual movement before jogging or synchronization"
+                )
             if mode == "off":
                 return self.stop(session_id)
             if self._preparing:
-                raise ConnectionError("Stop real-run preparation before changing robot controls")
+                raise ConnectionError(
+                    "Stop real-run preparation before changing robot controls"
+                )
             if mode not in ("real_to_gym", "gym_to_real"):
                 raise ConnectionError("Unknown sync mode")
             self._calibrated()
@@ -688,6 +737,7 @@ class ConnectionService:
             if self.tracker is None:
                 self.tracker = TrackingController(q, limits=self._control_limits())
             else:
+                self.tracker.default_rates()
                 self.tracker.reset(q, preserve_bias=True)
             self.target_rad = list(self.tracker.output)
             self.desired_rad = list(q)
@@ -709,6 +759,12 @@ class ConnectionService:
                 self.bridge.check_alive()
                 if self._preparing and time.monotonic() > self.lease_until:
                     self._fault("Controller heartbeat expired during preparation")
+                    return
+                if self.manual is not None:
+                    if time.monotonic() > self.lease_until:
+                        self._fault("Controller heartbeat expired")
+                        return
+                    self.manual.tick(q)
                     return
                 if self.enabled or self.sync_mode != "off":
                     if time.monotonic() > self.lease_until:

@@ -8,6 +8,7 @@ def clamp(value, limit):
 
 
 class TrackingController:
+    REFERENCE_SPEED = 0.24
     MAX_SPEED = 0.3
     MAX_ACCELERATION = 1.2
     MAX_BIAS = 0.1
@@ -21,6 +22,10 @@ class TrackingController:
         self.limits = limits or [(-math.inf, math.inf)] * 6
         self.bias = [0.0] * 6
         self.reset(measured)
+
+    def default_rates(self):
+        for name in ("MAX_SPEED", "REFERENCE_SPEED", "MAX_ACCELERATION"):
+            setattr(self, name, getattr(type(self), name))
 
     def reset(self, measured, *, preserve_bias=False):
         if not preserve_bias:
@@ -49,7 +54,7 @@ class TrackingController:
         for i in range(6):
             # Reserve part of the output speed for gentle feedback corrections.
             reference = self.reference[i] + clamp(
-                desired[i] - self.reference[i], 0.24 * dt
+                desired[i] - self.reference[i], self.REFERENCE_SPEED * dt
             )
             # A filtered reference velocity compensates servo lag without
             # differentiating noisy encoder readings. Existing correction and

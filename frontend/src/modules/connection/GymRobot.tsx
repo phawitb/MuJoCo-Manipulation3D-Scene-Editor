@@ -8,6 +8,7 @@ import {
   type ConnectionStatus,
 } from "./api";
 import "./connection.css";
+import ManualControls from "./ManualControls";
 import EpisodeSummary from "./EpisodeSummary";
 import type { RobotControlProps } from "../types";
 const executionLabels: Record<string, string> = {
@@ -69,6 +70,7 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
   useEffect(() => {
     void run(inventory);
     let stopped = false;
+    let heartbeatAt = 0;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
@@ -80,24 +82,27 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
           (s.enabled ||
             s.sync_mode !== "off" ||
             s.gym_execution?.phase === "preparing") &&
-          s.owner_session_id === sid
-        )
+          s.owner_session_id === sid &&
+          performance.now() - heartbeatAt > 700
+        ) {
           await api("/heartbeat", "POST", { session_id: sid });
+          heartbeatAt = performance.now();
+        }
         if (!stopped) await refreshStatus();
       } catch (e) {
         if (!stopped) setError(e instanceof Error ? e.message : String(e));
       } finally {
-        if (!stopped) timer = setTimeout(poll, 700);
+        if (!stopped) timer = setTimeout(poll, open ? 80 : 700);
       }
     };
-    timer = setTimeout(poll, 700);
+    timer = setTimeout(poll, open ? 80 : 700);
     return () => {
       stopped = true;
       clearTimeout(timer);
     };
     // sid changes must renew the lease only for the selected owner.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sid]);
+  }, [sid, open]);
   useEffect(() => {
     const stopHidden = () => {
       const state = current.current;
@@ -238,6 +243,15 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                   {notice}
                 </div>
               )}
+              {status?.connected && (
+                <ManualControls
+                  sid={sid}
+                  status={status}
+                  owned={owned}
+                  onError={setError}
+                  refresh={refreshStatus}
+                />
+              )}
               <div className="connection-grid">
                 <section className="connection-card">
                   <h2>
@@ -262,9 +276,26 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                     <button
                       className="primary"
                       disabled={busy || !port || !sid || !!status?.connected}
-                      onClick={() => void command("/connect", { port })}
+                      onClick={() =>
+                        void run(async () => {
+                          const connected = await api<ConnectionStatus>(
+                            "/connect",
+                            "POST",
+                            {
+                              session_id: sid,
+                              port,
+                            },
+                          );
+                          await refreshStatus();
+                          await api("/match-gym", "POST", {
+                            session_id: sid,
+                            control_epoch: connected.control_epoch,
+                          });
+                          await refreshStatus();
+                        })
+                      }
                     >
-                      Connect robot
+                      Connect & match Gym
                     </button>
                     <button
                       disabled={busy || !status?.connected}
@@ -278,8 +309,9 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                     </button>
                   </div>
                   <p className="connection-hint">
-                    Connecting reads the six motors. It does not enable movement
-                    or change motor calibration.
+                    Connect & match Gym reads the motors, validates the path,
+                    then moves the arm to the current Gym pose. Torque must
+                    already be on.
                   </p>
                   {status?.identity && (
                     <p className="connection-device-id">
@@ -378,7 +410,12 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                     Realtime direction
                     <select
                       aria-label="Realtime direction"
-                      disabled={busy || !owned || !status?.calibrated}
+                      disabled={
+                        busy ||
+                        !owned ||
+                        !status?.calibrated ||
+                        !!status.manual_target
+                      }
                       value={status?.sync_mode || "off"}
                       onChange={(e) =>
                         void command("/sync", { mode: e.target.value })
@@ -634,6 +671,7 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                                   busy ||
                                   !owned ||
                                   !status?.enabled ||
+                                  !!status.manual_target ||
                                   status.sync_mode !== "off"
                                 }
                                 onClick={() =>
@@ -651,6 +689,7 @@ export default function GymRobot({ sessionId }: RobotControlProps) {
                                   busy ||
                                   !owned ||
                                   !status?.enabled ||
+                                  !!status.manual_target ||
                                   status.sync_mode !== "off"
                                 }
                                 onClick={() =>

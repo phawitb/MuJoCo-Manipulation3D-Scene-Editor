@@ -1,0 +1,59 @@
+{
+  "id": "5eca044b2bf5402ab654017edbfc5537",
+  "outcome": "stopped",
+  "reason": "Simulation collision: Arm collision: table / moving jaw so101 v1 (0.46 mm).",
+  "samples": 509,
+  "duration_s": 34.51826791698113,
+  "simulation_time_s": 3.7479999999996982,
+  "last_sample_age_s": 0.06657833303324878,
+  "joints": [
+    {
+      "name": "shoulder_pan",
+      "rmse_deg": 0.1953287062163908,
+      "max_abs_error_deg": 0.8868041360389608,
+      "last_error_deg": -0.12527826185973331,
+      "last_measured_deg": 17.6220703125,
+      "last_gym_deg": 17.747348574359734
+    },
+    {
+      "name": "shoulder_lift",
+      "rmse_deg": 0.3915862946887237,
+      "max_abs_error_deg": 1.295930805903871,
+      "last_error_deg": 0.1196525948100026,
+      "last_measured_deg": 25.7080078125,
+      "last_gym_deg": 25.588355217689998
+    },
+    {
+      "name": "elbow_flex",
+      "rmse_deg": 0.3334394276229547,
+      "max_abs_error_deg": 0.7380954338029974,
+      "last_error_deg": -0.04375365306661921,
+      "last_measured_deg": -4.9658203125,
+      "last_gym_deg": -4.922066659433381
+    },
+    {
+      "name": "wrist_flex",
+      "rmse_deg": 0.3532534966712976,
+      "max_abs_error_deg": 1.311638456271811,
+      "last_error_deg": 0.014982527553914745,
+      "last_measured_deg": 69.345703125,
+      "last_gym_deg": 69.33072059744609
+    },
+    {
+      "name": "wrist_roll",
+      "rmse_deg": 0.19135344233194013,
+      "max_abs_error_deg": 0.45681520711844437,
+      "last_error_deg": 0.1547892910018566,
+      "last_measured_deg": -69.3017578125,
+      "last_gym_deg": -69.45654710350186
+    },
+    {
+      "name": "gripper",
+      "rmse_deg": 0.1418249721377606,
+      "max_abs_error_deg": 0.41736792328195,
+      "last_error_deg": -0.006420762994403124,
+      "last_measured_deg": 2.197265625,
+      "last_gym_deg": 2.203686387994403
+    }
+  ]
+}

@@ -43,6 +43,14 @@ export type EpisodeReport = {
   }[];
 };
 export type ConnectionStatus = {
+  control_epoch: number;
+  manual_phase?: "moving" | "holding" | null;
+  manual_target?: number[] | null;
+  control_limits?: [number, number][] | null;
+  robot_preview?: {
+    points: [number, number, number][];
+    fingers: [number, number, number][];
+  } | null;
   gym_execution?: {
     phase: string;
     message: string;

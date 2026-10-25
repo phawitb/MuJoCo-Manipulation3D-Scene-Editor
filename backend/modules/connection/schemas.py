@@ -91,3 +91,15 @@ class Assignments(StrictModel):
         if len(values) != len(set(values)):
             raise ValueError("Each camera may have only one role")
         return self
+
+
+class ManualOwner(Owner):
+    control_epoch: int = Field(ge=0)
+
+
+class JointTarget(ManualOwner):
+    joints: list[float] = Field(min_length=6, max_length=6)
+
+
+class Torque(ManualOwner):
+    enabled: bool
