@@ -1,0 +1,11 @@
+# Complete demonstrations across the reachable workspace
+
+User wants much wider position diversity constrained by actual reach, and reports incomplete datasets. Latest persisted outputs are our UI smoke fixtures: max_seconds=1, include_failed=true, all timeout; only real demo retained 2 successful 17.907-second tasks. Root causes are test fixture pollution, ambiguous format verification, and an easy-to-misconfigure fixed time cap.
+
+Implement directly under existing user design discretion. Keep physics/controller checks unchanged. Alternatives: merely raise the radius (still limited around original), exhaustive IK workspace map (cost/complexity and does not prove task success), or broad proposals plus existing full physical rehearsal. Choose broad proposals with rehearsal as authoritative acceptance.
+
+New settings default to workspace placement and automatic duration. Workspace proposals sample independently over the table within a coarse 0.40 m planar envelope around robot base, preserving all grouped object footprints and excluding overlap with other groups. This envelope is a search bound, not a guarantee or exhaustive reach map; only physically successful rehearsals proceed to capture. All seeds remain reproducible. Keep local radius mode and expand its maximum to 40 cm. Workspace uses up to 50 candidate attempts per desired episode, radius/off uses 5. Stop/cancel remains responsive. Preserve legacy settings with explicit radius but no mode as radius, and explicit max_seconds but no duration_mode as fixed.
+
+Auto duration derives from successful rehearsal plus 25%/2s slack, at least 30s, bounded 120s. Fixed limits shorter than rehearsal are rejected before recording unless explicitly collecting failed episodes. Default success-only remains. Stored outcomes distinguish success/failed/timeout and format verification is labeled as format verification. Expose successful and unsuccessful saved counts for old and new jobs.
+
+Archive known tool-generated UI smoke fixtures reversibly under recordings/.test-artifacts; preserve user recordings. Browser tests archive only their own terminal jobs in finally, never active/user jobs. Produce a real multi-episode successful workspace dataset and inspect final frames. No GitHub push requested.

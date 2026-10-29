@@ -12,22 +12,26 @@ The collector uses **LeRobot 0.6.1** in a separate Python 3.12 environment, `.ve
 
 ## Capture and randomization
 
-1. **Capture:** select a scene, enter a dataset name/instruction, and set **Episodes to generate**, starting seed, frame rate, resolution and time limit. Position randomization starts enabled with a **2 cm radius**; choose 1–5 cm or disable it.
+1. **Capture:** select a scene, enter a dataset name/instruction, and set **Episodes to generate**, starting seed, frame rate, resolution and duration mode. Position randomization defaults to **Reachable workspace · wide variation**. Choose **Around original positions** for a 1–40 cm local radius, or disable position variation.
 2. **Randomization:** every palette has an **All** button, including custom colors already added to that palette. All nine built-in colors are selected by default for tabletop, motors, legs, floor, wall, background and objects. **Robot body keeps orange/yellow** by default. All patterns, all five environment layouts, lighting and material finishes start enabled. Individual values/scopes can still be deselected; pattern and layout groups also have All controls.
 3. **Capture settings:** select one or more of **Main, Top, Front, Back, Wrist**. All five start selected; **Select all views** restores them. The dataset contains only selected views, and the job preview comes from the first selected view.
 4. **Start collection:** view progress under **Datasets**. Visualization and download become available after finalization and official LeRobot readback validation. Use **Back to editor** to leave the full-page workspace with the scene preserved.
 
 A disabled property retains its captured scene value. A nonempty color palette constrains both the base color and the secondary color of that surface's pattern, even if the pattern itself is locked. Motors remain independent of the robot body. Each property has an independent random stream: enabling another property does not change a previously enabled property's sample. Layout/lighting can affect perceived color in rendered images; palettes constrain material colors.
 
-Attempt `i` uses `starting_seed + i`, starting at zero. **Episodes is the retained-episode target**, not an attempt count. By default only successful executions count. Rejected placements/failed executions use a new seed until the target is reached or **five times the requested count** has been attempted. Exhaustion reports a failed/partial job with the actual saved count; verified prior episodes remain downloadable. Seeds are not recycled. Uniform choices may repeat and do not guarantee every combination appears in a small batch.
+Attempt `i` uses `starting_seed + i`, starting at zero. **Episodes is the retained-episode target**, not an attempt count. By default only successful executions count. Rejected placements/failed executions use a new seed until the target is reached or **50 times the requested count in workspace mode**, or **five times in radius/disabled mode**, has been attempted. Exhaustion reports a failed/partial job with the actual saved count; verified prior episodes remain downloadable. Seeds are not recycled. Uniform choices may repeat and do not guarantee every combination appears in a small batch.
 
-Source and destination receive independent XY offsets uniformly sampled within the selected radius around their initial positions. Heights, orientations, other physical properties and unrelated objects stay fixed. Complete object footprints stay on the tabletop. The existing local-space containment check groups cup/bowl contents with their container, including lower-half cargo and spoon endpoints; examples 11 and 13 retain their starting relationships. Every randomized arrangement is rehearsed with the existing physical contact/collision checks before recording. Invalid arrangements are recorded as rejected attempts, never executed with a stale path.
+Workspace mode independently proposes source/destination XY positions across the table within a coarse 40 cm envelope of the robot base, excluding overlaps with other groups. This envelope is a search bound, not a guarantee of reach or an exhaustive reachable-area map. Physical rehearsal is the acceptance check. Local radius mode samples uniformly within a circle around each original position. Heights, orientations, other physical properties and unrelated objects stay fixed. Complete object footprints stay on the tabletop. The existing local-space containment check groups cup/bowl contents with their container, including lower-half cargo and spoon endpoints; examples 11 and 13 retain their starting relationships. Every randomized arrangement is rehearsed with the existing physical contact/collision checks before recording. Invalid arrangements are recorded as rejected attempts, never executed with a stale path.
 
-Reproducibility requires the same complete input scene, configuration and generator/runtime version. Collection generator 2 includes position variation and per-attempt controller configuration; older generator-1 exports remain readable.
+Reproducibility requires the same complete input scene, configuration and generator/runtime version. Collection generator 2 now records explicit workspace/radius and automatic/fixed modes. The radius random stream is unchanged, and earlier exports remain readable. Legacy configurations containing an explicit radius without a position mode retain radius behavior; explicit max_seconds without a duration mode retains fixed behavior.
+
+**Automatic · finish the task** derives a time allowance from the successful rehearsal (duration × 1.25 + 2 seconds, rounded up, at least 30 and at most 120 seconds). Actual recording ends when the task finishes. Fixed limits shorter than the rehearsal are rejected before recording unless failed episodes were explicitly enabled. Each recorded attempt stores rehearsal duration and its capture time allowance.
 
 **Successful episodes only** is the default. Enable **Include failed episodes** to retain failed/timed-out attempts with their outcomes in metadata. **Stop collection** discards the current incomplete episode and retains already committed episodes. Stopping during encoding completes the current commit before stopping. Interrupted/error attempts retain seed, scene and captured-frame count in the manifest.
 
-Supported limits: 1–100 retained episodes (up to 500 attempts), 1–60 simulated seconds each, 10/20/25/50 FPS, 320×240 or 640×480 RGB. One job runs at a time. Rendering may be slower than real time; physics time drives capture, so slow rendering does not skip scheduled frames. The editor stays usable. Files stay on this computer; no Hub upload occurs.
+Dataset cards show **successful / unsuccessful** retained episodes separately. **LeRobot format verified** confirms readable files, not task completion. The viewer explicitly warns for timed-out/failed episodes. Browser tests archive their own terminal fixtures under ignored `recordings/.test-artifacts/` so they do not appear as demonstrations.
+
+Supported limits: 1–100 retained episodes (up to 5,000 workspace attempts or 500 local attempts), fixed limits of 1–120 simulated seconds each, 10/20/25/50 FPS, 320×240 or 640×480 RGB. One job runs at a time. Rendering may be slower than real time; physics time drives capture, so slow rendering does not skip scheduled frames. The editor stays usable. Files stay on this computer; no Hub upload occurs.
 
 ## Dataset contract
 
@@ -138,6 +142,7 @@ Example configuration:
   "fps": 20,
   "cameras": ["front", "wrist"],
   "resolution": "640x480",
+  "duration_mode": "auto",
   "max_seconds": 30,
   "include_failed": false,
   "variation": {
@@ -147,6 +152,7 @@ Example configuration:
     "environments": ["studio", "room", "warehouse"],
     "lighting": true,
     "positions": true,
+    "position_mode": "workspace",
     "position_radius": 0.02
   }
 }

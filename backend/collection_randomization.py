@@ -47,6 +47,6 @@ def episode_scene(source: Scene, config: Variation, seed: int) -> Scene:
     if config.positions:
         from .collection_positions import randomize_positions
 
-        randomize_positions(scene, config.position_radius, seed)
+        randomize_positions(scene, config.position_radius, seed, config.position_mode)
     scene.appearance.last_randomization = None
     return Scene.model_validate(scene.model_dump())

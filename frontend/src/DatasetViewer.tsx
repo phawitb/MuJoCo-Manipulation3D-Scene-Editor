@@ -325,6 +325,14 @@ function EpisodePlayer({
           {episode.outcome}
         </span>
       </div>
+      {!episode.success && (
+        <p className="look-error" role="status">
+          {episode.outcome === "timeout"
+            ? "This episode reached its time limit before completing the task."
+            : "This episode did not complete the task successfully."}{" "}
+          Included because failed episodes were enabled during collection.
+        </p>
+      )}
       <div className="dataset-camera-grid">
         {index.cameras.map((view) => (
           <figure key={view}>
@@ -511,6 +519,8 @@ export function DatasetViewer({
         {index && (
           <span>
             {index.episodes.length} episodes ·{" "}
+            {index.episodes.filter((entry) => entry.success).length} successful
+            ·{" "}
             {index.episodes
               .reduce((sum, entry) => sum + entry.frames, 0)
               .toLocaleString()}{" "}

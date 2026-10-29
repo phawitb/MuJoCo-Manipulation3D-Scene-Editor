@@ -14,6 +14,7 @@ export interface Variation
   extends Record<PaletteKey, string[]>, Record<PatternKey, Pattern[]> {
   environments: string[];
   positions: boolean;
+  position_mode: "radius" | "workspace";
   position_radius: number;
   lighting: boolean;
   finishes: boolean;
@@ -36,6 +37,7 @@ export interface CollectionConfig {
   fps: number;
   resolution: string;
   max_seconds: number;
+  duration_mode: "auto" | "fixed";
   include_failed: boolean;
   variation: Variation;
 }
@@ -50,6 +52,8 @@ export interface CollectionJob {
   episode: number;
   episodes: number;
   saved_episodes: number;
+  successful_episodes?: number;
+  unsuccessful_episodes?: number;
   frames: number;
   total_frames: number;
   seed: number;

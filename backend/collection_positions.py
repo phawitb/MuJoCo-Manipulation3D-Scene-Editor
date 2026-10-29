@@ -20,7 +20,7 @@ def object_half_extent(obj):
     )
 
 
-def randomize_positions(scene, radius, seed):
+def randomize_positions(scene, radius, seed, mode="radius"):
     objects = {o.id: o for o in scene.objects}
     if not scene.task.source or not scene.task.target:
         return
@@ -53,13 +53,41 @@ def randomize_positions(scene, radius, seed):
         )
     for selected_id in selected:
         group = [obj for obj in objects.values() if root(obj.id) == root(selected_id)]
-        rng = random.Random(f"collection-v1:{seed}:position:{selected_id}")
-        for _ in range(128):
-            angle, length = (
-                rng.uniform(0, 2 * math.pi),
-                radius * math.sqrt(rng.random()),
-            )
-            offset = np.array([math.cos(angle), math.sin(angle)]) * length
+        stream = "position" if mode == "radius" else "workspace"
+        rng = random.Random(f"collection-v1:{seed}:{stream}:{selected_id}")
+        anchor = np.array(objects[root(selected_id)].position[:2])
+        for _ in range(512 if mode == "workspace" else 128):
+            if mode == "workspace":
+                candidate = np.array(
+                    [
+                        rng.uniform(-scene.table.width / 2, scene.table.width / 2),
+                        rng.uniform(-scene.table.depth / 2, scene.table.depth / 2),
+                    ]
+                )
+                # Proposal envelope only. Full physical rehearsal decides reachability.
+                if np.linalg.norm(candidate - scene.robot.position[:2]) > 0.40:
+                    continue
+                offset = candidate - anchor
+                outsiders = [
+                    o for o in objects.values() if root(o.id) != root(selected_id)
+                ]
+                if any(
+                    np.all(
+                        np.abs(
+                            np.array(obj.position) + np.r_[offset, 0] - other.position
+                        )
+                        < object_half_extent(obj) + object_half_extent(other) + 0.005
+                    )
+                    for obj in group
+                    for other in outsiders
+                ):
+                    continue
+            else:
+                angle, length = (
+                    rng.uniform(0, 2 * math.pi),
+                    radius * math.sqrt(rng.random()),
+                )
+                offset = np.array([math.cos(angle), math.sin(angle)]) * length
             if all(
                 np.all(
                     np.abs(np.array(obj.position[:2]) + offset)

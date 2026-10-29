@@ -218,6 +218,8 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
       .then((data) => {
         const defaults = data.defaults as CollectionConfig;
         defaults.cameras ??= ["main", "top", "front", "back", "wrist"];
+        defaults.variation.position_mode ??= "workspace";
+        defaults.duration_mode ??= "auto";
         setReady(data.ready);
         setScenes(data.scenes);
         setEnabledPatterns(
@@ -309,6 +311,11 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
     (job) =>
       !sceneFilter || (job.scene_name || "Earlier datasets") === sceneFilter,
   );
+  const attemptMultiplier =
+    config?.variation.positions &&
+    config.variation.position_mode === "workspace"
+      ? 50
+      : 5;
   const valid =
     !!config &&
     config.cameras.length > 0 &&
@@ -319,10 +326,10 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
     config.episodes <= 100 &&
     Number.isInteger(config.seed) &&
     config.seed >= 0 &&
-    config.seed + config.episodes * 5 - 1 <= 2147483647 &&
+    config.seed + config.episodes * attemptMultiplier - 1 <= 2147483647 &&
     Number.isInteger(config.max_seconds) &&
     config.max_seconds >= 1 &&
-    config.max_seconds <= 60 &&
+    config.max_seconds <= 120 &&
     paletteRules.every(
       (r) => !enabledColors.has(r.key) || config.variation[r.key].length > 0,
     ) &&
@@ -332,7 +339,7 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
     (!varyLayout || config.variation.environments.length > 0) &&
     config.variation.repeat_min <= config.variation.repeat_max &&
     config.variation.position_radius >= 0.01 &&
-    config.variation.position_radius <= 0.05;
+    config.variation.position_radius <= 0.4;
   const start = async () => {
     if (!config) return;
     setBusy(true);
@@ -531,7 +538,8 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
               <p>
                 Generate {config.episodes} retained episodes, starting at seed{" "}
                 {config.seed}. Rejected placements use a new seed. Up to{" "}
-                {config.episodes * 5} attempts; progress counts saved episodes.
+                {config.episodes * attemptMultiplier} attempts; progress counts
+                saved episodes.
               </p>
             </section>
             <section className="look-section">
@@ -545,27 +553,47 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
                 Randomize object positions
               </label>
               {config.variation.positions && (
-                <label className="collect-input">
-                  Position radius (cm)
-                  <input
-                    aria-label="Position radius (cm)"
-                    type="number"
-                    min={1}
-                    max={5}
-                    step={0.5}
-                    value={
-                      Math.round(config.variation.position_radius * 1000) / 10
-                    }
-                    onChange={(e) =>
-                      variation("position_radius", Number(e.target.value) / 100)
-                    }
-                  />
+                <label className="look-select">
+                  Position sampling
+                  <select
+                    aria-label="Position sampling"
+                    value={config.variation.position_mode}
+                    onChange={(e) => variation("position_mode", e.target.value)}
+                  >
+                    <option value="workspace">
+                      Reachable workspace · wide variation
+                    </option>
+                    <option value="radius">Around original positions</option>
+                  </select>
                 </label>
               )}
+              {config.variation.positions &&
+                config.variation.position_mode === "radius" && (
+                  <label className="collect-input">
+                    Position radius (cm)
+                    <input
+                      aria-label="Position radius (cm)"
+                      type="number"
+                      min={1}
+                      max={40}
+                      step={0.5}
+                      value={
+                        Math.round(config.variation.position_radius * 1000) / 10
+                      }
+                      onChange={(e) =>
+                        variation(
+                          "position_radius",
+                          Number(e.target.value) / 100,
+                        )
+                      }
+                    />
+                  </label>
+                )}
               <p>
-                Move pick and destination objects independently on the table
-                each episode. Objects inside a cup move with it. Every new
-                placement is rehearsed before capture.
+                {config.variation.position_mode === "workspace"
+                  ? "Search broadly across the table near the arm. Only placements that complete a physical pick-and-place rehearsal proceed to capture."
+                  : "Move pick and destination objects independently within the radius of their original positions. Every new placement is rehearsed before capture."}{" "}
+                Objects inside a cup move with it. Positions stay on the table.
               </p>
             </section>
             <section className="look-section">
@@ -639,18 +667,38 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
                 </select>
               </label>
               <label className="look-select">
-                Episode time limit
-                <input
-                  aria-label="Episode time limit"
-                  type="number"
-                  min={1}
-                  max={60}
-                  value={config.max_seconds}
+                Episode duration
+                <select
+                  aria-label="Episode duration"
+                  value={config.duration_mode}
                   onChange={(e) =>
-                    patch({ max_seconds: Number(e.target.value) })
+                    patch({ duration_mode: e.target.value as "auto" | "fixed" })
                   }
-                />
+                >
+                  <option value="auto">Automatic · finish the task</option>
+                  <option value="fixed">Fixed time limit</option>
+                </select>
               </label>
+              {config.duration_mode === "fixed" && (
+                <label className="look-select">
+                  Episode time limit
+                  <input
+                    aria-label="Episode time limit"
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={config.max_seconds}
+                    onChange={(e) =>
+                      patch({ max_seconds: Number(e.target.value) })
+                    }
+                  />
+                </label>
+              )}
+              <p>
+                {config.duration_mode === "auto"
+                  ? "Time allowance follows the successful rehearsal with extra margin. Recording stops when the task finishes."
+                  : "Seconds of simulation. A limit shorter than the rehearsal is rejected unless failed episodes are enabled."}
+              </p>
               <label className="look-check">
                 <input
                   type="checkbox"
@@ -659,6 +707,12 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
                 />
                 Include failed episodes
               </label>
+              {config.include_failed && (
+                <p className="look-error" role="alert">
+                  Failed and timed-out attempts will be saved too. They are not
+                  successful demonstrations.
+                </p>
+              )}
               <p>
                 Successful tasks finish automatically. Failed or timed-out
                 attempts are excluded unless enabled above. Stopping a job
@@ -962,6 +1016,19 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
                     </span>
                   </div>
                   <progress max={job.episodes} value={job.saved_episodes} />
+                  {job.successful_episodes !== undefined && (
+                    <p className="collect-outcomes">
+                      {job.successful_episodes} successful ·{" "}
+                      {job.unsuccessful_episodes ?? 0} unsuccessful
+                    </p>
+                  )}
+                  {job.download_available &&
+                    job.saved_episodes > 0 &&
+                    job.successful_episodes === 0 && (
+                      <p className="look-error">
+                        No successful demonstrations in this dataset.
+                      </p>
+                    )}
                   <p role="status">
                     {job.cancel_requested &&
                     !terminalStatuses.includes(job.status)
@@ -982,7 +1049,7 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
                     <>
                       <div className="collect-verified">
                         <Check size={14} />
-                        Verified LeRobot dataset
+                        LeRobot format verified
                       </div>
                       <button
                         className="collect-visualize"

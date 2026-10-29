@@ -51,9 +51,21 @@ class Variation(Strict):
     lighting: bool = True
     finishes: bool = True
     positions: bool = True
-    position_radius: float = Field(default=0.02, ge=0.01, le=0.05)
+    position_mode: Literal["radius", "workspace"] = "workspace"
+    position_radius: float = Field(default=0.02, ge=0.01, le=0.40)
     repeat_min: float = Field(default=2, ge=1, le=24)
     repeat_max: float = Field(default=12, ge=1, le=24)
+
+    @model_validator(mode="before")
+    @classmethod
+    def legacy_positions(cls, values):
+        if (
+            isinstance(values, dict)
+            and "position_radius" in values
+            and "position_mode" not in values
+        ):
+            return {**values, "position_mode": "radius"}
+        return values
 
     @model_validator(mode="after")
     def ordered(self):
@@ -79,9 +91,21 @@ class CollectionConfig(Strict):
     seed: int = Field(default=42, ge=0, le=2**31 - 1)
     fps: Literal[10, 20, 25, 50] = 20
     resolution: Literal["640x480", "320x240"] = "640x480"
-    max_seconds: int = Field(default=30, ge=1, le=60)
+    duration_mode: Literal["auto", "fixed"] = "auto"
+    max_seconds: int = Field(default=30, ge=1, le=120)
     include_failed: bool = False
     variation: Variation = Field(default_factory=Variation)
+
+    @model_validator(mode="before")
+    @classmethod
+    def legacy_duration(cls, values):
+        if (
+            isinstance(values, dict)
+            and "max_seconds" in values
+            and "duration_mode" not in values
+        ):
+            return {**values, "duration_mode": "fixed"}
+        return values
 
     @model_validator(mode="after")
     def seed_range(self):
@@ -100,4 +124,8 @@ class CollectionConfig(Strict):
 
     @property
     def max_attempts(self):
-        return self.episodes * 5
+        return self.episodes * (
+            50
+            if self.variation.positions and self.variation.position_mode == "workspace"
+            else 5
+        )

@@ -151,3 +151,21 @@ Collect opens as a full-viewport workspace with the editor preserved behind it. 
 ![Synchronized joint trajectories](screenshots/collection-trajectories.png)
 
 The focused independent re-review confirmed entry/return focus and zero editor commands from BODY-level shortcuts; no substantive findings remain.
+
+## Complete demonstrations across the workspace (2026-10-29)
+
+The reported incomplete datasets were our persistent UI smoke fixtures: 1 simulated second, `include_failed=true`, all retained outcomes `timeout`. The file-format verification badge did not communicate task success. Ten known fixtures were moved reversibly to ignored `recordings/.test-artifacts/`; the existing real dataset was preserved. The browser regression now archives only its own terminal job after validating its session/name ownership.
+
+New captures default to **Reachable workspace · wide variation** and **Automatic · finish the task**, with failed episodes excluded. Workspace sampling proposes independent locations on the table within a coarse 40 cm base envelope; complete physical rehearsal, including collision and task success, decides acceptance. Table footprints/contained-object offsets are preserved. Local radius mode remains available with a 1–40 cm range. Workspace attempts are bounded at 50 per requested episode; local/off modes retain 5. Explicit legacy radius and duration settings retain their prior semantics.
+
+- **27 distinct relevant backend tests passed**: the first collection/scene/viewer/completion run passed 26 (94.02 s), and the expanded completion suite passed 5 (31.78 s), including the additional real workspace integration. That test records two successful tasks despite a stale `max_seconds=1` when automatic mode is selected, rejects unreachable seeds, checks wide displacement, and verifies final sampled trace coverage and official LeRobot readback. Four focused regressions were observed failing before implementation and passed after. Legacy success-count reconstruction distinguishes rejected attempts from retained failures.
+- **4 browser scenarios passed** (26.5 s), covering the new default modes, manual fixed/radius selection, explicit failed-output warning/counts, camera/viewer behavior, mobile layout and editor isolation. **14 frontend unit tests**, TypeScript, production build, focused Python correctness lint and `git diff --check` passed. The existing bundle-size warning remains.
+- A new local **workspace-spoon-success** dataset retained **3/3 successful episodes, 0 unsuccessful**, from **8 attempts**. Retained seeds **46, 47, 49**, each **17.907 simulated seconds / 359 frames**, five cameras at **640×480, 20 FPS**; **1,077 synchronized sample rows** total. Official dataset verification passed. Failed proposals were excluded. Native final Front/Top frames were inspected: the spoon is released into the cup.
+- A separate browser check opened this real dataset, confirmed 3 successful/0 unsuccessful, sought all five views to frame 359 of episode 2, and verified synchronized final playback and the `succeeded` label. The datasets list contains no smoke fixtures. Screenshots below were inspected.
+- Independent review found no actionable issues and independently passed four focused tests. Seven idle editor scenes were backed up before updating the local service; all restored scene documents matched their backups.
+
+![Workspace capture settings](screenshots/collection-scenes.png)
+
+![Successful workspace dataset](screenshots/collection-workspace-datasets.png)
+
+![Final synchronized frame of a completed demonstration](screenshots/collection-workspace-success.png)

@@ -1,4 +1,7 @@
 import { test, expect } from "@playwright/test";
+import { mkdir, readFile, rename } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 
 test("collect constrained multi-camera data and download a verified LeRobot dataset", async ({
   page,
@@ -9,6 +12,7 @@ test("collect constrained multi-camera data and download a verified LeRobot data
     await request.post("http://127.0.0.1:8765/api/sessions")
   ).json();
   const sid = initial.sessionId;
+  let ownedJob: string | undefined;
   const sentCommands: string[] = [];
   page.on("websocket", (socket) => {
     socket.on("framesent", ({ payload }) => sentCommands.push(String(payload)));
@@ -39,6 +43,21 @@ test("collect constrained multi-camera data and download a verified LeRobot data
     await expect(
       page.getByLabel("Randomize object positions", { exact: true }),
     ).toBeChecked();
+    await expect(
+      page.getByLabel("Position sampling", { exact: true }),
+    ).toHaveValue("workspace");
+    await expect(
+      page.getByLabel("Episode duration", { exact: true }),
+    ).toHaveValue("auto");
+    await expect(
+      page.getByLabel("Episode time limit", { exact: true }),
+    ).toHaveCount(0);
+    await page
+      .getByLabel("Position sampling", { exact: true })
+      .selectOption("radius");
+    await page
+      .getByLabel("Episode duration", { exact: true })
+      .selectOption("fixed");
     await expect(
       page.getByLabel("Position radius (cm)", { exact: true }),
     ).toHaveValue("2");
@@ -153,14 +172,25 @@ test("collect constrained multi-camera data and download a verified LeRobot data
     const jobResponse = await started;
     expect(jobResponse.ok()).toBeTruthy();
     const job = await jobResponse.json();
+    ownedJob = job.id;
     const card = page.getByTestId(`collection-job-${job.id}`);
     await expect(
-      card.getByText("Verified LeRobot dataset", { exact: true }),
+      card.getByText("LeRobot format verified", { exact: true }),
     ).toBeVisible({ timeout: 90000 });
     const completed = await (
       await request.get(`http://127.0.0.1:8765/api/collection/jobs/${job.id}`)
     ).json();
     expect(completed.saved_episodes).toBe(2);
+    expect(completed.successful_episodes).toBe(0);
+    expect(completed.unsuccessful_episodes).toBe(2);
+    await expect(
+      card.getByText("0 successful · 2 unsuccessful", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      card.getByText("No successful demonstrations in this dataset.", {
+        exact: true,
+      }),
+    ).toBeVisible();
     expect(completed.scene_id).toBe("kalas-cup-front");
     await page
       .getByLabel("Filter datasets by scene", { exact: true })
@@ -294,6 +324,36 @@ test("collect constrained multi-camera data and download a verified LeRobot data
       page.getByRole("button", { name: "Collect data", exact: true }),
     ).toBeEnabled();
   } finally {
+    if (ownedJob) {
+      await request.post(
+        `http://127.0.0.1:8765/api/collection/jobs/${ownedJob}/cancel`,
+      );
+      await expect
+        .poll(
+          async () =>
+            (
+              await (
+                await request.get(
+                  `http://127.0.0.1:8765/api/collection/jobs/${ownedJob}`,
+                )
+              ).json()
+            ).status,
+          { timeout: 30000 },
+        )
+        .toMatch(/^(completed|failed|cancelled|interrupted)$/);
+      const root = fileURLToPath(new URL("../../recordings/", import.meta.url));
+      const dir = path.join(root, ownedJob);
+      const payload = JSON.parse(
+        await readFile(path.join(dir, "config.json"), "utf8"),
+      );
+      if (
+        payload.session_id !== sid ||
+        payload.config.name !== "ui-collection-smoke"
+      )
+        throw new Error("Refusing to archive a job not owned by this test");
+      await mkdir(path.join(root, ".test-artifacts"), { recursive: true });
+      await rename(dir, path.join(root, ".test-artifacts", ownedJob));
+    }
     await request.delete(`http://127.0.0.1:8765/api/sessions/${sid}`);
   }
 });

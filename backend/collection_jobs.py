@@ -70,6 +70,20 @@ class CollectionJobs:
             status["download_available"] = status["status"] in TERMINAL and status.get(
                 "verified", False
             )
+            if "successful_episodes" not in status:
+                manifest = directory / "dataset/meta/collection.json"
+                if manifest.is_file():
+                    retained = [
+                        a
+                        for a in json.loads(manifest.read_text()).get("attempts", [])
+                        if a.get("dataset_episode_index") is not None
+                    ]
+                    status["successful_episodes"] = sum(
+                        bool(a.get("success")) for a in retained
+                    )
+                    status["unsuccessful_episodes"] = (
+                        len(retained) - status["successful_episodes"]
+                    )
             return status
 
     def list(self):

@@ -117,6 +117,7 @@ def test_retry_replans_each_seed_and_collects_requested_count(tmp_path):
                     "fps": 10,
                     "resolution": "320x240",
                     "max_seconds": 30,
+                    "variation": {"position_mode": "radius"},
                 },
             }
         )
@@ -217,7 +218,12 @@ def test_rejected_placements_stop_at_budget_and_never_claim_requested_count(tmp_
             {
                 "id": "rejected",
                 "scene": example_scene("kalas-cup-front").model_dump(),
-                "config": {"episodes": 1, "fps": 10, "resolution": "320x240"},
+                "config": {
+                    "episodes": 1,
+                    "fps": 10,
+                    "resolution": "320x240",
+                    "variation": {"position_mode": "radius"},
+                },
             }
         )
     )

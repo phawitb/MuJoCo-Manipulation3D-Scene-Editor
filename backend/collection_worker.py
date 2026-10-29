@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import json
+import math
 from importlib.metadata import version
 import os
 import sys
@@ -15,6 +16,17 @@ from .collection_data import CollectionCancelled, EpisodeRecorder, atomic_json, 
 from .schema import Scene
 from .simulation import Simulation
 from .render import CameraRenderer
+
+
+def capture_time_limit(config, plan):
+    duration = float(plan["duration"])
+    if config.duration_mode == "auto":
+        return min(120, max(30, math.ceil(duration * 1.25 + 2)))
+    if not config.include_failed and config.max_seconds < duration:
+        raise ValueError(
+            f"Time limit {config.max_seconds}s is shorter than the {duration:.2f}s rehearsal. Use automatic duration or increase the limit."
+        )
+    return config.max_seconds
 
 
 def collect(job_dir):
@@ -33,6 +45,8 @@ def collect(job_dir):
         "episode": 0,
         "episodes": config.episodes,
         "saved_episodes": 0,
+        "successful_episodes": 0,
+        "unsuccessful_episodes": 0,
         "frames": 0,
         "total_frames": 0,
         "seed": config.seed,
@@ -156,6 +170,8 @@ def collect(job_dir):
                 active_entry["scene"] = scene.model_dump()
                 sim = Simulation(scene)
                 plan = calculate_plan(sim, CancelSignal())
+                if plan.get("verified"):
+                    time_limit = capture_time_limit(config, plan)
             except ValueError as exc:
                 plan = {"verified": False, "message": str(exc)}
             if cancelled():
@@ -171,12 +187,16 @@ def collect(job_dir):
                 update(message="Placement rejected; trying the next seed")
                 continue
             active_entry["controller_configuration"] = plan["configuration"]
+            active_entry["rehearsal_duration"] = plan["duration"]
+            active_entry["capture_time_limit"] = time_limit
             if dataset is None:
                 dataset = LeRobotDataset.resume(**writer_options)
             sim.policy.configuration = plan["configuration"]
             sim.start_policy()
             update(
                 status="recording",
+                capture_time_limit=time_limit,
+                rehearsal_duration=plan["duration"],
                 message=f"Recording episode {status['saved_episodes'] + 1}/{config.episodes} (attempt {attempt + 1})",
             )
 
@@ -191,11 +211,11 @@ def collect(job_dir):
 
             with CameraRenderer(sim, width, height) as renderer:
                 recorder = EpisodeRecorder(dataset, renderer, config, sample, cancelled)
-                while sim.running and sim.data.time < config.max_seconds - 0.0000001:
+                while sim.running and sim.data.time < time_limit - 0.0000001:
                     sim.step(
                         min(
                             1000 // config.fps,
-                            round((config.max_seconds - sim.data.time) * 1000),
+                            round((time_limit - sim.data.time) * 1000),
                         ),
                         before_step=recorder.before_step,
                     )
@@ -203,12 +223,16 @@ def collect(job_dir):
             outcome = "succeeded" if success else "timeout" if sim.running else "failed"
             keep = recorder.frames > 0 and (success or config.include_failed)
             entry = {
+                "rehearsal_duration": plan["duration"],
+                "capture_time_limit": time_limit,
                 "controller_configuration": plan["configuration"],
                 "attempt": attempt,
                 "seed": seed,
                 "success": success,
                 "outcome": outcome,
-                "message": sim.policy.message,
+                "message": f"Time limit reached at {time_limit}s before task completion."
+                if outcome == "timeout"
+                else sim.policy.message,
                 "terminal_time": float(sim.data.time),
                 "frames": recorder.frames,
                 "dataset_episode_index": status["saved_episodes"] if keep else None,
@@ -226,6 +250,9 @@ def collect(job_dir):
                     # commit_episode closes the writer, including on rollback.
                     dataset = None
                 status["saved_episodes"] += 1
+                status[
+                    "successful_episodes" if success else "unsuccessful_episodes"
+                ] += 1
                 status["total_frames"] += recorder.frames
             else:
                 dataset.clear_episode_buffer()
@@ -234,7 +261,7 @@ def collect(job_dir):
             update()
         if status["saved_episodes"] < config.episodes:
             terminal = "failed"
-            error = f"Saved {status['saved_episodes']}/{config.episodes} episodes after {config.max_attempts} attempts. Reduce position range, increase time limit, or adjust the scene."
+            error = f"Saved {status['saved_episodes']}/{config.episodes} episodes after {config.max_attempts} attempts. Try local position variation, automatic duration, or adjust the scene."
     except CollectionCancelled:
         terminal = "cancelled"
         interrupted_attempt("cancelled", "Incomplete episode discarded by request")
