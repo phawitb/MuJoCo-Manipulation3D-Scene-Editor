@@ -33,6 +33,10 @@ Dataset cards show **successful / unsuccessful** retained episodes separately. *
 
 Supported limits: 1–100 retained episodes (up to 5,000 workspace attempts or 500 local attempts), fixed limits of 1–120 simulated seconds each, 10/20/25/50 FPS, 320×240 or 640×480 RGB. One job runs at a time. Rendering may be slower than real time; physics time drives capture, so slow rendering does not skip scheduled frames. The editor stays usable. Files stay on this computer; no Hub upload occurs.
 
+### No random
+
+In **Randomization**, click **No random** to select **Current editor scene** and turn off all color, pattern, finish, lighting, environment and object-position variation. This preserves the main editor's setup rather than reloading a preset scene. Dataset name, episode count, selected cameras and capture settings stay unchanged. Palette choices remain available if you re-enable a category. If the current editor has no pick/destination task, configure it before starting. Native lighting/material rendering can still differ from the browser preview; scene preservation is not a pixel-equality guarantee.
+
 ### Camera alignment and existing recordings
 
 New recordings use `camera_projection_version: 2` in `meta/collection.json`. Main/Front/Back preserve the editor eye, target, up direction and perspective zoom; Top is genuinely orthographic, with +X up. The browser supplies `top_reference_height` from the visible Top canvas when Collect opens (480 CSS pixels if Top is hidden, also the API default). Top vertical extent is this height divided by zoom and stays the same at either capture resolution. Perspective views preserve vertical field of view; a different output aspect ratio can change horizontal framing. Wrist follows the same mounted camera pose. Lighting/materials differ between the browser and native renderers, so matching cameras does not mean pixel-identical appearance.

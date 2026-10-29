@@ -319,6 +319,40 @@ export function CollectionPanel({
     (job) =>
       !sceneFilter || (job.scene_name || "Earlier datasets") === sceneFilter,
   );
+  const noRandom =
+    !!config &&
+    config.scene_id === null &&
+    enabledColors.size === 0 &&
+    enabledPatterns.size === 0 &&
+    !varyLayout &&
+    !config.variation.positions &&
+    !config.variation.lighting &&
+    !config.variation.finishes;
+  const useNoRandom = () => {
+    if (!config) return;
+    setEnabledColors(new Set());
+    setEnabledPatterns(new Set());
+    setVaryLayout(false);
+    const source = scene.objects.find(
+      (object) => object.id === scene.task.source,
+    );
+    const target = scene.objects.find(
+      (object) => object.id === scene.task.target,
+    );
+    patch({
+      scene_id: null,
+      task:
+        source && target
+          ? `Pick up ${source.name} and place it in or on ${target.name}.`
+          : config.task,
+      variation: {
+        ...config.variation,
+        positions: false,
+        lighting: false,
+        finishes: false,
+      },
+    });
+  };
   const attemptMultiplier =
     config?.variation.positions &&
     config.variation.position_mode === "workspace"
@@ -749,201 +783,223 @@ export function CollectionPanel({
           </div>
         )}
         {config && tab === "randomization" && (
-          <div className="collect-random-grid">
-            <section className="look-section">
-              <h3>
-                Color palettes<span>ALLOWED PER EPISODE</span>
-              </h3>
-              <p>
-                Enable a category and select its allowed colors. Unchecked
-                categories keep the captured scene's values. Surface palettes
-                also constrain the secondary color of existing patterns.
-              </p>
-              <div className="collect-palette-grid">
-                {paletteRules.map((rule) => (
-                  <PaletteRule
-                    key={rule.key}
-                    name={rule.name}
-                    value={config.variation[rule.key]}
-                    enabled={enabledColors.has(rule.key)}
-                    toggle={() =>
-                      setEnabledColors((old) => {
-                        const next = new Set(old);
-                        if (next.has(rule.key)) next.delete(rule.key);
-                        else next.add(rule.key);
-                        return next;
-                      })
-                    }
-                    update={(colors) => variation(rule.key, colors)}
-                  />
-                ))}
+          <>
+            <section className="look-section collect-random-actions">
+              <div>
+                <h3>Use the main editor scene</h3>
+                <p>
+                  No random selects Current editor scene and keeps its colors,
+                  patterns, materials, lighting, environment and object
+                  positions. You can re-enable individual options below.
+                </p>
               </div>
-            </section>
-            <section className="look-section">
-              <h3>Patterns & finishes</h3>
-              {patternRules.map((rule) => (
-                <div className="collect-rule" key={rule.key}>
-                  <div className="collect-rule-heading">
-                    <label className="look-check">
-                      <input
-                        aria-label={`Randomize ${rule.name.toLowerCase()} pattern`}
-                        type="checkbox"
-                        checked={enabledPatterns.has(rule.key)}
-                        onChange={() =>
-                          setEnabledPatterns((old) => {
-                            const next = new Set(old);
-                            if (next.has(rule.key)) next.delete(rule.key);
-                            else next.add(rule.key);
-                            return next;
-                          })
-                        }
-                      />
-                      {rule.name} pattern
-                    </label>
-                    <button
-                      type="button"
-                      className="collect-all"
-                      aria-label={`Select all ${rule.name.toLowerCase()} patterns`}
-                      aria-pressed={
-                        enabledPatterns.has(rule.key) &&
-                        patterns.every((p) =>
-                          config.variation[rule.key].includes(p),
-                        )
-                      }
-                      onClick={() => {
-                        setEnabledPatterns(
-                          (old) => new Set([...old, rule.key]),
-                        );
-                        variation(rule.key, [...patterns]);
-                      }}
-                    >
-                      All
-                    </button>
-                  </div>
-                  {enabledPatterns.has(rule.key) && (
-                    <div className="collect-chips">
-                      {patterns.map((p) => (
-                        <button
-                          key={p}
-                          aria-pressed={config.variation[rule.key].includes(p)}
-                          onClick={() =>
-                            variation(
-                              rule.key,
-                              config.variation[rule.key].includes(p)
-                                ? config.variation[rule.key].filter(
-                                    (v) => v !== p,
-                                  )
-                                : [...config.variation[rule.key], p],
-                            )
-                          }
-                        >
-                          {p}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-              <div className="collect-grid">
-                <label className="collect-input">
-                  Repeat minimum
-                  <input
-                    aria-label="Pattern repeat minimum"
-                    type="number"
-                    min={1}
-                    max={24}
-                    value={config.variation.repeat_min}
-                    onChange={(e) =>
-                      variation("repeat_min", Number(e.target.value))
-                    }
-                  />
-                </label>
-                <label className="collect-input">
-                  Repeat maximum
-                  <input
-                    aria-label="Pattern repeat maximum"
-                    type="number"
-                    min={1}
-                    max={24}
-                    value={config.variation.repeat_max}
-                    onChange={(e) =>
-                      variation("repeat_max", Number(e.target.value))
-                    }
-                  />
-                </label>
-              </div>
-              <label className="look-check">
-                <input
-                  type="checkbox"
-                  checked={config.variation.finishes}
-                  onChange={(e) => variation("finishes", e.target.checked)}
-                />
-                Randomize material finishes
-              </label>
-            </section>
-            <section className="look-section">
-              <h3>Environment & lighting</h3>
-              <label className="look-check">
-                <input
-                  type="checkbox"
-                  checked={varyLayout}
-                  onChange={(e) => setVaryLayout(e.target.checked)}
-                />
-                Randomize environment layout
-              </label>
               <button
                 type="button"
                 className="collect-all"
-                aria-label="Select all environment layouts"
-                aria-pressed={
-                  varyLayout &&
-                  layouts.every((v) =>
-                    config.variation.environments.includes(v),
-                  )
-                }
-                onClick={() => {
-                  setVaryLayout(true);
-                  variation("environments", [...layouts]);
-                }}
+                aria-pressed={noRandom}
+                onClick={useNoRandom}
               >
-                All
+                No random
               </button>
-              {varyLayout && (
-                <div className="collect-chips">
-                  {layouts.map((v) => (
-                    <button
-                      key={v}
-                      aria-pressed={config.variation.environments.includes(v)}
-                      onClick={() =>
-                        variation(
-                          "environments",
-                          config.variation.environments.includes(v)
-                            ? config.variation.environments.filter(
-                                (x) => x !== v,
-                              )
-                            : [...config.variation.environments, v],
-                        )
+            </section>
+            <div className="collect-random-grid">
+              <section className="look-section">
+                <h3>
+                  Color palettes<span>ALLOWED PER EPISODE</span>
+                </h3>
+                <p>
+                  Enable a category and select its allowed colors. Unchecked
+                  categories keep the captured scene's values. Surface palettes
+                  also constrain the secondary color of existing patterns.
+                </p>
+                <div className="collect-palette-grid">
+                  {paletteRules.map((rule) => (
+                    <PaletteRule
+                      key={rule.key}
+                      name={rule.name}
+                      value={config.variation[rule.key]}
+                      enabled={enabledColors.has(rule.key)}
+                      toggle={() =>
+                        setEnabledColors((old) => {
+                          const next = new Set(old);
+                          if (next.has(rule.key)) next.delete(rule.key);
+                          else next.add(rule.key);
+                          return next;
+                        })
                       }
-                    >
-                      {v}
-                    </button>
+                      update={(colors) => variation(rule.key, colors)}
+                    />
                   ))}
                 </div>
-              )}
-              <label className="look-check">
-                <input
-                  type="checkbox"
-                  checked={config.variation.lighting}
-                  onChange={(e) => variation("lighting", e.target.checked)}
-                />
-                Randomize lighting
-              </label>
-              <p>
-                Appearance choices preserve camera setup, mass and friction.
-                Object placement is controlled separately in Capture.
-              </p>
-            </section>
-          </div>
+              </section>
+              <section className="look-section">
+                <h3>Patterns & finishes</h3>
+                {patternRules.map((rule) => (
+                  <div className="collect-rule" key={rule.key}>
+                    <div className="collect-rule-heading">
+                      <label className="look-check">
+                        <input
+                          aria-label={`Randomize ${rule.name.toLowerCase()} pattern`}
+                          type="checkbox"
+                          checked={enabledPatterns.has(rule.key)}
+                          onChange={() =>
+                            setEnabledPatterns((old) => {
+                              const next = new Set(old);
+                              if (next.has(rule.key)) next.delete(rule.key);
+                              else next.add(rule.key);
+                              return next;
+                            })
+                          }
+                        />
+                        {rule.name} pattern
+                      </label>
+                      <button
+                        type="button"
+                        className="collect-all"
+                        aria-label={`Select all ${rule.name.toLowerCase()} patterns`}
+                        aria-pressed={
+                          enabledPatterns.has(rule.key) &&
+                          patterns.every((p) =>
+                            config.variation[rule.key].includes(p),
+                          )
+                        }
+                        onClick={() => {
+                          setEnabledPatterns(
+                            (old) => new Set([...old, rule.key]),
+                          );
+                          variation(rule.key, [...patterns]);
+                        }}
+                      >
+                        All
+                      </button>
+                    </div>
+                    {enabledPatterns.has(rule.key) && (
+                      <div className="collect-chips">
+                        {patterns.map((p) => (
+                          <button
+                            key={p}
+                            aria-pressed={config.variation[rule.key].includes(
+                              p,
+                            )}
+                            onClick={() =>
+                              variation(
+                                rule.key,
+                                config.variation[rule.key].includes(p)
+                                  ? config.variation[rule.key].filter(
+                                      (v) => v !== p,
+                                    )
+                                  : [...config.variation[rule.key], p],
+                              )
+                            }
+                          >
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div className="collect-grid">
+                  <label className="collect-input">
+                    Repeat minimum
+                    <input
+                      aria-label="Pattern repeat minimum"
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={config.variation.repeat_min}
+                      onChange={(e) =>
+                        variation("repeat_min", Number(e.target.value))
+                      }
+                    />
+                  </label>
+                  <label className="collect-input">
+                    Repeat maximum
+                    <input
+                      aria-label="Pattern repeat maximum"
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={config.variation.repeat_max}
+                      onChange={(e) =>
+                        variation("repeat_max", Number(e.target.value))
+                      }
+                    />
+                  </label>
+                </div>
+                <label className="look-check">
+                  <input
+                    type="checkbox"
+                    checked={config.variation.finishes}
+                    onChange={(e) => variation("finishes", e.target.checked)}
+                  />
+                  Randomize material finishes
+                </label>
+              </section>
+              <section className="look-section">
+                <h3>Environment & lighting</h3>
+                <label className="look-check">
+                  <input
+                    type="checkbox"
+                    checked={varyLayout}
+                    onChange={(e) => setVaryLayout(e.target.checked)}
+                  />
+                  Randomize environment layout
+                </label>
+                <button
+                  type="button"
+                  className="collect-all"
+                  aria-label="Select all environment layouts"
+                  aria-pressed={
+                    varyLayout &&
+                    layouts.every((v) =>
+                      config.variation.environments.includes(v),
+                    )
+                  }
+                  onClick={() => {
+                    setVaryLayout(true);
+                    variation("environments", [...layouts]);
+                  }}
+                >
+                  All
+                </button>
+                {varyLayout && (
+                  <div className="collect-chips">
+                    {layouts.map((v) => (
+                      <button
+                        key={v}
+                        aria-pressed={config.variation.environments.includes(v)}
+                        onClick={() =>
+                          variation(
+                            "environments",
+                            config.variation.environments.includes(v)
+                              ? config.variation.environments.filter(
+                                  (x) => x !== v,
+                                )
+                              : [...config.variation.environments, v],
+                          )
+                        }
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <label className="look-check">
+                  <input
+                    type="checkbox"
+                    checked={config.variation.lighting}
+                    onChange={(e) => variation("lighting", e.target.checked)}
+                  />
+                  Randomize lighting
+                </label>
+                <p>
+                  Appearance choices preserve camera setup, mass and friction.
+                  Object placement is controlled separately in Capture.
+                </p>
+              </section>
+            </div>
+          </>
         )}
         {tab === "jobs" && viewing && (
           <DatasetViewer

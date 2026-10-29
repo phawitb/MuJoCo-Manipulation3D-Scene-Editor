@@ -189,3 +189,13 @@ Browser viewport:
 Native recording renderer, same setup:
 
 ![Aligned native camera](screenshots/camera-alignment-native-main.png)
+
+## No random collection action (2026-10-29)
+
+**Collect → Randomization → No random** selects the current editor scene and disables all palette/pattern/layout scopes plus finishes, lighting and object positions. It preserves dataset naming, episode target, cameras and capture settings, and retains choices for optional re-enabling. The action explains its switch to the editor scene; an editor without a pick/destination task remains blocked by existing validation.
+
+The new browser regression failed on the missing button before implementation, then passed in **16.2 s**. It starts with custom robot/motor/table/object/background colors, a striped tabletop with custom repeat/roughness, and a room environment. After deliberately choosing another preset, No random returns to Current editor scene; all random scopes are off and individual re-enabling updates the pressed state. The test actually records **one successful complete episode**, checks the request's disabled scopes, and asserts that the saved episode scene equals the editor scene exactly. The live scene/time remains unchanged. Its own terminal recording is moved outside project recordings after verifying session/name ownership; user datasets are not removed.
+
+**14 frontend unit tests**, TypeScript, production build and `git diff --check` passed. Existing bundle-size warning remains. The screenshot was inspected. No backend rendering change is made: native/browser shading differences remain documented, rather than claiming pixel-identical output.
+
+![No random collection](screenshots/collection-no-random.png)
