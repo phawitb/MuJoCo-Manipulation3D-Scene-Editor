@@ -239,7 +239,7 @@ class Simulation:
         mujoco.mj_forward(self.model, self.data)
         self.policy = policy
 
-    def step(self, count=1):
+    def step(self, count=1, *, before_step=None):
         # A physics result must remain valid input for saving, editing and recovery.
         state_type = mujoco.mjtState.mjSTATE_INTEGRATION
         previous = np.empty(mujoco.mj_stateSize(self.model, state_type))
@@ -247,6 +247,8 @@ class Simulation:
         for _ in range(count):
             active = self.policy.status == "running"
             self.policy.update()
+            if before_step is not None:
+                before_step(self)
             mujoco.mj_step(self.model, self.data)
             mujoco.mj_forward(self.model, self.data)
             if active:

@@ -21,6 +21,8 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError, Field
 from .schema import Scene, ASSETS
 from .appearance import presets, Randomization, randomize_scene
+from .collection_jobs import CollectionJobs
+from .collection_api import router as collection_router
 from .simulation import compiled_meshes
 from .sessions import Registry, Command, Conflict
 from .importer import import_object, MAX_UPLOAD, MAX_SCENE
@@ -29,12 +31,15 @@ from .importer import import_object, MAX_UPLOAD, MAX_SCENE
 @asynccontextmanager
 async def lifespan(app):
     app.state.sessions = Registry()
+    app.state.collection = CollectionJobs()
     app.state.render_slots = asyncio.Semaphore(2)
     yield
+    await asyncio.to_thread(app.state.collection.close)
     await app.state.sessions.close()
 
 
 app = FastAPI(title="SO-101 Scene Studio", version="3.2.0", lifespan=lifespan)
+app.include_router(collection_router)
 LOCAL = ("localhost", "127.0.0.1", "::1", "testserver")
 
 

@@ -15,7 +15,13 @@ def render(payload):
     sim = Simulation(Scene.model_validate(payload["scene"]))
     sim.data.qpos[:6] = payload["joints"]
     mujoco.mj_forward(sim.model, sim.data)
-    view = payload["view"]
+    with CameraRenderer(sim) as renderer:
+        result = io.BytesIO()
+        Image.fromarray(renderer.capture(payload["view"])).save(result, format="PNG")
+        return result.getvalue()
+
+
+def camera_for_view(sim, view):
     camera = "wrist_cam"
     if view != "wrist":
         config = sim.scene.cameras[view]
@@ -35,14 +41,32 @@ def render(payload):
             camera.distance = 480 / (
                 config.zoom * 2 * math.tan(math.radians(config.fov / 2))
             )
-    with mujoco.Renderer(sim.model, height=480, width=640) as renderer:
-        option = mujoco.MjvOption()
-        option.geomgroup[3:] = 0
-        option.sitegroup[:] = 0
-        renderer.update_scene(sim.data, camera=camera, scene_option=option)
-        result = io.BytesIO()
-        Image.fromarray(renderer.render()).save(result, format="PNG")
-        return result.getvalue()
+    return camera
+
+
+class CameraRenderer:
+    """Persistent native renderer; all captures read the same physical state."""
+
+    def __init__(self, sim, width=640, height=480):
+        self.sim = sim
+        self.renderer = mujoco.Renderer(sim.model, height=height, width=width)
+        self.option = mujoco.MjvOption()
+        self.option.geomgroup[3:] = 0
+        self.option.sitegroup[:] = 0
+
+    def capture(self, view):
+        self.renderer.update_scene(
+            self.sim.data,
+            camera=camera_for_view(self.sim, view),
+            scene_option=self.option,
+        )
+        return self.renderer.render().copy()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.renderer.close()
 
 
 if __name__ == "__main__":

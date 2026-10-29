@@ -1,0 +1,776 @@
+import { useEffect, useRef, useState } from "react";
+import {
+  Camera,
+  Check,
+  Database,
+  Download,
+  LoaderCircle,
+  Palette,
+  Play,
+  Square,
+  X,
+} from "lucide-react";
+import type { Scene, Pattern } from "./types";
+import {
+  paletteRules,
+  patternRules,
+  terminalStatuses,
+} from "./collectionTypes";
+import type {
+  CollectionConfig,
+  CollectionJob,
+  PaletteKey,
+  PatternKey,
+} from "./collectionTypes";
+
+const colorOptions = [
+  ["Orange", "#f1792e"],
+  ["Yellow", "#ffd11f"],
+  ["White", "#ffffff"],
+  ["Gray", "#808080"],
+  ["Black", "#202020"],
+  ["Blue", "#668ad5"],
+  ["Green", "#6f9b77"],
+  ["Pink", "#e78dbe"],
+  ["Red", "#d95454"],
+];
+const patterns: Pattern[] = [
+  "solid",
+  "checker",
+  "stripes",
+  "dots",
+  "wood",
+  "terrazzo",
+  "tiles",
+  "noise",
+];
+const layouts = ["open", "studio", "room", "warehouse", "panels"];
+
+async function responseJSON(response: Response) {
+  const value = await response.json();
+  if (!response.ok)
+    throw Error(
+      typeof value.detail === "string"
+        ? value.detail
+        : "Check the collection settings and try again.",
+    );
+  return value;
+}
+function PaletteRule({
+  name,
+  value,
+  enabled,
+  toggle,
+  update,
+}: {
+  name: string;
+  value: string[];
+  enabled: boolean;
+  toggle: () => void;
+  update: (colors: string[]) => void;
+}) {
+  const [custom, setCustom] = useState("#7799bb");
+  const choices = [...new Set([...colorOptions.map((c) => c[1]), ...value])];
+  return (
+    <section className={`collect-rule ${enabled ? "enabled" : ""}`}>
+      <label className="look-check">
+        <input
+          aria-label={`Randomize ${name.toLowerCase()} color`}
+          type="checkbox"
+          checked={enabled}
+          onChange={toggle}
+        />
+        <strong>{name} color</strong>
+        <span>{enabled ? `${value.length} choices` : "Keep current"}</span>
+      </label>
+      {enabled && (
+        <>
+          <div className="collect-swatches">
+            {choices.map((color) => (
+              <button
+                key={color}
+                type="button"
+                title={colorOptions.find((c) => c[1] === color)?.[0] || color}
+                aria-label={`${name} ${colorOptions.find((c) => c[1] === color)?.[0] || color}`}
+                aria-pressed={value.includes(color)}
+                style={{ background: color }}
+                onClick={() =>
+                  update(
+                    value.includes(color)
+                      ? value.filter((v) => v !== color)
+                      : [...value, color],
+                  )
+                }
+              >
+                {value.includes(color) && <Check size={14} />}
+              </button>
+            ))}
+          </div>
+          <div className="collect-custom">
+            <input
+              aria-label={`${name} custom color`}
+              type="color"
+              value={custom}
+              onChange={(e) => setCustom(e.target.value)}
+            />
+            <code>{custom}</code>
+            <button
+              type="button"
+              disabled={value.includes(custom) || value.length >= 32}
+              onClick={() => update([...value, custom])}
+            >
+              Add color
+            </button>
+          </div>
+          {value.length === 0 && (
+            <p className="look-error">Choose at least one color.</p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+interface Props {
+  scene: Scene;
+  sessionId: string;
+  editable: boolean;
+  close: () => void;
+}
+export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
+  const [config, setConfig] = useState<CollectionConfig | null>(null);
+  const [ready, setReady] = useState(false);
+  const [jobs, setJobs] = useState<CollectionJob[]>([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState("capture");
+  const [enabledColors, setEnabledColors] = useState<Set<PaletteKey>>(
+    new Set(),
+  );
+  const [enabledPatterns, setEnabledPatterns] = useState<Set<PatternKey>>(
+    new Set(),
+  );
+  const [varyLayout, setVaryLayout] = useState(false);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    closeButton.current?.focus();
+    return () => previous?.focus();
+  }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/collection", { signal: controller.signal })
+      .then(responseJSON)
+      .then((data) => {
+        const defaults = data.defaults as CollectionConfig;
+        setReady(data.ready);
+        setEnabledColors(
+          new Set(
+            paletteRules
+              .filter((r) => defaults.variation[r.key].length)
+              .map((r) => r.key),
+          ),
+        );
+        paletteRules.forEach((r) => {
+          if (!defaults.variation[r.key].length)
+            defaults.variation[r.key] = [...r.defaults];
+        });
+        patternRules.forEach((r) => {
+          defaults.variation[r.key] = ["solid", "wood", "checker"];
+        });
+        defaults.variation.environments = [...layouts];
+        const source = scene.objects.find((o) => o.id === scene.task.source);
+        const target = scene.objects.find((o) => o.id === scene.task.target);
+        if (source && target)
+          defaults.task = `Pick up ${source.name} and place it in or on ${target.name}.`;
+        setConfig(defaults);
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(String(e));
+      });
+    return () => controller.abort();
+  }, []);
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    const refresh = () =>
+      fetch("/api/collection/jobs", { signal: controller.signal })
+        .then(responseJSON)
+        .then((data) => {
+          if (active) setJobs(data);
+        })
+        .catch((e) => {
+          if (active && !controller.signal.aborted) setError(String(e));
+        });
+    void refresh();
+    const timer = setInterval(() => void refresh(), 1500);
+    return () => {
+      active = false;
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, []);
+  const patch = (value: Partial<CollectionConfig>) =>
+    setConfig((c) => (c ? { ...c, ...value } : c));
+  const variation = (key: string, value: unknown) =>
+    setConfig((c) =>
+      c ? { ...c, variation: { ...c.variation, [key]: value } } : c,
+    );
+  const activeJob = jobs.find((j) => !terminalStatuses.includes(j.status));
+  const selectedTask = !!scene.task.source && !!scene.task.target;
+  const valid =
+    !!config &&
+    /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(config.name) &&
+    !!config.task.trim() &&
+    Number.isInteger(config.episodes) &&
+    config.episodes >= 1 &&
+    config.episodes <= 100 &&
+    Number.isInteger(config.seed) &&
+    config.seed >= 0 &&
+    config.seed + config.episodes - 1 <= 2147483647 &&
+    Number.isInteger(config.max_seconds) &&
+    config.max_seconds >= 1 &&
+    config.max_seconds <= 60 &&
+    paletteRules.every(
+      (r) => !enabledColors.has(r.key) || config.variation[r.key].length > 0,
+    ) &&
+    patternRules.every(
+      (r) => !enabledPatterns.has(r.key) || config.variation[r.key].length > 0,
+    ) &&
+    (!varyLayout || config.variation.environments.length > 0) &&
+    config.variation.repeat_min <= config.variation.repeat_max;
+  const start = async () => {
+    if (!config) return;
+    setBusy(true);
+    setError("");
+    const value = structuredClone(config);
+    paletteRules.forEach((r) => {
+      if (!enabledColors.has(r.key)) value.variation[r.key] = [];
+    });
+    patternRules.forEach((r) => {
+      if (!enabledPatterns.has(r.key)) value.variation[r.key] = [];
+    });
+    if (!varyLayout) value.variation.environments = [];
+    try {
+      const job = await responseJSON(
+        await fetch(`/api/sessions/${sessionId}/collection`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(value),
+        }),
+      );
+      setJobs((old) => [job, ...old.filter((j) => j.id !== job.id)]);
+      setTab("jobs");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const cancel = async (job: CollectionJob) => {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await responseJSON(
+        await fetch(`/api/collection/jobs/${job.id}/cancel`, {
+          method: "POST",
+        }),
+      );
+      setJobs((old) => old.map((j) => (j.id === result.id ? result : j)));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <aside
+      className="appearance-studio collection-panel"
+      role="dialog"
+      aria-label="Data collection"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          close();
+        }
+      }}
+    >
+      <header className="look-header">
+        <div className="look-icon">
+          <Database size={22} />
+        </div>
+        <div>
+          <small>LEROBOT V3 · LOCAL DATASETS</small>
+          <h2>Collect demonstrations</h2>
+        </div>
+        <button
+          ref={closeButton}
+          onClick={close}
+          aria-label="Close data collection"
+        >
+          <X size={19} />
+        </button>
+      </header>
+      <div className="look-intro">
+        One task. Many visual environments.
+        <span>
+          Five synchronized cameras · measured joints · full trajectory
+        </span>
+      </div>
+      <nav
+        className="look-tabs collect-tabs"
+        aria-label="Collection categories"
+      >
+        {[
+          { id: "capture", name: "Capture", Icon: Camera },
+          { id: "randomization", name: "Randomization", Icon: Palette },
+          { id: "jobs", name: "Datasets", Icon: Database },
+        ].map(({ id, name, Icon }) => (
+          <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}>
+            <Icon size={15} />
+            {name}
+            {id === "jobs" && activeJob && <i className="green-dot" />}
+          </button>
+        ))}
+      </nav>
+      <div className="look-scroll">
+        {!config && (
+          <p className="collect-note">Loading collection settings…</p>
+        )}
+        {config && tab === "capture" && (
+          <>
+            <section className="look-section">
+              <h3>
+                Dataset<span>ON THIS COMPUTER</span>
+              </h3>
+              <label className="collect-input">
+                Dataset name
+                <input
+                  aria-label="Dataset name"
+                  value={config.name}
+                  maxLength={64}
+                  onChange={(e) => patch({ name: e.target.value })}
+                />
+              </label>
+              <label className="collect-input">
+                Task instruction
+                <textarea
+                  aria-label="Task instruction"
+                  value={config.task}
+                  maxLength={500}
+                  rows={3}
+                  onChange={(e) => patch({ task: e.target.value })}
+                />
+              </label>
+              <div className="collect-grid">
+                <label className="collect-input">
+                  Episodes
+                  <input
+                    aria-label="Episodes"
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={config.episodes}
+                    onChange={(e) =>
+                      patch({ episodes: Number(e.target.value) })
+                    }
+                  />
+                </label>
+                <label className="collect-input">
+                  Starting seed
+                  <input
+                    aria-label="Starting seed"
+                    type="number"
+                    min={0}
+                    max={2147483647}
+                    value={config.seed}
+                    onChange={(e) => patch({ seed: Number(e.target.value) })}
+                  />
+                </label>
+              </div>
+              <p>
+                Episode seeds: {config.seed}–{config.seed + config.episodes - 1}
+                . Each attempt starts from a copy of the current scene and
+                repeats its pick-and-place task.
+              </p>
+            </section>
+            <section className="look-section">
+              <h3>
+                Capture settings<span>SIMULATION TIME</span>
+              </h3>
+              <div className="collect-cameras">
+                {["main", "top", "front", "back", "wrist"].map((v) => (
+                  <span key={v}>
+                    <Camera size={12} />
+                    {v}
+                  </span>
+                ))}
+              </div>
+              <label className="look-select">
+                Frame rate
+                <select
+                  aria-label="Frame rate"
+                  value={config.fps}
+                  onChange={(e) => patch({ fps: Number(e.target.value) })}
+                >
+                  {[10, 20, 25, 50].map((v) => (
+                    <option key={v} value={v}>
+                      {v} FPS
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="look-select">
+                Image resolution
+                <select
+                  aria-label="Image resolution"
+                  value={config.resolution}
+                  onChange={(e) => patch({ resolution: e.target.value })}
+                >
+                  <option value="640x480">640 × 480</option>
+                  <option value="320x240">320 × 240</option>
+                </select>
+              </label>
+              <label className="look-select">
+                Episode time limit
+                <input
+                  aria-label="Episode time limit"
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={config.max_seconds}
+                  onChange={(e) =>
+                    patch({ max_seconds: Number(e.target.value) })
+                  }
+                />
+              </label>
+              <label className="look-check">
+                <input
+                  type="checkbox"
+                  checked={config.include_failed}
+                  onChange={(e) => patch({ include_failed: e.target.checked })}
+                />
+                Include failed episodes
+              </label>
+              <p>
+                Successful tasks finish automatically. Failed or timed-out
+                attempts are excluded unless enabled above. Stopping a job
+                discards its unfinished episode.
+              </p>
+            </section>
+            <section className="look-section">
+              <h3>What is recorded</h3>
+              <ul className="collect-features">
+                <li>RGB video from all five native MuJoCo cameras</li>
+                <li>
+                  Joint positions, velocities, actuator forces and command
+                  targets
+                </li>
+                <li>Tool position and orientation, plus 1,000 Hz trajectory</li>
+                <li>
+                  Task instruction, seed, scene recipe and episode outcome
+                </li>
+              </ul>
+              <p>
+                Capture advances with simulation time, so slow rendering does
+                not drop frames. The editor scene stays available while an
+                independent copy records.
+              </p>
+            </section>
+          </>
+        )}
+        {config && tab === "randomization" && (
+          <>
+            <section className="look-section">
+              <h3>
+                Color palettes<span>ALLOWED PER EPISODE</span>
+              </h3>
+              <p>
+                Enable a category and select its allowed colors. Unchecked
+                categories keep the captured scene's values. Surface palettes
+                also constrain the secondary color of existing patterns.
+              </p>
+              {paletteRules.map((rule) => (
+                <PaletteRule
+                  key={rule.key}
+                  name={rule.name}
+                  value={config.variation[rule.key]}
+                  enabled={enabledColors.has(rule.key)}
+                  toggle={() =>
+                    setEnabledColors((old) => {
+                      const next = new Set(old);
+                      if (next.has(rule.key)) next.delete(rule.key);
+                      else next.add(rule.key);
+                      return next;
+                    })
+                  }
+                  update={(colors) => variation(rule.key, colors)}
+                />
+              ))}
+            </section>
+            <section className="look-section">
+              <h3>Patterns & finishes</h3>
+              {patternRules.map((rule) => (
+                <div className="collect-rule" key={rule.key}>
+                  <label className="look-check">
+                    <input
+                      aria-label={`Randomize ${rule.name.toLowerCase()} pattern`}
+                      type="checkbox"
+                      checked={enabledPatterns.has(rule.key)}
+                      onChange={() =>
+                        setEnabledPatterns((old) => {
+                          const next = new Set(old);
+                          if (next.has(rule.key)) next.delete(rule.key);
+                          else next.add(rule.key);
+                          return next;
+                        })
+                      }
+                    />
+                    {rule.name} pattern
+                  </label>
+                  {enabledPatterns.has(rule.key) && (
+                    <div className="collect-chips">
+                      {patterns.map((p) => (
+                        <button
+                          key={p}
+                          aria-pressed={config.variation[rule.key].includes(p)}
+                          onClick={() =>
+                            variation(
+                              rule.key,
+                              config.variation[rule.key].includes(p)
+                                ? config.variation[rule.key].filter(
+                                    (v) => v !== p,
+                                  )
+                                : [...config.variation[rule.key], p],
+                            )
+                          }
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div className="collect-grid">
+                <label className="collect-input">
+                  Repeat minimum
+                  <input
+                    aria-label="Pattern repeat minimum"
+                    type="number"
+                    min={1}
+                    max={24}
+                    value={config.variation.repeat_min}
+                    onChange={(e) =>
+                      variation("repeat_min", Number(e.target.value))
+                    }
+                  />
+                </label>
+                <label className="collect-input">
+                  Repeat maximum
+                  <input
+                    aria-label="Pattern repeat maximum"
+                    type="number"
+                    min={1}
+                    max={24}
+                    value={config.variation.repeat_max}
+                    onChange={(e) =>
+                      variation("repeat_max", Number(e.target.value))
+                    }
+                  />
+                </label>
+              </div>
+              <label className="look-check">
+                <input
+                  type="checkbox"
+                  checked={config.variation.finishes}
+                  onChange={(e) => variation("finishes", e.target.checked)}
+                />
+                Randomize material finishes
+              </label>
+            </section>
+            <section className="look-section">
+              <h3>Environment & lighting</h3>
+              <label className="look-check">
+                <input
+                  type="checkbox"
+                  checked={varyLayout}
+                  onChange={(e) => setVaryLayout(e.target.checked)}
+                />
+                Randomize environment layout
+              </label>
+              {varyLayout && (
+                <div className="collect-chips">
+                  {layouts.map((v) => (
+                    <button
+                      key={v}
+                      aria-pressed={config.variation.environments.includes(v)}
+                      onClick={() =>
+                        variation(
+                          "environments",
+                          config.variation.environments.includes(v)
+                            ? config.variation.environments.filter(
+                                (x) => x !== v,
+                              )
+                            : [...config.variation.environments, v],
+                        )
+                      }
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <label className="look-check">
+                <input
+                  type="checkbox"
+                  checked={config.variation.lighting}
+                  onChange={(e) => variation("lighting", e.target.checked)}
+                />
+                Randomize lighting
+              </label>
+              <p>
+                Visual variation does not change object placement, camera setup,
+                mass, friction or task motion.
+              </p>
+            </section>
+          </>
+        )}
+        {tab === "jobs" && (
+          <section className="look-section">
+            <h3>
+              Collection jobs<span>{jobs.length} LOCAL</span>
+            </h3>
+            {jobs.length === 0 && (
+              <p>No datasets yet. Configure a capture and start collection.</p>
+            )}
+            {jobs.slice(0, 8).map((job) => (
+              <article
+                className="collect-job"
+                key={job.id}
+                data-testid={`collection-job-${job.id}`}
+              >
+                <div className="collect-job-title">
+                  <strong>{job.name}</strong>
+                  <span className={`collect-status ${job.status}`}>
+                    {job.status}
+                  </span>
+                </div>
+                {(job.frames > 0 || job.saved_episodes > 0) && (
+                  <img
+                    className="collect-preview"
+                    src={`/api/collection/jobs/${job.id}/preview?t=${job.updated_at}`}
+                    alt={`Latest main camera frame for ${job.name}`}
+                  />
+                )}
+                <div className="collect-metrics">
+                  <span>
+                    Episode{" "}
+                    <b>
+                      {job.episode}/{job.episodes}
+                    </b>
+                  </span>
+                  <span>
+                    Saved <b>{job.saved_episodes}</b>
+                  </span>
+                  <span>
+                    Seed <b>{job.seed}</b>
+                  </span>
+                  <span>
+                    Frames <b>{job.total_frames}</b>
+                  </span>
+                </div>
+                <progress
+                  max={job.episodes}
+                  value={
+                    terminalStatuses.includes(job.status)
+                      ? job.episode
+                      : Math.max(0, job.episode - 1)
+                  }
+                />
+                <p role="status">
+                  {job.cancel_requested &&
+                  !terminalStatuses.includes(job.status)
+                    ? "Stopping after the current operation…"
+                    : job.message}
+                </p>
+                {!terminalStatuses.includes(job.status) && (
+                  <button
+                    className="collect-stop"
+                    disabled={busy || job.cancel_requested}
+                    onClick={() => void cancel(job)}
+                  >
+                    <Square size={13} />
+                    Stop collection
+                  </button>
+                )}
+                {job.download_available && (
+                  <>
+                    <div className="collect-verified">
+                      <Check size={14} />
+                      Verified LeRobot dataset
+                    </div>
+                    <a
+                      className="collect-download"
+                      href={`/api/collection/jobs/${job.id}/download`}
+                      download
+                    >
+                      <Download size={15} />
+                      Download dataset ZIP
+                    </a>
+                    <p className="collect-path">{job.dataset_path}</p>
+                  </>
+                )}
+              </article>
+            ))}
+          </section>
+        )}
+      </div>
+      <footer className="look-footer">
+        {error && (
+          <p className="look-error" role="alert">
+            {error}
+          </p>
+        )}
+        {config && !ready && (
+          <p>
+            Install the collection runtime with{" "}
+            <code>bash scripts/setup-collection.sh</code>.
+          </p>
+        )}
+        {!selectedTask && (
+          <p>
+            Load a task example or choose a pick object and destination first.
+          </p>
+        )}
+        {!editable && (
+          <p>Pause the simulation before starting a new collection.</p>
+        )}
+        {activeJob && (
+          <p>A collection is running. See Datasets for progress.</p>
+        )}
+        <button
+          className="look-primary"
+          disabled={
+            !ready ||
+            !valid ||
+            !selectedTask ||
+            !editable ||
+            busy ||
+            !!activeJob
+          }
+          onClick={() => void start()}
+        >
+          {busy ? (
+            <LoaderCircle size={16} className="spin" />
+          ) : (
+            <Play size={16} />
+          )}
+          Start collection
+        </button>
+        <small className="collect-local">
+          Saved locally · no automatic upload
+        </small>
+      </footer>
+    </aside>
+  );
+}

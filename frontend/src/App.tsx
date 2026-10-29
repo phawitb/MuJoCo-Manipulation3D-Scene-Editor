@@ -7,6 +7,7 @@ import {
   Check,
   CircleHelp,
   Columns2,
+  Database,
   Focus,
   Grid3X3,
   LoaderCircle,
@@ -25,6 +26,7 @@ import { TaskPanel, type PickMode } from "./TaskPanel";
 import { CameraEditor } from "./CameraEditor";
 import { ImportDialog } from "./ImportDialog";
 import { Library, type PlacementCursor } from "./Library";
+import { CollectionPanel } from "./CollectionPanel";
 import { AppearanceStudio } from "./AppearanceStudio";
 import { Inspector } from "./Inspector";
 import { rememberResetJoints } from "./robotPreferences";
@@ -101,6 +103,8 @@ export default function App() {
   >(null);
   const [apiHelp, setApiHelp] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [collectionOpen, setCollectionOpen] = useState(false);
+  const closeCollection = useCallback(() => setCollectionOpen(false), []);
   const closeAppearance = useCallback(() => setAppearanceOpen(false), []);
   const [selected, setSelected] = useState<string | null>(null);
   const [transform, setTransform] = useState<"translate" | "rotate">(
@@ -335,6 +339,7 @@ export default function App() {
       sim.status !== "connected" ||
       sim.live.current?.running ||
       importing ||
+      collectionOpen ||
       appearanceOpen ||
       cameraEdit ||
       apiHelp ||
@@ -538,11 +543,26 @@ export default function App() {
           <button
             className="appearance-launch"
             disabled={!scene?.appearance}
-            onClick={() => setAppearanceOpen(true)}
+            onClick={() => {
+              setAppearanceOpen(true);
+              setCollectionOpen(false);
+            }}
             aria-label="Appearance Studio"
           >
             <Palette size={16} />
             <span>Appearance</span>
+          </button>
+          <button
+            className="appearance-launch"
+            disabled={!sim.snapshot}
+            aria-label="Collect data"
+            onClick={() => {
+              setCollectionOpen(true);
+              setAppearanceOpen(false);
+            }}
+          >
+            <Database size={16} />
+            <span>Collect</span>
           </button>
           <button onClick={() => setApiHelp(true)}>AI / API</button>
           <button
@@ -954,6 +974,14 @@ export default function App() {
           <Check size={16} />
           {toast}
         </div>
+      )}
+      {collectionOpen && scene && sim.snapshot && (
+        <CollectionPanel
+          scene={scene}
+          sessionId={sim.snapshot.sessionId}
+          editable={editable}
+          close={closeCollection}
+        />
       )}
       {appearanceOpen && scene?.appearance && (
         <AppearanceStudio

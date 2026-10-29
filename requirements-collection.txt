@@ -1,0 +1,2 @@
+# Separate Python 3.12 environment; avoids changing the editor dependencies.
+-r requirements-collection.lock.txt

@@ -154,3 +154,7 @@ To save a reset pose through HTTP or MCP, send `{"type":"robot","patch":{"reset_
 - `POST /api/appearance/variants`: `{ "scene": <portable scene>, "seed": 42, "count": 8, "groups": ["table", "lighting"], "strength": "wide" }`. Returns `{ "generator": 1, "scenes": [...] }` for consecutive seeds. Count 1–32, output bounded to 32 MB. Does not mutate any live session.
 
 Appearance is part of the portable scene schema. Snapshot `materials` contains colors, finishes, pattern scale and optional embedded PNG textures; `geometry[].material` selects a material by name. Decorative geometry has `owner: "environment"` and never collides. Scene files contain compact recipe values rather than generated PNGs. Use the existing image endpoint after loading a recipe for native training observations.
+
+## LeRobot collection
+
+The local service also exposes background collection jobs, constrained seeded variation, native multi-camera recording, cancellation and verified ZIP downloads. See [Data collection API and format](DATA-COLLECTION.md#http-api). These routes operate on a cloned paused session and do not require a browser connection.

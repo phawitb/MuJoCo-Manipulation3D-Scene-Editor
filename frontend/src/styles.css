@@ -2603,3 +2603,253 @@ p {
     padding-top: 14px;
   }
 }
+
+.collection-panel {
+  width: 450px;
+}
+.collect-tabs {
+  grid-template-columns: repeat(3, 1fr);
+}
+.collect-input {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 11px;
+  color: #b7c8be;
+  margin-bottom: 14px;
+}
+.collect-input input,
+.collect-input textarea {
+  border: 1px solid #40554a;
+  border-radius: 7px;
+  background: #22332b;
+  color: #e1ece4;
+  font: inherit;
+  font-size: 12px;
+  padding: 10px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+.collect-input textarea {
+  resize: vertical;
+  line-height: 1.6;
+}
+.collect-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.collect-cameras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+.collect-cameras span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #3d5c4b;
+  color: #b0d6bf;
+  font-size: 10px;
+}
+.collect-features {
+  margin: 0;
+  padding-left: 17px;
+  font-size: 11px;
+  color: #b0c1b7;
+  line-height: 1.9;
+}
+.collect-rule {
+  border: 1px solid #34443a;
+  padding: 10px 12px;
+  border-radius: 9px;
+  margin: 10px 0;
+}
+.collect-rule.enabled {
+  border-color: #526d59;
+  background: #213229;
+}
+.collect-rule .look-check {
+  font-size: 11px;
+  margin: 0;
+}
+.collect-rule .look-check span {
+  margin-left: auto;
+  color: #91a99a;
+  font-size: 10px;
+}
+.collect-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+.collect-swatches button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 7px;
+  border: 2px solid #627068;
+  color: white;
+  text-shadow: 0 1px 3px #000;
+}
+.collect-swatches button[aria-pressed="true"] {
+  outline: 2px solid #c9e5ce;
+  outline-offset: 2px;
+}
+.collect-swatches button svg {
+  background: #142c24b0;
+  border-radius: 50%;
+}
+.collect-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.collect-custom input {
+  width: 28px;
+  height: 25px;
+  padding: 1px;
+  border: 1px solid #6a7e6f;
+  background: transparent;
+  border-radius: 4px;
+}
+.collect-custom code {
+  font-size: 10px;
+  color: #a4bcae;
+}
+.collect-custom button {
+  margin-left: auto;
+  font-size: 10px;
+  padding: 5px 8px;
+  border: 1px solid #4f6a59;
+  background: #2e4536;
+}
+.collect-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+.collect-chips button {
+  border: 1px solid #41574a;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 10px;
+  color: #8fa69a;
+}
+.collect-chips button[aria-pressed="true"] {
+  background: #34513e;
+  border-color: #6e9477;
+  color: #def0df;
+}
+.collect-job {
+  padding: 14px;
+  border-radius: 10px;
+  background: #213027;
+  border: 1px solid #435a49;
+  margin-bottom: 14px;
+}
+.collect-job-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+.collect-job-title strong {
+  overflow-wrap: anywhere;
+}
+.collect-status {
+  font-size: 9px;
+  text-transform: uppercase;
+  color: #bbd5a7;
+  letter-spacing: 0.6px;
+}
+.collect-status.failed,
+.collect-status.interrupted {
+  color: #eaaa92;
+}
+.collect-preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #17201a;
+  margin-bottom: 12px;
+}
+.collect-metrics {
+  display: flex;
+  justify-content: space-between;
+  gap: 7px;
+  font-size: 9px;
+  color: #8fa79a;
+}
+.collect-metrics b {
+  display: block;
+  font-size: 13px;
+  color: #d8e6dc;
+  margin-top: 5px;
+}
+.collect-job progress {
+  width: 100%;
+  height: 5px;
+  accent-color: #b1d9ad;
+  margin-top: 14px;
+}
+.collect-verified {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #c5e9c5;
+  margin: 10px 0;
+}
+.collect-download,
+.collect-stop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: #344e3c;
+  border: 1px solid #709477;
+  border-radius: 7px;
+  font-size: 12px;
+  padding: 10px;
+  text-decoration: none;
+  color: #d3e8d6;
+}
+.collect-stop {
+  width: 100%;
+  background: #543e30;
+  border-color: #8f6c51;
+  color: #f3d2b4;
+}
+.collect-job .collect-path {
+  font-size: 9px;
+  word-break: break-all;
+  color: #92ac9b;
+  margin-bottom: 0;
+}
+.collect-local {
+  display: block;
+  text-align: center;
+  font-size: 9px;
+  color: #94ac9b;
+  margin-top: 10px;
+}
+.collect-note {
+  padding: 20px;
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .collection-panel {
+    width: auto;
+  }
+}
