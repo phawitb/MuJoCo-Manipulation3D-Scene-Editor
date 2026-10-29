@@ -104,6 +104,7 @@ export default function App() {
   const [apiHelp, setApiHelp] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [collectionOpen, setCollectionOpen] = useState(false);
+  const [collectionTopHeight, setCollectionTopHeight] = useState(480);
   const closeCollection = useCallback(() => setCollectionOpen(false), []);
   const closeAppearance = useCallback(() => setAppearanceOpen(false), []);
   const [selected, setSelected] = useState<string | null>(null);
@@ -559,8 +560,16 @@ export default function App() {
             disabled={!sim.snapshot}
             aria-label="Collect data"
             onClick={() => {
-              setCollectionOpen(true);
-              setAppearanceOpen(false);
+              const canvas = document.querySelector<HTMLCanvasElement>(
+                '[data-testid="viewport-top"] canvas',
+              );
+              const height = canvas?.getBoundingClientRect().height;
+              setCollectionTopHeight(height && height >= 1 ? height : 480);
+              void safe(async () => {
+                await sim.waitForPending();
+                setCollectionOpen(true);
+                setAppearanceOpen(false);
+              });
             }}
           >
             <Database size={16} />
@@ -979,6 +988,7 @@ export default function App() {
       )}
       {collectionOpen && scene && sim.snapshot && (
         <CollectionPanel
+          topReferenceHeight={collectionTopHeight}
           scene={scene}
           sessionId={sim.snapshot.sessionId}
           editable={editable}

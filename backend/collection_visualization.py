@@ -74,6 +74,7 @@ def build_index(root):
         "task": manifest["config"]["task"],
         "fps": info["fps"],
         "cameras": cameras,
+        "camera_projection_version": manifest.get("camera_projection_version", 1),
         "joint_names": info["features"]["observation.state"]["names"],
         "episodes": sorted(episodes, key=lambda e: e["index"]),
     }

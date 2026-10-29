@@ -22,6 +22,7 @@ interface Episode {
   videos: Record<string, VideoSource>;
 }
 interface Index {
+  camera_projection_version?: number;
   name: string;
   scene_name: string;
   task: string;
@@ -531,6 +532,13 @@ export function DatasetViewer({
       {error && (
         <p role="alert" className="look-error">
           {error}
+        </p>
+      )}
+      {index && (index.camera_projection_version ?? 1) < 2 && (
+        <p className="look-error">
+          Recorded before the camera alignment fix. These saved videos may show
+          different angles from the editor; collect a new dataset to use the
+          corrected cameras.
         </p>
       )}
       {!index && !error && <p role="status">Reading episode metadata…</p>}

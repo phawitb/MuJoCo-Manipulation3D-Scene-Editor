@@ -149,12 +149,19 @@ function PaletteRule({
   );
 }
 interface Props {
+  topReferenceHeight: number;
   scene: Scene;
   sessionId: string;
   editable: boolean;
   close: () => void;
 }
-export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
+export function CollectionPanel({
+  scene,
+  sessionId,
+  editable,
+  close,
+  topReferenceHeight,
+}: Props) {
   const [config, setConfig] = useState<CollectionConfig | null>(null);
   const [scenes, setScenes] = useState<CollectionScene[]>([]);
   const [sceneFilter, setSceneFilter] = useState("");
@@ -217,6 +224,7 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
       .then(responseJSON)
       .then((data) => {
         const defaults = data.defaults as CollectionConfig;
+        defaults.top_reference_height = topReferenceHeight;
         defaults.cameras ??= ["main", "top", "front", "back", "wrist"];
         defaults.variation.position_mode ??= "workspace";
         defaults.duration_mode ??= "auto";

@@ -90,6 +90,7 @@ def test_real_subset_export_and_viewer_api(tmp_path, monkeypatch):
         assert response.status_code == 200, response.text
         index = response.json()
         assert index["cameras"] == ["front", "wrist"]
+        assert index["camera_projection_version"] == 2
         assert len(index["episodes"]) == 2
         assert index["episodes"][1]["seed"] == 43
         assert "path" not in index["episodes"][1]["videos"]["front"]

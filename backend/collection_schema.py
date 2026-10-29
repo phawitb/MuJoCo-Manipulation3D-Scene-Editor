@@ -75,6 +75,7 @@ class Variation(Strict):
 
 
 class CollectionConfig(Strict):
+    top_reference_height: float = Field(default=480, ge=1, le=16384)
     cameras: list[Literal["main", "top", "front", "back", "wrist"]] = Field(
         default_factory=lambda: list(VIEWS), min_length=1, max_length=5
     )

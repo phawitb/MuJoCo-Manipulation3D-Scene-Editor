@@ -1,0 +1,7 @@
+# Recorded/editor camera alignment
+
+Reported dataset angles differ from the main editor. Reproduced using native MuJoCo camera matrices: a configured Main position [1.05,-1.25,1.55] becomes [-1.05,1.25,1.55]; Front/Back similarly reflect XY about look-at. Native free-camera azimuth follows the opposite convention. Also top's MjvCamera.orthographic does not activate native orthographic projection (model.vis.global_.orthographic does); perspective zoom was incorrectly moving the camera instead of changing field of view.
+
+Correct conversion while keeping the editor camera setup and physics unchanged: azimuth +180 for perspective, unscaled distance, effective fov=2atan(tan(fov/2)/zoom), true orthographic Top with up +X, exact configured distance, vertical world extent from editor Top canvas CSS height / zoom. Collection stores that reference height (default480 for API/hidden Top), independent of output resolution. Native clipping .005..20 matches browser. Wrist remains attached fixed camera, unaffected by previous Top capture.
+
+Existing videos cannot change viewpoint through playback. Preserve them and mark old projection version in viewer; future captures use version2 metadata. No silent regeneration/overwriting of user datasets. Use numerical native/Three camera/frustum regression plus real recorded frame comparison from an isolated scene. Aspect ratio differences may change horizontal framing; pose and vertical frustum match.

@@ -71,6 +71,7 @@ def collect(job_dir):
     dataset = None
     manifest = {
         "generator": 2,
+        "camera_projection_version": 2,
         "scene_id": config.scene_id,
         "scene_name": source.name,
         "config": config.model_dump(),
@@ -209,7 +210,9 @@ def collect(job_dir):
                     os.replace(temporary, job_dir / "preview.jpg")
                     update(frames=frames, simulation_time=sim_time)
 
-            with CameraRenderer(sim, width, height) as renderer:
+            with CameraRenderer(
+                sim, width, height, config.top_reference_height
+            ) as renderer:
                 recorder = EpisodeRecorder(dataset, renderer, config, sample, cancelled)
                 while sim.running and sim.data.time < time_limit - 0.0000001:
                     sim.step(

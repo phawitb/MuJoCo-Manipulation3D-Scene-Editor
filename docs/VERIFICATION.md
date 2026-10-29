@@ -169,3 +169,23 @@ New captures default to **Reachable workspace · wide variation** and **Automati
 ![Successful workspace dataset](screenshots/collection-workspace-datasets.png)
 
 ![Final synchronized frame of a completed demonstration](screenshots/collection-workspace-success.png)
+
+## Editor / dataset camera alignment (2026-10-29)
+
+The camera configuration was copied correctly, but native free-camera conversion used the wrong azimuth convention. The default Main eye `[1.05,-1.25,1.55]` actually rendered from `[-1.05,1.25,1.55]`; Front and Back had the same XY reflection about their look-at target. Perspective zoom also moved the eye, introducing parallax, and setting `MjvCamera.orthographic` alone left Top in perspective mode.
+
+The renderer now corrects azimuth by 180 degrees, preserves eye distance, converts zoom into effective vertical FOV and activates true orthographic projection through the model visualization settings. Top keeps +X up and takes its vertical world extent from the editor canvas CSS height divided by zoom. The reference height is captured when opening Collect (480 fallback for hidden Top/API) and persisted in collection config. Near/far clipping matches the editor. Wrist retains its mounted pose and does not inherit the preceding Top projection.
+
+- All **13 camera regressions failed before the fix**. They now verify native eye position, forward/up vectors, projection at three zoom levels, Top at three reference heights, and Top→Wrist→Main isolation. The native-image checks also pass.
+- **28 relevant backend tests passed** (51.47 s): alignment, native rendering, collection and viewer, including actual official LeRobot export/readback and projection-version provenance. **3 browser scenarios passed** (28.3 s): collection and camera controls. The collection request's Top reference height matches the visible canvas. **14 frontend unit tests**, TypeScript, production build, focused Python correctness lint and `git diff --check` passed. Existing bundle-size warning remains.
+- An isolated clone of the user's dataset source scene was rendered at 640×480 in both the actual browser viewport and native renderer. Images below were inspected: robot, spoon and cup occupy matching positions and view direction. Renderer lighting/material differences remain. The latest archived test dataset's decoded Front/Wrist first frames were also compared visually to native captures from their saved recipe; geometry aligns. Mean RGB differences were 4.34/2.65 out of 255 after lossy H.264 compression; exact pixel equality is not the camera contract.
+- New captures carry `camera_projection_version: 2`. Existing videos are preserved, including the user's five-episode dataset. The viewer explains that old recordings use pre-fix angles, even when their cached index lacks the new field. New collection is required to obtain corrected viewpoints; playback cannot reconstruct another camera angle.
+- Independent review found no substantive issues and independently passed all 13 alignment regressions. Four idle editor scenes were backed up before the local service update and restored scene documents matched exactly.
+
+Browser viewport:
+
+![Editor camera](screenshots/camera-alignment-editor-main.png)
+
+Native recording renderer, same setup:
+
+![Aligned native camera](screenshots/camera-alignment-native-main.png)

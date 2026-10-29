@@ -28,6 +28,7 @@ export interface CollectionScene {
   instruction: string;
 }
 export interface CollectionConfig {
+  top_reference_height: number;
   cameras: string[];
   scene_id: string | null;
   name: string;

@@ -19,6 +19,11 @@ test("collect constrained multi-camera data and download a verified LeRobot data
   });
   try {
     await page.goto(`/?session=${sid}`);
+    const topCanvas = page.getByTestId("viewport-top").locator("canvas");
+    await expect(topCanvas).toBeVisible();
+    const topReferenceHeight = await topCanvas.evaluate(
+      (canvas) => canvas.getBoundingClientRect().height,
+    );
     await page
       .getByRole("button", { name: "Collect data", exact: true })
       .click();
@@ -171,6 +176,9 @@ test("collect constrained multi-camera data and download a verified LeRobot data
       .click();
     const jobResponse = await started;
     expect(jobResponse.ok()).toBeTruthy();
+    expect(
+      jobResponse.request().postDataJSON().top_reference_height,
+    ).toBeCloseTo(topReferenceHeight, 3);
     const job = await jobResponse.json();
     ownedJob = job.id;
     const card = page.getByTestId(`collection-job-${job.id}`);

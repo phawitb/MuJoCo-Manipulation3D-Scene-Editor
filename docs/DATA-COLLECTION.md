@@ -33,6 +33,12 @@ Dataset cards show **successful / unsuccessful** retained episodes separately. *
 
 Supported limits: 1–100 retained episodes (up to 5,000 workspace attempts or 500 local attempts), fixed limits of 1–120 simulated seconds each, 10/20/25/50 FPS, 320×240 or 640×480 RGB. One job runs at a time. Rendering may be slower than real time; physics time drives capture, so slow rendering does not skip scheduled frames. The editor stays usable. Files stay on this computer; no Hub upload occurs.
 
+### Camera alignment and existing recordings
+
+New recordings use `camera_projection_version: 2` in `meta/collection.json`. Main/Front/Back preserve the editor eye, target, up direction and perspective zoom; Top is genuinely orthographic, with +X up. The browser supplies `top_reference_height` from the visible Top canvas when Collect opens (480 CSS pixels if Top is hidden, also the API default). Top vertical extent is this height divided by zoom and stays the same at either capture resolution. Perspective views preserve vertical field of view; a different output aspect ratio can change horizontal framing. Wrist follows the same mounted camera pose. Lighting/materials differ between the browser and native renderers, so matching cameras does not mean pixel-identical appearance.
+
+Older videos used the previous camera conversion and remain unchanged. The visualizer identifies those recordings, including cached older indexes. Collect a new dataset to get corrected angles; changing the viewer cannot recover another viewpoint from an existing video.
+
 ## Dataset contract
 
 The official `LeRobotDataset.create/add_frame/save_episode/finalize` writer produces **LeRobot v3.0**, Parquet metadata/data and H.264 RGB videos. The repo ID is `local/<dataset-name>` and robot type is `so101_mujoco`.
