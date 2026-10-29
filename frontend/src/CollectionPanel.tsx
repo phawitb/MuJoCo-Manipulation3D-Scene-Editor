@@ -18,6 +18,7 @@ import {
 } from "./collectionTypes";
 import type {
   CollectionConfig,
+  CollectionScene,
   CollectionJob,
   PaletteKey,
   PatternKey,
@@ -73,16 +74,32 @@ function PaletteRule({
   const choices = [...new Set([...colorOptions.map((c) => c[1]), ...value])];
   return (
     <section className={`collect-rule ${enabled ? "enabled" : ""}`}>
-      <label className="look-check">
-        <input
-          aria-label={`Randomize ${name.toLowerCase()} color`}
-          type="checkbox"
-          checked={enabled}
-          onChange={toggle}
-        />
-        <strong>{name} color</strong>
-        <span>{enabled ? `${value.length} choices` : "Keep current"}</span>
-      </label>
+      <div className="collect-rule-heading">
+        <label className="look-check">
+          <input
+            aria-label={`Randomize ${name.toLowerCase()} color`}
+            type="checkbox"
+            checked={enabled}
+            onChange={toggle}
+          />
+          <strong>{name} color</strong>
+          <span>{enabled ? `${value.length} choices` : "Keep current"}</span>
+        </label>
+        <button
+          type="button"
+          className="collect-all"
+          aria-label={`Select all ${name.toLowerCase()} colors`}
+          aria-pressed={
+            enabled && choices.every((color) => value.includes(color))
+          }
+          onClick={() => {
+            if (!enabled) toggle();
+            update(choices);
+          }}
+        >
+          All
+        </button>
+      </div>
       {enabled && (
         <>
           <div className="collect-swatches">
@@ -116,7 +133,7 @@ function PaletteRule({
             <code>{custom}</code>
             <button
               type="button"
-              disabled={value.includes(custom) || value.length >= 32}
+              disabled={value.includes(custom) || choices.length >= 32}
               onClick={() => update([...value, custom])}
             >
               Add color
@@ -138,6 +155,8 @@ interface Props {
 }
 export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
   const [config, setConfig] = useState<CollectionConfig | null>(null);
+  const [scenes, setScenes] = useState<CollectionScene[]>([]);
+  const [sceneFilter, setSceneFilter] = useState("");
   const [ready, setReady] = useState(false);
   const [jobs, setJobs] = useState<CollectionJob[]>([]);
   const [error, setError] = useState("");
@@ -151,6 +170,10 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
   );
   const [varyLayout, setVaryLayout] = useState(false);
   const closeButton = useRef<HTMLButtonElement>(null);
+  const scrollPanel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollPanel.current?.scrollTo({ top: 0 });
+  }, [tab]);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     closeButton.current?.focus();
@@ -163,6 +186,15 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
       .then((data) => {
         const defaults = data.defaults as CollectionConfig;
         setReady(data.ready);
+        setScenes(data.scenes);
+        setEnabledPatterns(
+          new Set(
+            patternRules
+              .filter((r) => defaults.variation[r.key].length)
+              .map((r) => r.key),
+          ),
+        );
+        setVaryLayout(defaults.variation.environments.length > 0);
         setEnabledColors(
           new Set(
             paletteRules
@@ -175,13 +207,21 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
             defaults.variation[r.key] = [...r.defaults];
         });
         patternRules.forEach((r) => {
-          defaults.variation[r.key] = ["solid", "wood", "checker"];
+          if (!defaults.variation[r.key].length)
+            defaults.variation[r.key] = [...patterns];
         });
-        defaults.variation.environments = [...layouts];
+        if (!defaults.variation.environments.length)
+          defaults.variation.environments = [...layouts];
         const source = scene.objects.find((o) => o.id === scene.task.source);
         const target = scene.objects.find((o) => o.id === scene.task.target);
         if (source && target)
           defaults.task = `Pick up ${source.name} and place it in or on ${target.name}.`;
+        if (!source || !target) {
+          const first = data.scenes[0] as CollectionScene;
+          defaults.scene_id = first.id;
+          defaults.name = `${first.id}-demonstrations`;
+          defaults.task = first.instruction;
+        }
         setConfig(defaults);
       })
       .catch((e) => {
@@ -216,7 +256,26 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
       c ? { ...c, variation: { ...c.variation, [key]: value } } : c,
     );
   const activeJob = jobs.find((j) => !terminalStatuses.includes(j.status));
-  const selectedTask = !!scene.task.source && !!scene.task.target;
+  const selectedTask =
+    !!config?.scene_id || (!!scene.task.source && !!scene.task.target);
+  const selectScene = (id: string) => {
+    const selected = scenes.find((s) => s.id === id);
+    const source = scene.objects.find((o) => o.id === scene.task.source);
+    const target = scene.objects.find((o) => o.id === scene.task.target);
+    patch({
+      scene_id: id || null,
+      name: `${id || "current-scene"}-demonstrations`,
+      task:
+        selected?.instruction ||
+        (source && target
+          ? `Pick up ${source.name} and place it in or on ${target.name}.`
+          : "Pick up the source object and place it in the destination."),
+    });
+  };
+  const visibleJobs = jobs.filter(
+    (job) =>
+      !sceneFilter || (job.scene_name || "Earlier datasets") === sceneFilter,
+  );
   const valid =
     !!config &&
     /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(config.name) &&
@@ -226,7 +285,7 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
     config.episodes <= 100 &&
     Number.isInteger(config.seed) &&
     config.seed >= 0 &&
-    config.seed + config.episodes - 1 <= 2147483647 &&
+    config.seed + config.episodes * 5 - 1 <= 2147483647 &&
     Number.isInteger(config.max_seconds) &&
     config.max_seconds >= 1 &&
     config.max_seconds <= 60 &&
@@ -237,7 +296,9 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
       (r) => !enabledPatterns.has(r.key) || config.variation[r.key].length > 0,
     ) &&
     (!varyLayout || config.variation.environments.length > 0) &&
-    config.variation.repeat_min <= config.variation.repeat_max;
+    config.variation.repeat_min <= config.variation.repeat_max &&
+    config.variation.position_radius >= 0.01 &&
+    config.variation.position_radius <= 0.05;
   const start = async () => {
     if (!config) return;
     setBusy(true);
@@ -311,7 +372,7 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
         </button>
       </header>
       <div className="look-intro">
-        One task. Many visual environments.
+        One scene. Many demonstrations.
         <span>
           Five synchronized cameras · measured joints · full trajectory
         </span>
@@ -332,7 +393,7 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
           </button>
         ))}
       </nav>
-      <div className="look-scroll">
+      <div className="look-scroll" ref={scrollPanel}>
         {!config && (
           <p className="collect-note">Loading collection settings…</p>
         )}
@@ -342,6 +403,25 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
               <h3>
                 Dataset<span>ON THIS COMPUTER</span>
               </h3>
+              <label className="collect-input">
+                Scene
+                <select
+                  aria-label="Dataset scene"
+                  value={config.scene_id || ""}
+                  onChange={(e) => selectScene(e.target.value)}
+                >
+                  <option value="">Current editor scene · {scene.name}</option>
+                  {scenes.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p>
+                One scene per dataset. Choose another scene to generate a
+                separate dataset.
+              </p>
               <label className="collect-input">
                 Dataset name
                 <input
@@ -363,7 +443,7 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
               </label>
               <div className="collect-grid">
                 <label className="collect-input">
-                  Episodes
+                  Episodes to generate
                   <input
                     aria-label="Episodes"
                     type="number"
@@ -388,9 +468,43 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
                 </label>
               </div>
               <p>
-                Episode seeds: {config.seed}–{config.seed + config.episodes - 1}
-                . Each attempt starts from a copy of the current scene and
-                repeats its pick-and-place task.
+                Generate {config.episodes} retained episodes, starting at seed{" "}
+                {config.seed}. Rejected placements use a new seed. Up to{" "}
+                {config.episodes * 5} attempts; progress counts saved episodes.
+              </p>
+            </section>
+            <section className="look-section">
+              <h3>Object positions</h3>
+              <label className="look-check">
+                <input
+                  type="checkbox"
+                  checked={config.variation.positions}
+                  onChange={(e) => variation("positions", e.target.checked)}
+                />
+                Randomize object positions
+              </label>
+              {config.variation.positions && (
+                <label className="collect-input">
+                  Position radius (cm)
+                  <input
+                    aria-label="Position radius (cm)"
+                    type="number"
+                    min={1}
+                    max={5}
+                    step={0.5}
+                    value={
+                      Math.round(config.variation.position_radius * 1000) / 10
+                    }
+                    onChange={(e) =>
+                      variation("position_radius", Number(e.target.value) / 100)
+                    }
+                  />
+                </label>
+              )}
+              <p>
+                Move pick and destination objects independently on the table
+                each episode. Objects inside a cup move with it. Every new
+                placement is rehearsed before capture.
               </p>
             </section>
             <section className="look-section">
@@ -511,22 +625,43 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
               <h3>Patterns & finishes</h3>
               {patternRules.map((rule) => (
                 <div className="collect-rule" key={rule.key}>
-                  <label className="look-check">
-                    <input
-                      aria-label={`Randomize ${rule.name.toLowerCase()} pattern`}
-                      type="checkbox"
-                      checked={enabledPatterns.has(rule.key)}
-                      onChange={() =>
-                        setEnabledPatterns((old) => {
-                          const next = new Set(old);
-                          if (next.has(rule.key)) next.delete(rule.key);
-                          else next.add(rule.key);
-                          return next;
-                        })
+                  <div className="collect-rule-heading">
+                    <label className="look-check">
+                      <input
+                        aria-label={`Randomize ${rule.name.toLowerCase()} pattern`}
+                        type="checkbox"
+                        checked={enabledPatterns.has(rule.key)}
+                        onChange={() =>
+                          setEnabledPatterns((old) => {
+                            const next = new Set(old);
+                            if (next.has(rule.key)) next.delete(rule.key);
+                            else next.add(rule.key);
+                            return next;
+                          })
+                        }
+                      />
+                      {rule.name} pattern
+                    </label>
+                    <button
+                      type="button"
+                      className="collect-all"
+                      aria-label={`Select all ${rule.name.toLowerCase()} patterns`}
+                      aria-pressed={
+                        enabledPatterns.has(rule.key) &&
+                        patterns.every((p) =>
+                          config.variation[rule.key].includes(p),
+                        )
                       }
-                    />
-                    {rule.name} pattern
-                  </label>
+                      onClick={() => {
+                        setEnabledPatterns(
+                          (old) => new Set([...old, rule.key]),
+                        );
+                        variation(rule.key, [...patterns]);
+                      }}
+                    >
+                      All
+                    </button>
+                  </div>
                   {enabledPatterns.has(rule.key) && (
                     <div className="collect-chips">
                       {patterns.map((p) => (
@@ -598,6 +733,23 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
                 />
                 Randomize environment layout
               </label>
+              <button
+                type="button"
+                className="collect-all"
+                aria-label="Select all environment layouts"
+                aria-pressed={
+                  varyLayout &&
+                  layouts.every((v) =>
+                    config.variation.environments.includes(v),
+                  )
+                }
+                onClick={() => {
+                  setVaryLayout(true);
+                  variation("environments", [...layouts]);
+                }}
+              >
+                All
+              </button>
               {varyLayout && (
                 <div className="collect-chips">
                   {layouts.map((v) => (
@@ -629,8 +781,8 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
                 Randomize lighting
               </label>
               <p>
-                Visual variation does not change object placement, camera setup,
-                mass, friction or task motion.
+                Appearance choices preserve camera setup, mass and friction.
+                Object placement is controlled separately in Capture.
               </p>
             </section>
           </>
@@ -640,10 +792,29 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
             <h3>
               Collection jobs<span>{jobs.length} LOCAL</span>
             </h3>
-            {jobs.length === 0 && (
+            <label className="collect-input">
+              Scene
+              <select
+                aria-label="Filter datasets by scene"
+                value={sceneFilter}
+                onChange={(e) => setSceneFilter(e.target.value)}
+              >
+                <option value="">All scenes</option>
+                {[
+                  ...new Set(
+                    jobs.map((job) => job.scene_name || "Earlier datasets"),
+                  ),
+                ].map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {visibleJobs.length === 0 && (
               <p>No datasets yet. Configure a capture and start collection.</p>
             )}
-            {jobs.slice(0, 8).map((job) => (
+            {visibleJobs.map((job) => (
               <article
                 className="collect-job"
                 key={job.id}
@@ -655,6 +826,9 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
                     {job.status}
                   </span>
                 </div>
+                <p className="collect-scene-name">
+                  {job.scene_name || "Earlier dataset"}
+                </p>
                 {(job.frames > 0 || job.saved_episodes > 0) && (
                   <img
                     className="collect-preview"
@@ -664,13 +838,17 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
                 )}
                 <div className="collect-metrics">
                   <span>
-                    Episode{" "}
+                    Target{" "}
                     <b>
-                      {job.episode}/{job.episodes}
+                      {job.saved_episodes}/{job.episodes}
                     </b>
                   </span>
                   <span>
-                    Saved <b>{job.saved_episodes}</b>
+                    Attempt{" "}
+                    <b>
+                      {job.attempt ?? job.episode}/
+                      {job.max_attempts ?? job.episodes}
+                    </b>
                   </span>
                   <span>
                     Seed <b>{job.seed}</b>
@@ -679,14 +857,7 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
                     Frames <b>{job.total_frames}</b>
                   </span>
                 </div>
-                <progress
-                  max={job.episodes}
-                  value={
-                    terminalStatuses.includes(job.status)
-                      ? job.episode
-                      : Math.max(0, job.episode - 1)
-                  }
-                />
+                <progress max={job.episodes} value={job.saved_episodes} />
                 <p role="status">
                   {job.cancel_requested &&
                   !terminalStatuses.includes(job.status)

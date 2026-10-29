@@ -1,6 +1,6 @@
 # Collect LeRobot demonstrations
 
-Open **Collect** in the header after loading a task example or selecting a pick object and destination. Pause the editor first. Collection rehearses the captured task, then runs independent episodes in a background process. Editing the live scene after starting does not alter the job.
+Open **Collect** in the header and select **Scene**: any of the 13 built-in examples or the current editor scene. Each job writes a separate dataset for that scene; use the scene filter under **Datasets** to browse results. A preset can be collected even when the live editor is empty. Presets use their own physical layout/reset pose plus your current cameras and appearance. Pause the editor before starting. Editing it afterward does not alter the captured job.
 
 ## Install once
 
@@ -12,17 +12,21 @@ The collector uses **LeRobot 0.6.1** in a separate Python 3.12 environment, `.ve
 
 ## Capture and randomization
 
-1. **Capture:** enter a dataset name, natural-language instruction, number of attempts, starting seed, frame rate, resolution and episode time limit.
-2. **Randomization:** enable only the properties to vary and select their allowed values. Defaults are orange/yellow robot body and white/gray/black tabletop. Motors, legs, floor, wall, background and individual objects have separate color controls. Robot/table/floor/wall patterns, repeat range, material finishes, environment layouts and lighting are independently selectable.
+1. **Capture:** select a scene, enter a dataset name/instruction, and set **Episodes to generate**, starting seed, frame rate, resolution and time limit. Position randomization starts enabled with a **2 cm radius**; choose 1–5 cm or disable it.
+2. **Randomization:** every palette has an **All** button, including custom colors already added to that palette. All nine built-in colors are selected by default for tabletop, motors, legs, floor, wall, background and objects. **Robot body keeps orange/yellow** by default. All patterns, all five environment layouts, lighting and material finishes start enabled. Individual values/scopes can still be deselected; pattern and layout groups also have All controls.
 3. **Start collection:** view progress and the latest native main-camera image under **Datasets**. Download becomes available after finalization and official LeRobot readback validation.
 
 A disabled property retains its captured scene value. A nonempty color palette constrains both the base color and the secondary color of that surface's pattern, even if the pattern itself is locked. Motors remain independent of the robot body. Each property has an independent random stream: enabling another property does not change a previously enabled property's sample. Layout/lighting can affect perceived color in rendered images; palettes constrain material colors.
 
-Attempt `i` uses `starting_seed + i`, starting at zero. Reproducibility requires the same complete input scene, configuration and generator/runtime version. Recipes are included. Attempts count includes failures; excluded failures do not consume a LeRobot episode index. Seeds are not recycled. Uniform choices may repeat and do not guarantee every combination appears in a small batch.
+Attempt `i` uses `starting_seed + i`, starting at zero. **Episodes is the retained-episode target**, not an attempt count. By default only successful executions count. Rejected placements/failed executions use a new seed until the target is reached or **five times the requested count** has been attempted. Exhaustion reports a failed/partial job with the actual saved count; verified prior episodes remain downloadable. Seeds are not recycled. Uniform choices may repeat and do not guarantee every combination appears in a small batch.
+
+Source and destination receive independent XY offsets uniformly sampled within the selected radius around their initial positions. Heights, orientations, other physical properties and unrelated objects stay fixed. Complete object footprints stay on the tabletop. The existing local-space containment check groups cup/bowl contents with their container, including lower-half cargo and spoon endpoints; examples 11 and 13 retain their starting relationships. Every randomized arrangement is rehearsed with the existing physical contact/collision checks before recording. Invalid arrangements are recorded as rejected attempts, never executed with a stale path.
+
+Reproducibility requires the same complete input scene, configuration and generator/runtime version. Collection generator 2 includes position variation and per-attempt controller configuration; older generator-1 exports remain readable.
 
 **Successful episodes only** is the default. Enable **Include failed episodes** to retain failed/timed-out attempts with their outcomes in metadata. **Stop collection** discards the current incomplete episode and retains already committed episodes. Stopping during encoding completes the current commit before stopping. Interrupted/error attempts retain seed, scene and captured-frame count in the manifest.
 
-Supported limits: 1–100 attempts, 1–60 simulated seconds each, 10/20/25/50 FPS, 320×240 or 640×480 RGB. One job runs at a time. Rendering may be slower than real time; physics time drives capture, so slow rendering does not skip scheduled frames. The editor stays usable. Files stay on this computer; no Hub upload occurs.
+Supported limits: 1–100 retained episodes (up to 500 attempts), 1–60 simulated seconds each, 10/20/25/50 FPS, 320×240 or 640×480 RGB. One job runs at a time. Rendering may be slower than real time; physics time drives capture, so slow rendering does not skip scheduled frames. The editor stays usable. Files stay on this computer; no Hub upload occurs.
 
 ## Dataset contract
 
@@ -60,7 +64,7 @@ meta/collection-verification.json      # readback result
 trajectories/episode_000000.npz         # every 1 ms controller/physics sample
 ```
 
-Dense NPZ arrays: `time`, `qpos`, `qvel`, `effort`, `control`, `tcp`, and `sample_steps`. `sample_steps` maps dataset rows to dense trajectory indices. It permits exact comparison of sampled state/action/timestamps without interpolating. The manifest includes the rehearsed controller configuration, runtime package versions, joint names, units and action semantics.
+Dense NPZ arrays: `time`, `qpos`, `qvel`, `effort`, `control`, `tcp`, and `sample_steps`. `sample_steps` maps dataset rows to dense trajectory indices. It permits exact comparison of sampled state/action/timestamps without interpolating. The manifest includes scene ID/name, runtime package versions, joint names, units and action semantics. Each recorded attempt includes its own rehearsed controller configuration, exact object positions and appearance recipe.
 
 Every retained episode is finalized before the next writer resumes. This starts separate data/video shards; only metadata needs a rollback checkpoint. A failed encoding/write removes the incomplete episode and restores prior metadata. Recovery checkpoints are preserved if restoration itself fails. Downloads require a successful verification, including when earlier episodes survive a later error. Hard process termination/power loss is reported as interrupted and is not automatically resumed or presented as a verified download.
 
@@ -99,7 +103,7 @@ All endpoints use the existing local service at port 8765:
 | Method / route | Result |
 | --- | --- |
 | `GET /api/collection` | Runtime readiness, defaults, format, camera list |
-| `POST /api/sessions/{sid}/collection` | Clone paused scene and launch a job with `CollectionConfig` JSON |
+| `POST /api/sessions/{sid}/collection` | Select the preset or clone the paused editor scene; launch a job with `CollectionConfig` JSON |
 | `GET /api/collection/jobs` | Latest 100 jobs |
 | `GET /api/collection/jobs/{id}` | Progress, errors, verification/download availability |
 | `POST /api/collection/jobs/{id}/cancel` | Request cooperative stop |
@@ -110,6 +114,7 @@ Example configuration:
 
 ```json
 {
+  "scene_id": "kalas-cup-front",
   "name": "orange-yellow-training",
   "task": "Pick up the spoon and place it in the cup.",
   "episodes": 10,
@@ -123,11 +128,13 @@ Example configuration:
     "table_colors": ["#ffffff", "#808080", "#202020"],
     "table_patterns": ["solid", "wood", "checker"],
     "environments": ["studio", "room", "warehouse"],
-    "lighting": true
+    "lighting": true,
+    "positions": true,
+    "position_radius": 0.02
   }
 }
 ```
 
-Empty palette/pattern/layout arrays mean locked. Omitted fields receive the defaults exposed by the capabilities endpoint; explicitly pass `robot_colors: []` and `table_colors: []` to lock the two default-enabled scopes. Full settings are validated with unknown keys rejected.
+Empty palette/pattern/layout arrays mean locked. `scene_id: null` means the current editor scene. Omitted fields receive the broad defaults exposed by the capabilities endpoint: all colors except robot orange/yellow, all patterns/layouts, lighting, finishes and positions. Pass `positions: false`, `lighting: false`, `finishes: false` and empty lists for the scopes you want to lock. Unknown keys and invalid scene IDs are rejected.
 
-This version repeats the selected physical task while varying appearance. It does not randomize object placement, camera poses, dynamics, occlusion or sensor noise. Split training/evaluation by seeds and environment families, then validate the trained policy on held-out conditions and hardware before claiming robustness.
+This version varies visual properties and source/destination positions while retaining the selected task. Camera poses, dynamics and sensor noise are not randomized. Split training/evaluation by seeds and environment families, then validate the trained policy on held-out conditions and hardware before claiming robustness.

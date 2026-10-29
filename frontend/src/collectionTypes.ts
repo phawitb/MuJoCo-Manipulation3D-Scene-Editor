@@ -13,12 +13,21 @@ export type PatternKey =
 export interface Variation
   extends Record<PaletteKey, string[]>, Record<PatternKey, Pattern[]> {
   environments: string[];
+  positions: boolean;
+  position_radius: number;
   lighting: boolean;
   finishes: boolean;
   repeat_min: number;
   repeat_max: number;
 }
+export interface CollectionScene {
+  id: string;
+  name: string;
+  description: string;
+  instruction: string;
+}
 export interface CollectionConfig {
+  scene_id: string | null;
   name: string;
   task: string;
   episodes: number;
@@ -30,6 +39,10 @@ export interface CollectionConfig {
   variation: Variation;
 }
 export interface CollectionJob {
+  scene_id?: string | null;
+  scene_name?: string;
+  attempt?: number;
+  max_attempts?: number;
   id: string;
   name: string;
   status: string;

@@ -18,6 +18,9 @@ def test_collection_palettes_are_bounded_independent_and_reproducible():
     config = Variation(
         robot_colors=["#ff8800", "#ffff00"],
         table_colors=["#ffffff", "#808080", "#000000"],
+        robot_patterns=[],
+        motor_colors=[],
+        positions=False,
     )
     results = [episode_scene(original, config, seed) for seed in range(20)]
     assert {s.appearance.robot_color for s in results} == {"#ff8800", "#ffff00"}
@@ -87,6 +90,7 @@ def test_real_worker_exports_readable_synchronized_lerobot(tmp_path):
             "resolution": "320x240",
             "max_seconds": 1,
             "include_failed": True,
+            "variation": {"positions": False},
         },
     }
     (tmp_path / "config.json").write_text(json.dumps(config))
@@ -160,7 +164,12 @@ def test_cancel_keeps_completed_episodes_and_excludes_partial(tmp_path, monkeypa
     if not manager.ready():
         pytest.skip("Collection runtime not installed")
     config = CollectionConfig(
-        episodes=5, fps=10, resolution="320x240", max_seconds=1, include_failed=True
+        episodes=5,
+        fps=10,
+        resolution="320x240",
+        max_seconds=1,
+        include_failed=True,
+        variation={"positions": False},
     )
     try:
         job = manager.start(example_scene(), config, "test")
@@ -190,7 +199,7 @@ def test_cancel_keeps_completed_episodes_and_excludes_partial(tmp_path, monkeypa
         interrupted = manifest["attempts"][-1]
         assert interrupted["outcome"] == "cancelled"
         assert interrupted["dataset_episode_index"] is None
-        assert interrupted["seed"] == config.seed + status["episode"] - 1
+        assert interrupted["seed"] == config.seed + status["attempt"] - 1
         archive, name = manager.archive(job["id"])
         assert archive.is_file()
         assert name.endswith("-lerobot.zip")
@@ -207,7 +216,7 @@ def test_palette_constrains_existing_pattern_secondary_without_changing_pattern(
     source.appearance.robot.secondary = "#0000ff"
     source.appearance.table.pattern = "stripes"
     source.appearance.table.secondary = "#ff0000"
-    config = Variation()
+    config = Variation(robot_patterns=[], table_patterns=[])
     result = episode_scene(source, config, 42)
     assert result.appearance.robot.secondary in config.robot_colors
     assert result.appearance.table.secondary in config.table_colors
@@ -239,6 +248,7 @@ def test_encoding_failure_preserves_prior_committed_episode(tmp_path):
                     "resolution": "320x240",
                     "max_seconds": 1,
                     "include_failed": True,
+                    "variation": {"positions": False},
                 },
             }
         )

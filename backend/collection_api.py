@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import FileResponse
 from .collection_schema import CollectionConfig, VIEWS
 from .schema import MAX_SCENE_BYTES
+from .collection_scenes import collection_scene, collection_catalog
 
 router = APIRouter()
 
@@ -19,6 +20,7 @@ def capabilities(request: Request):
         "cameras": list(VIEWS),
         "root": str(jobs.root),
         "defaults": CollectionConfig().model_dump(),
+        "scenes": collection_catalog(),
     }
 
 
@@ -42,7 +44,7 @@ async def start(sid: str, request: Request):
     with session.lock:
         if session.sim.running:
             raise ValueError("Pause the simulation before starting collection")
-        source = session.sim.export_scene()
+        source = collection_scene(session.sim.export_scene(), config.scene_id)
         if not source.task.source or not source.task.target:
             raise ValueError(
                 "Choose a pick object and destination, or load a task example first"

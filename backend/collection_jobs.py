@@ -109,6 +109,9 @@ class CollectionJobs:
             status = {
                 "id": job_id,
                 "name": config.name,
+                "scene_id": config.scene_id,
+                "scene_name": scene.name,
+                "max_attempts": config.max_attempts,
                 "status": "queued",
                 "episode": 0,
                 "episodes": config.episodes,

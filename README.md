@@ -113,6 +113,6 @@ Both renderers use the same generated texture pixels, colors, environment geomet
 
 ## LeRobot data collection
 
-Open **Collect** to record five synchronized native cameras, measured joints, commanded actions and dense 1000 Hz trajectories. Select allowed color palettes (robot orange/yellow, table white/gray/black by default), patterns, environments and lighting; each episode receives a reproducible seed. A background copy rehearses and repeats the selected pick/place task while the editor remains usable.
+Open **Collect** to record five synchronized native cameras, measured joints, commanded actions and dense 1000 Hz trajectories. Choose a scene, the desired saved episode count and allowed variation. **All** colors/patterns/environments start enabled except robot body colors, which retain orange/yellow. Source and destination positions vary independently within a configurable radius (2 cm default); contained objects move with their container. Each new arrangement receives a reproducible seed and its own physical rehearsal. The editor remains usable, and datasets can be filtered by scene.
 
 Install once with `bash scripts/setup-collection.sh`. Finished jobs include a verified **LeRobot v3.0** dataset, H.264 videos, Parquet data, full episode recipes and NPZ trajectories. Download the ZIP from **Collect → Datasets**. Outputs stay local under `recordings/`. See **[setup, data contract, replay semantics and API](docs/DATA-COLLECTION.md)**.

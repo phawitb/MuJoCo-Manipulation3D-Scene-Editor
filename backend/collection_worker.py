@@ -25,6 +25,10 @@ def collect(job_dir):
     status = {
         "id": payload["id"],
         "name": config.name,
+        "scene_id": config.scene_id,
+        "scene_name": source.name,
+        "attempt": 0,
+        "max_attempts": config.max_attempts,
         "status": "planning",
         "episode": 0,
         "episodes": config.episodes,
@@ -52,7 +56,9 @@ def collect(job_dir):
 
     dataset = None
     manifest = {
-        "generator": 1,
+        "generator": 2,
+        "scene_id": config.scene_id,
+        "scene_name": source.name,
         "config": config.model_dump(),
         "cameras": list(VIEWS),
         "physics_hz": 1000,
@@ -70,6 +76,7 @@ def collect(job_dir):
     terminal, error = "completed", None
     active_entry = None
     recorder = None
+    sim = None
 
     def interrupted_attempt(outcome, message):
         if active_entry is not None:
@@ -78,7 +85,7 @@ def collect(job_dir):
                 message=message,
                 success=False,
                 frames=recorder.frames if recorder else 0,
-                terminal_time=float(sim.data.time),
+                terminal_time=float(sim.data.time) if sim is not None else 0,
                 dataset_episode_index=None,
             )
             manifest["attempts"].append(active_entry)
@@ -94,14 +101,6 @@ def collect(job_dir):
         if not source.task.source or not source.task.target:
             raise ValueError("Choose a pick object and a destination before collecting")
         base = Simulation(source)
-        plan = calculate_plan(base, CancelSignal())
-        if cancelled():
-            raise CollectionCancelled()
-        if not plan.get("verified"):
-            raise ValueError(
-                "Task rehearsal failed: " + plan.get("message", "No valid path")
-            )
-        manifest["controller_configuration"] = plan["configuration"]
         manifest["runtime_versions"] = {
             package: version(package)
             for package in ("lerobot", "mujoco", "numpy", "scipy", "pydantic", "pillow")
@@ -128,29 +127,57 @@ def collect(job_dir):
             use_videos=True,
             metadata_buffer_size=1,
         )
-        for attempt in range(config.episodes):
+        for attempt in range(config.max_attempts):
+            if status["saved_episodes"] >= config.episodes:
+                break
             if cancelled():
                 raise CollectionCancelled()
-            if dataset is None:
-                dataset = LeRobotDataset.resume(**writer_options)
             seed = config.seed + attempt
-            scene = episode_scene(source, config.variation, seed)
-            sim = Simulation(scene)
-            sim.policy.configuration = plan["configuration"]
-            sim.start_policy()
-            recorder = None
+            recorder, sim = None, None
             active_entry = {
                 "attempt": attempt,
                 "seed": seed,
-                "scene": scene.model_dump(),
+                "scene": None,
+                "success": False,
+                "frames": 0,
+                "dataset_episode_index": None,
             }
             update(
-                status="recording",
-                episode=attempt + 1,
+                status="planning",
+                episode=status["saved_episodes"] + 1,
+                attempt=attempt + 1,
                 frames=0,
                 seed=seed,
                 simulation_time=0,
-                message=f"Recording episode {attempt + 1}",
+                message=f"Rehearsing placement {attempt + 1}; {status['saved_episodes']}/{config.episodes} episodes saved",
+            )
+            try:
+                scene = episode_scene(source, config.variation, seed)
+                active_entry["scene"] = scene.model_dump()
+                sim = Simulation(scene)
+                plan = calculate_plan(sim, CancelSignal())
+            except ValueError as exc:
+                plan = {"verified": False, "message": str(exc)}
+            if cancelled():
+                raise CollectionCancelled()
+            if not plan.get("verified"):
+                active_entry.update(
+                    outcome="rejected",
+                    message=plan.get("message", "No valid path"),
+                    terminal_time=0,
+                )
+                manifest["attempts"].append(active_entry)
+                active_entry = None
+                update(message="Placement rejected; trying the next seed")
+                continue
+            active_entry["controller_configuration"] = plan["configuration"]
+            if dataset is None:
+                dataset = LeRobotDataset.resume(**writer_options)
+            sim.policy.configuration = plan["configuration"]
+            sim.start_policy()
+            update(
+                status="recording",
+                message=f"Recording episode {status['saved_episodes'] + 1}/{config.episodes} (attempt {attempt + 1})",
             )
 
             def sample(frames, sim_time, preview):
@@ -176,6 +203,7 @@ def collect(job_dir):
             outcome = "succeeded" if success else "timeout" if sim.running else "failed"
             keep = recorder.frames > 0 and (success or config.include_failed)
             entry = {
+                "controller_configuration": plan["configuration"],
                 "attempt": attempt,
                 "seed": seed,
                 "success": success,
@@ -204,6 +232,9 @@ def collect(job_dir):
             manifest["attempts"].append(entry)
             active_entry = None
             update()
+        if status["saved_episodes"] < config.episodes:
+            terminal = "failed"
+            error = f"Saved {status['saved_episodes']}/{config.episodes} episodes after {config.max_attempts} attempts. Reduce position range, increase time limit, or adjust the scene."
     except CollectionCancelled:
         terminal = "cancelled"
         interrupted_attempt("cancelled", "Incomplete episode discarded by request")

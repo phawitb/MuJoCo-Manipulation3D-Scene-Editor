@@ -9,6 +9,20 @@ from .catalog import profile
 def inside_container(sim, container, obj):
     vessel = sim.data.body(f"object_{container.id}")
     body = sim.data.body(f"object_{obj.id}")
+    return inside_container_geometry(
+        container,
+        obj,
+        vessel.xpos,
+        vessel.xmat.reshape(3, 3),
+        body.xpos,
+        body.xmat.reshape(3, 3),
+    )
+
+
+def inside_container_geometry(
+    container, obj, vessel_position, vessel_rotation, item_position, item_rotation
+):
+    """Shared containment predicate for measured physics and initial scene poses."""
     p, item = profile(container), profile(obj)
     # Either end of a spoon can be inside the vessel. Checking only its bowl
     # misses the common handle-first orientation and would silently skip cargo.
@@ -19,8 +33,8 @@ def inside_container(sim, container, obj):
             for x in (-item["dimensions"][0] * 0.42, item["grasp"], 0, item["bowl"])
         ]
     for offset in offsets:
-        point = body.xpos + body.xmat.reshape(3, 3) @ offset
-        relative = vessel.xmat.reshape(3, 3).T @ (point - vessel.xpos)
+        point = item_position + item_rotation @ offset
+        relative = vessel_rotation.T @ (point - vessel_position)
         if (
             np.linalg.norm(relative[:2]) < p["rim"] * container.scale
             and -p["dimensions"][2] * container.scale / 2 - 0.003

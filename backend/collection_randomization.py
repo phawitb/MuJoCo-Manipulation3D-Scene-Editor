@@ -44,5 +44,9 @@ def episode_scene(source: Scene, config: Variation, seed: int) -> Scene:
         a.environment = stream("environment").choice(config.environments)
     if config.lighting:
         scene = randomize_scene(scene, Randomization(seed=seed, groups=["lighting"]))
+    if config.positions:
+        from .collection_positions import randomize_positions
+
+        randomize_positions(scene, config.position_radius, seed)
     scene.appearance.last_randomization = None
     return Scene.model_validate(scene.model_dump())

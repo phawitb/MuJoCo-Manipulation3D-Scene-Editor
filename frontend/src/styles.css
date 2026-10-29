@@ -2853,3 +2853,10 @@ p {
     width: auto;
   }
 }
+
+.collect-rule-heading { display: flex; align-items: center; gap: 10px; }
+.collect-rule-heading .look-check { flex: 1; min-width: 0; }
+.collect-all { padding: 5px 10px; border: 1px solid #526c60; border-radius: 6px; font-size: 11px; background: transparent; color: #c6d8cf; flex: none; }
+.collect-all[aria-pressed="true"] { background: #b9d8c1; color: #1c3025; }
+.collect-input select { width: 100%; padding: 10px; color: var(--text); background: #253133; border: 1px solid #42514e; border-radius: 7px; font: inherit; }
+.collect-scene-name { color: #b9d8c1 !important; }

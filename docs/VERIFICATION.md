@@ -122,3 +122,16 @@ The new **Collect** panel records main/top/front/back/wrist cameras with joint s
 Hard process termination/power loss is not automatically recovered into a verified dataset. Randomization currently varies visual properties, retaining the physical task and camera setup. No learned-policy robustness claim is made.
 
 ![Collection palettes](screenshots/collection-palettes.png)
+
+## Scene-specific collection and All defaults (2026-10-29)
+
+Collect now selects any of 13 example scenes or the live editor, sets a retained-episode target, randomizes source/destination XY positions, and filters saved jobs by scene. Each changed placement gets its own real rehearsal; rejected placements use new seeds. Attempts are bounded to five times the requested count, and partial results are clearly reported. All visual choices start enabled except the orange/yellow robot-body palette. Palette All includes added custom colors. [Updated collection contract](DATA-COLLECTION.md).
+
+- **44 backend tests passed** (172.73 s): collection, planning, cup grasp and clearance. Actual official LeRobot export retained two successful episodes with different source and destination positions after an injected initial rejection. The generated scenes and per-episode controller configurations are saved in provenance. A separate all-rejected test confirms termination at 5 attempts for a target of 1, with explicit 0/1 status and distinct seeds. Table-footprint bounds and invalid placement are tested.
+- Containment review identified lower-half cargo and spoon tips outside the center-based heuristic. The regression failed first; collection now shares the unchanged local-space containment predicate with the controller. Tests cover examples 11/13, lower-half cube cargo and a spoon whose center lies outside but end lies inside. Final focused independent review found no actionable issues and independently passed containment/budget tests.
+- **4 browser scenarios passed** (collection plus Appearance), followed by the final collection rerun (**17.9 s**) after fixing tab scroll reset. Checks include preset selection from an empty live editor, All/default colors, pattern/layout defaults, 2 requested retained episodes, exact 20 frames, scene filtering, ZIP download, live scene/time isolation and a visible mobile close control. **14 frontend unit tests**, TypeScript, production build and focused Python correctness lint passed. Existing bundle-size warning remains.
+- Updated running service reports 13 scene choices, 9 default non-robot colors, orange/yellow robot colors and enabled position variation. Screenshots inspected below. Existing editor sessions were backed up before the service restart.
+
+![Scene selection and episode target](screenshots/collection-scenes.png)
+
+![All palette controls](screenshots/collection-all-palettes.png)

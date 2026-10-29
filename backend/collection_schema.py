@@ -7,27 +7,51 @@ from .appearance import Color, Pattern, Strict
 Palette = Annotated[list[Color], Field(max_length=32)]
 Patterns = Annotated[list[Pattern], Field(max_length=8)]
 Environment = Literal["open", "studio", "room", "warehouse", "panels"]
+ALL_COLORS = [
+    "#f1792e",
+    "#ffd11f",
+    "#ffffff",
+    "#808080",
+    "#202020",
+    "#668ad5",
+    "#6f9b77",
+    "#e78dbe",
+    "#d95454",
+]
+ALL_PATTERNS = [
+    "solid",
+    "checker",
+    "stripes",
+    "dots",
+    "wood",
+    "terrazzo",
+    "tiles",
+    "noise",
+]
+ALL_ENVIRONMENTS = ["open", "studio", "room", "warehouse", "panels"]
 VIEWS = ("main", "top", "front", "back", "wrist")
 
 
 class Variation(Strict):
     robot_colors: Palette = Field(default_factory=lambda: ["#f1792e", "#ffd11f"])
-    table_colors: Palette = Field(
-        default_factory=lambda: ["#ffffff", "#808080", "#202020"]
+    table_colors: Palette = Field(default_factory=lambda: ALL_COLORS.copy())
+    motor_colors: Palette = Field(default_factory=lambda: ALL_COLORS.copy())
+    leg_colors: Palette = Field(default_factory=lambda: ALL_COLORS.copy())
+    floor_colors: Palette = Field(default_factory=lambda: ALL_COLORS.copy())
+    wall_colors: Palette = Field(default_factory=lambda: ALL_COLORS.copy())
+    background_colors: Palette = Field(default_factory=lambda: ALL_COLORS.copy())
+    object_colors: Palette = Field(default_factory=lambda: ALL_COLORS.copy())
+    robot_patterns: Patterns = Field(default_factory=lambda: ALL_PATTERNS.copy())
+    table_patterns: Patterns = Field(default_factory=lambda: ALL_PATTERNS.copy())
+    floor_patterns: Patterns = Field(default_factory=lambda: ALL_PATTERNS.copy())
+    wall_patterns: Patterns = Field(default_factory=lambda: ALL_PATTERNS.copy())
+    environments: list[Environment] = Field(
+        default_factory=lambda: ALL_ENVIRONMENTS.copy(), max_length=5
     )
-    motor_colors: Palette = Field(default_factory=list)
-    leg_colors: Palette = Field(default_factory=list)
-    floor_colors: Palette = Field(default_factory=list)
-    wall_colors: Palette = Field(default_factory=list)
-    background_colors: Palette = Field(default_factory=list)
-    object_colors: Palette = Field(default_factory=list)
-    robot_patterns: Patterns = Field(default_factory=list)
-    table_patterns: Patterns = Field(default_factory=list)
-    floor_patterns: Patterns = Field(default_factory=list)
-    wall_patterns: Patterns = Field(default_factory=list)
-    environments: list[Environment] = Field(default_factory=list, max_length=5)
-    lighting: bool = False
-    finishes: bool = False
+    lighting: bool = True
+    finishes: bool = True
+    positions: bool = True
+    position_radius: float = Field(default=0.02, ge=0.01, le=0.05)
     repeat_min: float = Field(default=2, ge=1, le=24)
     repeat_max: float = Field(default=12, ge=1, le=24)
 
@@ -39,6 +63,7 @@ class Variation(Strict):
 
 
 class CollectionConfig(Strict):
+    scene_id: str | None = Field(default=None, max_length=80)
     name: str = Field(
         default="so101-demonstrations", pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$"
     )
@@ -57,8 +82,17 @@ class CollectionConfig(Strict):
 
     @model_validator(mode="after")
     def seed_range(self):
-        if self.seed + self.episodes - 1 > 2**31 - 1:
+        if self.scene_id is not None:
+            from .examples import example_catalog
+
+            if self.scene_id not in {s["id"] for s in example_catalog()}:
+                raise ValueError("Unknown collection scene")
+        if self.seed + self.max_attempts - 1 > 2**31 - 1:
             raise ValueError("Episode seed range exceeds maximum")
         if not self.task.strip():
             raise ValueError("Task instruction cannot be blank")
         return self
+
+    @property
+    def max_attempts(self):
+        return self.episodes * 5
