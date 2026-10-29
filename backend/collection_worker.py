@@ -8,7 +8,7 @@ import sys
 import time
 import traceback
 
-from .collection_schema import CollectionConfig, VIEWS
+from .collection_schema import CollectionConfig
 from .collection_commit import commit_episode
 from .collection_randomization import episode_scene
 from .collection_data import CollectionCancelled, EpisodeRecorder, atomic_json, features
@@ -60,7 +60,7 @@ def collect(job_dir):
         "scene_id": config.scene_id,
         "scene_name": source.name,
         "config": config.model_dump(),
-        "cameras": list(VIEWS),
+        "cameras": config.cameras,
         "physics_hz": 1000,
         "repo_id": f"local/{config.name}",
         "units": {
@@ -123,7 +123,7 @@ def collect(job_dir):
             **writer_options,
             fps=config.fps,
             robot_type="so101_mujoco",
-            features=features(width, height, joint_names),
+            features=features(width, height, joint_names, config.cameras),
             use_videos=True,
             metadata_buffer_size=1,
         )
@@ -218,7 +218,7 @@ def collect(job_dir):
                 update(
                     status="encoding",
                     frames=recorder.frames,
-                    message="Encoding all five camera streams",
+                    message=f"Encoding {len(config.cameras)} camera streams",
                 )
                 try:
                     commit_episode(dataset, recorder, entry, job_dir / "dataset")

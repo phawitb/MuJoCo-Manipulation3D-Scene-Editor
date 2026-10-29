@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  ArrowLeft,
   Camera,
   Check,
   Database,
@@ -8,8 +9,8 @@ import {
   Palette,
   Play,
   Square,
-  X,
 } from "lucide-react";
+import { DatasetViewer } from "./DatasetViewer";
 import type { Scene, Pattern } from "./types";
 import {
   paletteRules,
@@ -162,6 +163,9 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("capture");
+  const [viewing, setViewing] = useState<string | null>(null);
+  const pageRef = useRef<HTMLElement>(null);
+  const lastViewed = useRef<string | null>(null);
   const [enabledColors, setEnabledColors] = useState<Set<PaletteKey>>(
     new Set(),
   );
@@ -175,9 +179,37 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
     scrollPanel.current?.scrollTo({ top: 0 });
   }, [tab]);
   useEffect(() => {
+    if (viewing) {
+      pageRef.current
+        ?.querySelector<HTMLButtonElement>("[data-dataset-back]")
+        ?.focus();
+    } else if (lastViewed.current) {
+      pageRef.current
+        ?.querySelector<HTMLButtonElement>(
+          `[data-testid="collection-job-${CSS.escape(lastViewed.current)}"] .collect-visualize`,
+        )
+        ?.focus();
+    }
+  }, [viewing]);
+  useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
+    const background = Array.from(
+      pageRef.current?.parentElement?.children || [],
+    ).filter(
+      (element): element is HTMLElement =>
+        element instanceof HTMLElement && element !== pageRef.current,
+    );
+    const prior = background.map((element) => element.inert);
+    background.forEach((element) => {
+      element.inert = true;
+    });
     closeButton.current?.focus();
-    return () => previous?.focus();
+    return () => {
+      background.forEach((element, i) => {
+        element.inert = prior[i];
+      });
+      previous?.focus();
+    };
   }, []);
   useEffect(() => {
     const controller = new AbortController();
@@ -185,6 +217,7 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
       .then(responseJSON)
       .then((data) => {
         const defaults = data.defaults as CollectionConfig;
+        defaults.cameras ??= ["main", "top", "front", "back", "wrist"];
         setReady(data.ready);
         setScenes(data.scenes);
         setEnabledPatterns(
@@ -278,6 +311,7 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
   );
   const valid =
     !!config &&
+    config.cameras.length > 0 &&
     /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(config.name) &&
     !!config.task.trim() &&
     Number.isInteger(config.episodes) &&
@@ -345,10 +379,31 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
   };
   return (
     <aside
+      ref={pageRef}
       className="appearance-studio collection-panel"
+      data-testid="collection-page"
+      data-tab={tab}
+      aria-modal="true"
       role="dialog"
       aria-label="Data collection"
       onKeyDown={(e) => {
+        if (e.key === "Tab") {
+          const focusable = Array.from(
+            e.currentTarget.querySelectorAll<HTMLElement>(
+              'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+            ),
+          ).filter((el) => el.offsetParent !== null);
+          if (e.shiftKey && document.activeElement === focusable[0]) {
+            e.preventDefault();
+            focusable.at(-1)?.focus();
+          } else if (
+            !e.shiftKey &&
+            document.activeElement === focusable.at(-1)
+          ) {
+            e.preventDefault();
+            focusable[0]?.focus();
+          }
+        }
         if (e.key === "Escape") {
           e.stopPropagation();
           close();
@@ -368,14 +423,13 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
           onClick={close}
           aria-label="Close data collection"
         >
-          <X size={19} />
+          <ArrowLeft size={17} />
+          <span>Back to editor</span>
         </button>
       </header>
       <div className="look-intro">
         One scene. Many demonstrations.
-        <span>
-          Five synchronized cameras · measured joints · full trajectory
-        </span>
+        <span>Selected camera views · measured joints · full trajectory</span>
       </div>
       <nav
         className="look-tabs collect-tabs"
@@ -386,7 +440,14 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
           { id: "randomization", name: "Randomization", Icon: Palette },
           { id: "jobs", name: "Datasets", Icon: Database },
         ].map(({ id, name, Icon }) => (
-          <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}>
+          <button
+            key={id}
+            aria-pressed={tab === id}
+            onClick={() => {
+              setTab(id);
+              setViewing(null);
+            }}
+          >
             <Icon size={15} />
             {name}
             {id === "jobs" && activeJob && <i className="green-dot" />}
@@ -398,7 +459,7 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
           <p className="collect-note">Loading collection settings…</p>
         )}
         {config && tab === "capture" && (
-          <>
+          <div className="collect-capture-grid">
             <section className="look-section">
               <h3>
                 Dataset<span>ON THIS COMPUTER</span>
@@ -513,12 +574,45 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
               </h3>
               <div className="collect-cameras">
                 {["main", "top", "front", "back", "wrist"].map((v) => (
-                  <span key={v}>
-                    <Camera size={12} />
+                  <label
+                    key={v}
+                    className={config.cameras.includes(v) ? "selected" : ""}
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`Capture ${v} view`}
+                      checked={config.cameras.includes(v)}
+                      onChange={() =>
+                        patch({
+                          cameras: config.cameras.includes(v)
+                            ? config.cameras.filter((camera) => camera !== v)
+                            : [...config.cameras, v],
+                        })
+                      }
+                    />
+                    <Camera size={14} />
                     {v}
-                  </span>
+                  </label>
                 ))}
               </div>
+              <button
+                className="collect-all"
+                type="button"
+                onClick={() =>
+                  patch({ cameras: ["main", "top", "front", "back", "wrist"] })
+                }
+              >
+                Select all views
+              </button>
+              {config.cameras.length === 0 && (
+                <p className="look-error" role="alert">
+                  Select at least one camera view.
+                </p>
+              )}
+              <p>
+                {config.cameras.length} selected views are recorded at the same
+                simulation time.
+              </p>
               <label className="look-select">
                 Frame rate
                 <select
@@ -574,7 +668,7 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
             <section className="look-section">
               <h3>What is recorded</h3>
               <ul className="collect-features">
-                <li>RGB video from all five native MuJoCo cameras</li>
+                <li>RGB video from your selected native MuJoCo cameras</li>
                 <li>
                   Joint positions, velocities, actuator forces and command
                   targets
@@ -590,10 +684,10 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
                 independent copy records.
               </p>
             </section>
-          </>
+          </div>
         )}
         {config && tab === "randomization" && (
-          <>
+          <div className="collect-random-grid">
             <section className="look-section">
               <h3>
                 Color palettes<span>ALLOWED PER EPISODE</span>
@@ -603,23 +697,25 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
                 categories keep the captured scene's values. Surface palettes
                 also constrain the secondary color of existing patterns.
               </p>
-              {paletteRules.map((rule) => (
-                <PaletteRule
-                  key={rule.key}
-                  name={rule.name}
-                  value={config.variation[rule.key]}
-                  enabled={enabledColors.has(rule.key)}
-                  toggle={() =>
-                    setEnabledColors((old) => {
-                      const next = new Set(old);
-                      if (next.has(rule.key)) next.delete(rule.key);
-                      else next.add(rule.key);
-                      return next;
-                    })
-                  }
-                  update={(colors) => variation(rule.key, colors)}
-                />
-              ))}
+              <div className="collect-palette-grid">
+                {paletteRules.map((rule) => (
+                  <PaletteRule
+                    key={rule.key}
+                    name={rule.name}
+                    value={config.variation[rule.key]}
+                    enabled={enabledColors.has(rule.key)}
+                    toggle={() =>
+                      setEnabledColors((old) => {
+                        const next = new Set(old);
+                        if (next.has(rule.key)) next.delete(rule.key);
+                        else next.add(rule.key);
+                        return next;
+                      })
+                    }
+                    update={(colors) => variation(rule.key, colors)}
+                  />
+                ))}
+              </div>
             </section>
             <section className="look-section">
               <h3>Patterns & finishes</h3>
@@ -785,9 +881,16 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
                 Object placement is controlled separately in Capture.
               </p>
             </section>
-          </>
+          </div>
         )}
-        {tab === "jobs" && (
+        {tab === "jobs" && viewing && (
+          <DatasetViewer
+            key={viewing}
+            jobId={viewing}
+            back={() => setViewing(null)}
+          />
+        )}
+        {tab === "jobs" && !viewing && (
           <section className="look-section">
             <h3>
               Collection jobs<span>{jobs.length} LOCAL</span>
@@ -814,134 +917,149 @@ export function CollectionPanel({ scene, sessionId, editable, close }: Props) {
             {visibleJobs.length === 0 && (
               <p>No datasets yet. Configure a capture and start collection.</p>
             )}
-            {visibleJobs.map((job) => (
-              <article
-                className="collect-job"
-                key={job.id}
-                data-testid={`collection-job-${job.id}`}
-              >
-                <div className="collect-job-title">
-                  <strong>{job.name}</strong>
-                  <span className={`collect-status ${job.status}`}>
-                    {job.status}
-                  </span>
-                </div>
-                <p className="collect-scene-name">
-                  {job.scene_name || "Earlier dataset"}
-                </p>
-                {(job.frames > 0 || job.saved_episodes > 0) && (
-                  <img
-                    className="collect-preview"
-                    src={`/api/collection/jobs/${job.id}/preview?t=${job.updated_at}`}
-                    alt={`Latest main camera frame for ${job.name}`}
-                  />
-                )}
-                <div className="collect-metrics">
-                  <span>
-                    Target{" "}
-                    <b>
-                      {job.saved_episodes}/{job.episodes}
-                    </b>
-                  </span>
-                  <span>
-                    Attempt{" "}
-                    <b>
-                      {job.attempt ?? job.episode}/
-                      {job.max_attempts ?? job.episodes}
-                    </b>
-                  </span>
-                  <span>
-                    Seed <b>{job.seed}</b>
-                  </span>
-                  <span>
-                    Frames <b>{job.total_frames}</b>
-                  </span>
-                </div>
-                <progress max={job.episodes} value={job.saved_episodes} />
-                <p role="status">
-                  {job.cancel_requested &&
-                  !terminalStatuses.includes(job.status)
-                    ? "Stopping after the current operation…"
-                    : job.message}
-                </p>
-                {!terminalStatuses.includes(job.status) && (
-                  <button
-                    className="collect-stop"
-                    disabled={busy || job.cancel_requested}
-                    onClick={() => void cancel(job)}
-                  >
-                    <Square size={13} />
-                    Stop collection
-                  </button>
-                )}
-                {job.download_available && (
-                  <>
-                    <div className="collect-verified">
-                      <Check size={14} />
-                      Verified LeRobot dataset
-                    </div>
-                    <a
-                      className="collect-download"
-                      href={`/api/collection/jobs/${job.id}/download`}
-                      download
+            <div className="collect-jobs-grid">
+              {visibleJobs.map((job) => (
+                <article
+                  className="collect-job"
+                  key={job.id}
+                  data-testid={`collection-job-${job.id}`}
+                >
+                  <div className="collect-job-title">
+                    <strong>{job.name}</strong>
+                    <span className={`collect-status ${job.status}`}>
+                      {job.status}
+                    </span>
+                  </div>
+                  <p className="collect-scene-name">
+                    {job.scene_name || "Earlier dataset"}
+                  </p>
+                  {(job.frames > 0 || job.saved_episodes > 0) && (
+                    <img
+                      className="collect-preview"
+                      src={`/api/collection/jobs/${job.id}/preview?t=${job.updated_at}`}
+                      alt={`Latest recorded camera frame for ${job.name}`}
+                    />
+                  )}
+                  <div className="collect-metrics">
+                    <span>
+                      Target{" "}
+                      <b>
+                        {job.saved_episodes}/{job.episodes}
+                      </b>
+                    </span>
+                    <span>
+                      Attempt{" "}
+                      <b>
+                        {job.attempt ?? job.episode}/
+                        {job.max_attempts ?? job.episodes}
+                      </b>
+                    </span>
+                    <span>
+                      Seed <b>{job.seed}</b>
+                    </span>
+                    <span>
+                      Frames <b>{job.total_frames}</b>
+                    </span>
+                  </div>
+                  <progress max={job.episodes} value={job.saved_episodes} />
+                  <p role="status">
+                    {job.cancel_requested &&
+                    !terminalStatuses.includes(job.status)
+                      ? "Stopping after the current operation…"
+                      : job.message}
+                  </p>
+                  {!terminalStatuses.includes(job.status) && (
+                    <button
+                      className="collect-stop"
+                      disabled={busy || job.cancel_requested}
+                      onClick={() => void cancel(job)}
                     >
-                      <Download size={15} />
-                      Download dataset ZIP
-                    </a>
-                    <p className="collect-path">{job.dataset_path}</p>
-                  </>
-                )}
-              </article>
-            ))}
+                      <Square size={13} />
+                      Stop collection
+                    </button>
+                  )}
+                  {job.download_available && (
+                    <>
+                      <div className="collect-verified">
+                        <Check size={14} />
+                        Verified LeRobot dataset
+                      </div>
+                      <button
+                        className="collect-visualize"
+                        onClick={() => {
+                          lastViewed.current = job.id;
+                          setViewing(job.id);
+                          scrollPanel.current?.scrollTo({ top: 0 });
+                        }}
+                      >
+                        <Play size={15} />
+                        Visualize dataset
+                      </button>
+                      <a
+                        className="collect-download"
+                        href={`/api/collection/jobs/${job.id}/download`}
+                        download
+                      >
+                        <Download size={15} />
+                        Download dataset ZIP
+                      </a>
+                      <p className="collect-path">{job.dataset_path}</p>
+                    </>
+                  )}
+                </article>
+              ))}
+            </div>
           </section>
         )}
       </div>
-      <footer className="look-footer">
-        {error && (
-          <p className="look-error" role="alert">
-            {error}
-          </p>
-        )}
-        {config && !ready && (
-          <p>
-            Install the collection runtime with{" "}
-            <code>bash scripts/setup-collection.sh</code>.
-          </p>
-        )}
-        {!selectedTask && (
-          <p>
-            Load a task example or choose a pick object and destination first.
-          </p>
-        )}
-        {!editable && (
-          <p>Pause the simulation before starting a new collection.</p>
-        )}
-        {activeJob && (
-          <p>A collection is running. See Datasets for progress.</p>
-        )}
-        <button
-          className="look-primary"
-          disabled={
-            !ready ||
-            !valid ||
-            !selectedTask ||
-            !editable ||
-            busy ||
-            !!activeJob
-          }
-          onClick={() => void start()}
-        >
-          {busy ? (
-            <LoaderCircle size={16} className="spin" />
-          ) : (
-            <Play size={16} />
+      {!viewing && (
+        <footer className="look-footer">
+          {error && (
+            <p className="look-error" role="alert">
+              {error}
+            </p>
           )}
-          Start collection
-        </button>
-        <small className="collect-local">
-          Saved locally · no automatic upload
-        </small>
-      </footer>
+          {config && !ready && (
+            <p>
+              Install the collection runtime with{" "}
+              <code>bash scripts/setup-collection.sh</code>.
+            </p>
+          )}
+          {!selectedTask && (
+            <p>
+              Load a task example or choose a pick object and destination first.
+            </p>
+          )}
+          {!editable && (
+            <p>Pause the simulation before starting a new collection.</p>
+          )}
+          {activeJob && (
+            <p>A collection is running. See Datasets for progress.</p>
+          )}
+          <button
+            className="look-primary"
+            disabled={
+              !ready ||
+              !valid ||
+              !selectedTask ||
+              !editable ||
+              busy ||
+              !!activeJob
+            }
+            onClick={() => void start()}
+          >
+            {busy ? (
+              <LoaderCircle size={16} className="spin" />
+            ) : (
+              <Play size={16} />
+            )}
+            Start collection
+          </button>
+          <small className="collect-local">
+            Saved locally · no automatic upload
+          </small>
+        </footer>
+      )}
     </aside>
   );
 }

@@ -9,6 +9,10 @@ test("collect constrained multi-camera data and download a verified LeRobot data
     await request.post("http://127.0.0.1:8765/api/sessions")
   ).json();
   const sid = initial.sessionId;
+  const sentCommands: string[] = [];
+  page.on("websocket", (socket) => {
+    socket.on("framesent", ({ payload }) => sentCommands.push(String(payload)));
+  });
   try {
     await page.goto(`/?session=${sid}`);
     await page
@@ -41,6 +45,16 @@ test("collect constrained multi-camera data and download a verified LeRobot data
     await page
       .getByLabel("Dataset name", { exact: true })
       .fill("ui-collection-smoke");
+    for (const view of ["main", "top", "front", "back", "wrist"])
+      await page.getByLabel(`Capture ${view} view`, { exact: true }).uncheck();
+    await expect(
+      page.getByText("Select at least one camera view.", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Start collection", exact: true }),
+    ).toBeDisabled();
+    await page.getByLabel("Capture front view", { exact: true }).check();
+    await page.getByLabel("Capture wrist view", { exact: true }).check();
     await page.getByLabel("Episodes", { exact: true }).fill("2");
     await page.getByLabel("Frame rate", { exact: true }).selectOption("10");
     await page
@@ -158,6 +172,102 @@ test("collect constrained multi-camera data and download a verified LeRobot data
       .getByRole("link", { name: "Download dataset ZIP", exact: true })
       .click();
     expect((await download).suggestedFilename()).toContain("lerobot.zip");
+    await card
+      .getByRole("button", { name: "Visualize dataset", exact: true })
+      .click();
+    const viewer = page.getByRole("region", {
+      name: "Dataset visualizer",
+      exact: true,
+    });
+    await expect(viewer).toBeVisible();
+    const commandCount = sentCommands.length;
+    // Global shortcuts must stay disabled even if focus temporarily falls onto BODY.
+    await page.evaluate(() => {
+      for (const [key, code] of [
+        [" ", "Space"],
+        ["Delete", "Delete"],
+        ["ArrowUp", "ArrowUp"],
+      ])
+        document.body.dispatchEvent(
+          new KeyboardEvent("keydown", { key, code, bubbles: true }),
+        );
+    });
+    await page.waitForTimeout(150);
+    expect(sentCommands.slice(commandCount)).toEqual([]);
+    await expect(
+      page.getByRole("button", { name: "Back to datasets", exact: true }),
+    ).toBeFocused();
+    await expect(viewer.locator("video")).toHaveCount(2);
+    await expect(page.getByTestId("viewer-ready")).toHaveText(
+      "All views synchronized",
+      { timeout: 30000 },
+    );
+    await expect(page.getByTestId("viewer-frame")).toHaveText("Frame 1 / 10");
+    await page.getByRole("button", { name: "Next frame", exact: true }).click();
+    await expect(page.getByTestId("viewer-frame")).toHaveText("Frame 2 / 10");
+    await expect(page.getByTestId("trajectory-cursor")).toHaveAttribute(
+      "data-frame",
+      "1",
+    );
+    const timeline = page.getByLabel("Episode frame", { exact: true });
+    await timeline.focus();
+    await timeline.press("End");
+    await expect(page.getByTestId("viewer-frame")).toHaveText("Frame 10 / 10");
+    await expect
+      .poll(async () =>
+        viewer
+          .locator("video")
+          .evaluateAll((elements) =>
+            elements.every(
+              (element) =>
+                Math.abs(
+                  (element as HTMLVideoElement).currentTime -
+                    Number(element.getAttribute("data-offset")) -
+                    0.9,
+                ) < 0.002,
+            ),
+          ),
+      )
+      .toBe(true);
+    await page
+      .getByRole("button", { name: "Play episode", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Pause episode", exact: true }),
+    ).toBeVisible();
+    await expect
+      .poll(async () =>
+        Number(
+          await page
+            .getByTestId("trajectory-cursor")
+            .getAttribute("data-frame"),
+        ),
+      )
+      .toBeGreaterThan(0);
+    await page
+      .getByRole("button", { name: "Pause episode", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Episode 2", exact: true }).click();
+    await expect(page.getByTestId("episode-player")).toHaveAttribute(
+      "data-episode",
+      "1",
+    );
+    await expect(page.getByTestId("viewer-ready")).toHaveText(
+      "All views synchronized",
+    );
+    await expect(page.getByTestId("viewer-frame")).toHaveText("Frame 1 / 10");
+    await page
+      .getByLabel("Trajectory signal", { exact: true })
+      .selectOption("action");
+    await page.screenshot({
+      path: "../docs/screenshots/collection-viewer.png",
+    });
+    await page
+      .getByRole("img", { name: "Joint trajectories", exact: true })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: "../docs/screenshots/collection-trajectories.png",
+    });
     const after = await (
       await request.get(`http://127.0.0.1:8765/api/sessions/${sid}`)
     ).json();
@@ -167,6 +277,22 @@ test("collect constrained multi-camera data and download a verified LeRobot data
     await expect(
       page.getByRole("button", { name: "Close data collection" }),
     ).toBeInViewport();
+    await expect(viewer).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(390);
+    await page
+      .getByRole("button", { name: "Back to datasets", exact: true })
+      .click();
+    await expect(card).toBeVisible();
+    await expect(
+      card.getByRole("button", { name: "Visualize dataset", exact: true }),
+    ).toBeFocused();
+    await page.getByRole("button", { name: "Close data collection" }).click();
+    await expect(page.getByTestId("collection-page")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Collect data", exact: true }),
+    ).toBeEnabled();
   } finally {
     await request.delete(`http://127.0.0.1:8765/api/sessions/${sid}`);
   }

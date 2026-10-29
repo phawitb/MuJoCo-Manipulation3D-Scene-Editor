@@ -26,7 +26,7 @@ def atomic_json(path, value):
     os.replace(temporary, path)
 
 
-def features(width, height, joint_names):
+def features(width, height, joint_names, cameras=VIEWS):
     return {
         "observation.state": {"dtype": "float32", "shape": (6,), "names": joint_names},
         "observation.velocity": {
@@ -48,7 +48,7 @@ def features(width, height, joint_names):
                 "shape": (height, width, 3),
                 "names": ["height", "width", "channels"],
             }
-            for view in VIEWS
+            for view in cameras
         },
     }
 
@@ -96,15 +96,17 @@ class EpisodeRecorder:
             "action": values["control"].astype(np.float32),
             "task": self.config.task,
         }
-        # No simulation stepping occurs between the five native camera captures.
-        for view in VIEWS:
+        # No simulation stepping occurs between the selected native camera captures.
+        for view in self.config.cameras:
             frame[f"observation.images.{view}"] = self.renderer.capture(view)
         self.dataset.add_frame(frame)
         self.sample_steps.append(step)
         self.frames += 1
         if self.on_sample:
             self.on_sample(
-                self.frames, values["time"], frame["observation.images.main"]
+                self.frames,
+                values["time"],
+                frame[f"observation.images.{self.config.cameras[0]}"],
             )
 
     def save_trace(self, path):

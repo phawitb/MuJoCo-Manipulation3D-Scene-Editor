@@ -63,6 +63,9 @@ class Variation(Strict):
 
 
 class CollectionConfig(Strict):
+    cameras: list[Literal["main", "top", "front", "back", "wrist"]] = Field(
+        default_factory=lambda: list(VIEWS), min_length=1, max_length=5
+    )
     scene_id: str | None = Field(default=None, max_length=80)
     name: str = Field(
         default="so101-demonstrations", pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$"
@@ -82,6 +85,8 @@ class CollectionConfig(Strict):
 
     @model_validator(mode="after")
     def seed_range(self):
+        if len(set(self.cameras)) != len(self.cameras):
+            raise ValueError("Select each camera only once")
         if self.scene_id is not None:
             from .examples import example_catalog
 

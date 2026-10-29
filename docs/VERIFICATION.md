@@ -135,3 +135,19 @@ Collect now selects any of 13 example scenes or the live editor, sets a retained
 ![Scene selection and episode target](screenshots/collection-scenes.png)
 
 ![All palette controls](screenshots/collection-all-palettes.png)
+
+## Selectable cameras and full-page dataset visualization (2026-10-29)
+
+Collect opens as a full-viewport workspace with the editor preserved behind it. Capture accepts any nonempty unique subset of Main, Top, Front, Back and Wrist (all selected initially). Recording, preview, feature schema, provenance and official reader validation use that same subset. Datasets now exposes **Visualize dataset** for verified jobs, with episode search, synchronized camera views, playback speed, frame stepping/scrubbing and named joint state/action/velocity/effort plots plus current values and TCP position. The local Lerobot-Dataset-Manager was inspected read-only as a UX reference.
+
+- **24 relevant backend tests passed** (95.72 s): collection, scene randomization, rendering and the new viewer regressions. Actual Front/Wrist-only exports pass official LeRobot readback; no unselected camera video is created. API checks verify sampled signals against dense traces, verified-output gating, unknown views/episodes, HTTP byte ranges and path/symlink containment. A real two-episode shared-video export checks the second episode's nonzero video offset.
+- **4 browser scenarios passed** (26.3 s), including Appearance regression coverage. Collection checks camera exclusion, empty-selection rejection, two retained episodes, download, synchronized frame seeking, playback/pause, episode switching, graph cursor, mobile overflow, focus restoration and unchanged live editor scene/time. **14 frontend unit tests**, TypeScript and production build passed. Existing bundle-size warning remains. Focused Python correctness lint and `git diff --check` passed.
+- Independent review reproduced a global keyboard listener bypass after opening the viewer: focus fell onto BODY and Space sent the hidden editor a plan command. A browser regression failed with that exact command before the fix. The editor now explicitly disables its shortcut handler while Collect is open; viewer entry/return restores focus to the appropriate navigation button. The final browser run passed BODY-level Space/Delete/ArrowUp isolation and both focus assertions.
+- Camera playback uses one frame clock and waits for every selected video to finish seeking before advancing the signals/graph cursor. Slow decoding can reduce playback speed while preserving frame alignment. Read-only metadata indexing handles existing collected v3 datasets and shared-video offsets; the viewer does not import arbitrary external datasets.
+- Full-page Capture, palettes, video viewer and trajectory screenshots were inspected. The updated local backend and frontend are running; editor sessions were backed up before the backend restart.
+
+![Dataset camera viewer](screenshots/collection-viewer.png)
+
+![Synchronized joint trajectories](screenshots/collection-trajectories.png)
+
+The focused independent re-review confirmed entry/return focus and zero editor commands from BODY-level shortcuts; no substantive findings remain.

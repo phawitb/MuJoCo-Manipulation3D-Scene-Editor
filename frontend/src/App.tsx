@@ -420,6 +420,8 @@ export default function App() {
   handlers.current = { save, remove, runPause, frame, nudge };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Inert editor elements do not suppress this window-level listener.
+      if (collectionOpen) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         handlers.current.save();
@@ -454,7 +456,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [collectionOpen]);
   useEffect(() => {
     const incoming = sim.snapshot?.scene.cameras;
     if (!incoming) return;

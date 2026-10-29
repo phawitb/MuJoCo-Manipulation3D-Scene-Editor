@@ -90,3 +90,63 @@ async def download(job_id: str, request: Request):
     get_job(request, job_id)
     path, name = await asyncio.to_thread(request.app.state.collection.archive, job_id)
     return FileResponse(path, media_type="application/zip", filename=name)
+
+
+def visualization_source(request, job_id):
+    from .collection_jobs import RUNTIME
+    from .collection_visualization import load_index
+
+    status = get_job(request, job_id)
+    if not status["download_available"]:
+        raise HTTPException(
+            409, "Dataset must be finalized and verified before visualization"
+        )
+    directory = request.app.state.collection.directory(job_id).resolve()
+    root = (directory / "dataset").resolve()
+    if not root.is_relative_to(directory):
+        raise HTTPException(404, "Dataset not found")
+    return root, load_index(root, RUNTIME)
+
+
+@router.get("/api/collection/jobs/{job_id}/visualization")
+def visualization(job_id: str, request: Request):
+    import copy
+
+    _, index = visualization_source(request, job_id)
+    public = copy.deepcopy(index)
+    for entry in public["episodes"]:
+        for view, video in entry["videos"].items():
+            video.pop("path")
+            video["url"] = (
+                f"/api/collection/jobs/{job_id}/episodes/{entry['index']}/video/{view}"
+            )
+    return public
+
+
+def visualization_episode(request, job_id, episode):
+    from .collection_visualization import find_episode
+
+    root, index = visualization_source(request, job_id)
+    entry = find_episode(index, episode)
+    if entry is None:
+        raise HTTPException(404, "Episode not found")
+    return root, entry
+
+
+@router.get("/api/collection/jobs/{job_id}/episodes/{episode}/signals")
+def signals(job_id: str, episode: int, request: Request):
+    from .collection_visualization import episode_signals
+
+    root, entry = visualization_episode(request, job_id, episode)
+    return episode_signals(root, entry)
+
+
+@router.get("/api/collection/jobs/{job_id}/episodes/{episode}/video/{view}")
+def video(job_id: str, episode: int, view: str, request: Request):
+    from .collection_visualization import contained_file
+
+    root, entry = visualization_episode(request, job_id, episode)
+    if view not in entry["videos"]:
+        raise HTTPException(404, "Camera was not recorded in this dataset")
+    path = contained_file(root, entry["videos"][view]["path"])
+    return FileResponse(path, media_type="video/mp4")

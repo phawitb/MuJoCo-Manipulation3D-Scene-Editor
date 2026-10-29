@@ -27,6 +27,7 @@ export interface CollectionScene {
   instruction: string;
 }
 export interface CollectionConfig {
+  cameras: string[];
   scene_id: string | null;
   name: string;
   task: string;

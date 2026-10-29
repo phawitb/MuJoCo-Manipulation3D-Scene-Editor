@@ -13,6 +13,7 @@ def verify_dataset(root):
 
     root = Path(root)
     collection = json.loads((root / "meta/collection.json").read_text())
+    cameras = collection.get("cameras", list(VIEWS))
     dataset = LeRobotDataset(collection["repo_id"], root=root, video_backend="pyav")
     if len(dataset) == 0:
         raise ValueError("Dataset contains no saved frames")
@@ -22,7 +23,7 @@ def verify_dataset(root):
     rows.sort(key=lambda row: row["index"])
     if len(rows) != len(dataset):
         raise ValueError("LeRobot row count differs from stored frame count")
-    for view in VIEWS:
+    for view in cameras:
         total = 0
         for video in sorted(
             (root / "videos" / f"observation.images.{view}").rglob("*.mp4")
@@ -50,7 +51,7 @@ def verify_dataset(root):
         )
         for row in (episode[0], episode[len(episode) // 2], episode[-1]):
             frame = dataset[row["index"]]
-            for view in VIEWS:
+            for view in cameras:
                 image = frame[f"observation.images.{view}"]
                 if tuple(image.shape)[0] != 3 or not bool(image.isfinite().all()):
                     raise ValueError(f"Invalid decoded image for {view}")
@@ -59,7 +60,7 @@ def verify_dataset(root):
         "lerobot_version": "0.6.1",
         "frames": len(dataset),
         "episodes": len(indices),
-        "cameras": list(VIEWS),
+        "cameras": cameras,
         "verified": True,
     }
 
