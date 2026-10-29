@@ -33,6 +33,7 @@ export interface Scene {
   version: 1;
   name: string;
   table: Table;
+  appearance?: Appearance;
   robot: {
     model: "so101";
     position: Vec3;
@@ -74,6 +75,7 @@ export interface Geometry {
   size: Vec3;
   color: Quat;
   mesh: number;
+  material?: string | null;
 }
 export interface JointInfo {
   name: string;
@@ -131,6 +133,7 @@ export interface Snapshot extends StatePacket {
   type: "snapshot";
   scene: Scene;
   geometry: Geometry[];
+  materials?: Record<string, RenderMaterial>;
   meshes?: MeshData;
   jointInfo: JointInfo[];
 }
@@ -148,3 +151,60 @@ export interface SavedDocument {
   cameras?: Cameras;
 }
 export type MeshData = Record<string, { vertices: number[]; faces: number[] }>;
+
+export type Pattern =
+  | "solid"
+  | "checker"
+  | "stripes"
+  | "dots"
+  | "wood"
+  | "terrazzo"
+  | "tiles"
+  | "noise";
+export interface Surface {
+  pattern: Pattern;
+  secondary: string;
+  repeat: number;
+  roughness: number;
+  metallic: number;
+}
+export type AppearanceGroup =
+  "robot" | "table" | "environment" | "lighting" | "objects";
+export interface Randomization {
+  seed: number;
+  groups: AppearanceGroup[];
+  strength: "mild" | "balanced" | "wide";
+}
+export interface Appearance {
+  generator: 1;
+  last_randomization: Randomization | null;
+  robot_color: string;
+  motor_color: string;
+  leg_color: string;
+  floor_color: string;
+  wall_color: string;
+  background: string;
+  robot: Surface;
+  table: Surface;
+  floor: Surface;
+  wall: Surface;
+  environment: "open" | "studio" | "room" | "warehouse" | "panels";
+  key_color: string;
+  key_intensity: number;
+  fill_intensity: number;
+  ambient: number;
+  light_azimuth: number;
+  light_elevation: number;
+  shadows: boolean;
+}
+export interface RenderMaterial extends Surface {
+  color: string;
+  texture: string | null;
+}
+export interface AppearancePreset {
+  id: string;
+  name: string;
+  description: string;
+  tableColor: string;
+  appearance: Appearance;
+}

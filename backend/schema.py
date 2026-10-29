@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, AfterValidator, model_validat
 import math
 import json
 from .catalog import KALAS_ASSETS
+from .appearance import Appearance
 
 MAX_SCENE_BYTES = 8_000_000
 
@@ -146,6 +147,7 @@ class Scene(StrictModel):
     version: Literal[1] = 1
     name: str = Field(default="Untitled workspace", max_length=100)
     table: Table = Field(default_factory=Table)
+    appearance: Appearance = Field(default_factory=Appearance)
     robot: Robot = Field(default_factory=Robot)
     task: Task = Field(default_factory=Task)
     cameras: dict[Literal["main", "top", "front", "back"], Camera] = Field(

@@ -145,3 +145,12 @@ Editor navigation: Main allows orbit/pan/zoom; Top allows zoom only and uses +X 
 `scene.robot.reset_joints` contains six joint targets in radians, ordered shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper. Both current and reset joints are checked against the model limits before replacing the scene. The default compact folded pose is `[0, -1.5, 1.5, -1.5, 0, 0]`; older files keep their current joints and receive this reset default. `reset` and `example` preserve the saved reset joints and use them as the initial joint positions. Base transforms continue to follow the new scene/example's setup.
 
 To save a reset pose through HTTP or MCP, send `{"type":"robot","patch":{"reset_joints":[0,-1.5,1.5,-1.5,0,0]}}`. Include `joints` in that patch to apply the pose immediately as an editor change. This setting is serialized in scene files. The browser's explicit Save current pose / Use folded default actions additionally remember it in local storage for new workspaces; opening an existing session or scene file respects that scene's setting. These are paused editing actions, not animated policy motions.
+
+## Visual diversity
+
+- `GET /api/appearance/presets`: six named presets with `appearance` and `tableColor`.
+- `appearance` command: `value` is the complete validated appearance configuration; optional `patch: {"tableColor": "#a57745"}`. Requires pause; preserves simulation state and prepared plans.
+- `randomize_appearance` command: `value: {"seed": 42, "groups": ["robot", "table", "environment", "lighting", "objects"], "strength": "balanced"}`. Scopes are independent; `objects` randomizes colors only. Seeds are integers in `[0, 2147483647]`; strength is `mild`, `balanced` or `wide`. Include `revision` for optimistic concurrency.
+- `POST /api/appearance/variants`: `{ "scene": <portable scene>, "seed": 42, "count": 8, "groups": ["table", "lighting"], "strength": "wide" }`. Returns `{ "generator": 1, "scenes": [...] }` for consecutive seeds. Count 1–32, output bounded to 32 MB. Does not mutate any live session.
+
+Appearance is part of the portable scene schema. Snapshot `materials` contains colors, finishes, pattern scale and optional embedded PNG textures; `geometry[].material` selects a material by name. Decorative geometry has `owner: "environment"` and never collides. Scene files contain compact recipe values rather than generated PNGs. Use the existing image endpoint after loading a recipe for native training observations.

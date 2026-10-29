@@ -14,6 +14,7 @@ import {
   MousePointer2,
   Move,
   Pause,
+  Palette,
   Play,
   RotateCcw,
   RotateCw,
@@ -24,6 +25,7 @@ import { TaskPanel, type PickMode } from "./TaskPanel";
 import { CameraEditor } from "./CameraEditor";
 import { ImportDialog } from "./ImportDialog";
 import { Library, type PlacementCursor } from "./Library";
+import { AppearanceStudio } from "./AppearanceStudio";
 import { Inspector } from "./Inspector";
 import { rememberResetJoints } from "./robotPreferences";
 import { Viewport } from "./Viewport";
@@ -98,6 +100,8 @@ export default function App() {
     "library" | "inspector" | null
   >(null);
   const [apiHelp, setApiHelp] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const closeAppearance = useCallback(() => setAppearanceOpen(false), []);
   const [selected, setSelected] = useState<string | null>(null);
   const [transform, setTransform] = useState<"translate" | "rotate">(
     "translate",
@@ -331,6 +335,7 @@ export default function App() {
       sim.status !== "connected" ||
       sim.live.current?.running ||
       importing ||
+      appearanceOpen ||
       cameraEdit ||
       apiHelp ||
       help
@@ -417,7 +422,7 @@ export default function App() {
       }
       if (
         (e.target as HTMLElement).closest(
-          "input,textarea,select,[contenteditable],[role=dialog]",
+          "input,textarea,select,[contenteditable],[role=dialog],.appearance-studio",
         )
       )
         return;
@@ -530,6 +535,15 @@ export default function App() {
           <span className="local-badge">LOCAL</span>
         </div>
         <div className="header-actions">
+          <button
+            className="appearance-launch"
+            disabled={!scene?.appearance}
+            onClick={() => setAppearanceOpen(true)}
+            aria-label="Appearance Studio"
+          >
+            <Palette size={16} />
+            <span>Appearance</span>
+          </button>
           <button onClick={() => setApiHelp(true)}>AI / API</button>
           <button
             className="icon-button"
@@ -940,6 +954,18 @@ export default function App() {
           <Check size={16} />
           {toast}
         </div>
+      )}
+      {appearanceOpen && scene?.appearance && (
+        <AppearanceStudio
+          scene={scene}
+          editable={editable}
+          currentScene={sim.currentScene}
+          apply={(value, tableColor) =>
+            sim.command("appearance", { value, patch: { tableColor } })
+          }
+          randomize={(value) => sim.command("randomize_appearance", { value })}
+          close={closeAppearance}
+        />
       )}
       {cameraEdit && (
         <CameraEditor

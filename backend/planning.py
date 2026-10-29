@@ -38,7 +38,10 @@ def physics_fingerprint(sim):
     kind = mujoco.mjtState.mjSTATE_INTEGRATION
     values = np.empty(mujoco.mj_stateSize(sim.model, kind))
     mujoco.mj_getState(sim.model, sim.data, values, kind)
-    scene = sim.scene.model_dump(exclude={"cameras", "name"})
+    scene = sim.scene.model_dump(exclude={"cameras", "name", "appearance"})
+    scene["table"].pop("color", None)
+    for obj in scene["objects"]:
+        obj.pop("color", None)
     return hashlib.sha256(
         json.dumps(scene, sort_keys=True).encode()
         + values.tobytes()

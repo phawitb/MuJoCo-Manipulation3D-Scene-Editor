@@ -18,8 +18,9 @@ from fastapi import (
     Query,
 )
 from fastapi.responses import JSONResponse, Response
-from pydantic import ValidationError
+from pydantic import ValidationError, Field
 from .schema import Scene, ASSETS
+from .appearance import presets, Randomization, randomize_scene
 from .simulation import compiled_meshes
 from .sessions import Registry, Command, Conflict
 from .importer import import_object, MAX_UPLOAD, MAX_SCENE
@@ -79,6 +80,39 @@ def session(request, sid):
 @app.get("/api/health")
 def health():
     return dict(status="ok", engine="MuJoCo", version=mujoco.__version__, apiVersion=3)
+
+
+class VariantRequest(Randomization):
+    scene: Scene
+    count: int = Field(default=8, ge=1, le=32)
+
+
+@app.post("/api/appearance/variants")
+async def appearance_variants(request: Request):
+    payload = VariantRequest.model_validate_json(await bounded_body(request, MAX_SCENE))
+    if len(payload.scene.model_dump_json().encode()) * payload.count > 32_000_000:
+        raise ValueError("Recipe batch exceeds 32 MB; reduce count or simplify meshes")
+    if payload.seed + payload.count - 1 > 2**31 - 1:
+        raise ValueError("Seed range exceeds maximum")
+    return dict(
+        generator=1,
+        scenes=[
+            randomize_scene(
+                payload.scene,
+                Randomization(
+                    seed=payload.seed + i,
+                    groups=payload.groups,
+                    strength=payload.strength,
+                ),
+            ).model_dump()
+            for i in range(payload.count)
+        ],
+    )
+
+
+@app.get("/api/appearance/presets")
+def appearance_presets():
+    return presets()
 
 
 @app.get("/api/assets")
@@ -142,7 +176,9 @@ async def read_session(sid: str, request: Request):
 
 @app.get("/api/sessions/{sid}/image")
 async def camera_image(
-    sid: str, request: Request, view: Literal["main", "top", "front", "back", "wrist"] = "wrist"
+    sid: str,
+    request: Request,
+    view: Literal["main", "top", "front", "back", "wrist"] = "wrist",
 ):
     state = await asyncio.to_thread(session(request, sid).packet)
     payload = json.dumps(

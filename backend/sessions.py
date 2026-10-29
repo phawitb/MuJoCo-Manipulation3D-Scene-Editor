@@ -7,6 +7,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal, Any
 from .schema import Scene, SceneObject, Task, Camera
+from .appearance import Appearance, Randomization, randomize_scene
 from .simulation import Simulation
 from .examples import example_scene
 from .planning import (
@@ -42,6 +43,8 @@ class Command(BaseModel):
         "object_remove",
         "robot",
         "camera",
+        "appearance",
+        "randomize_appearance",
     ]
     requestId: str | None = Field(default=None, max_length=100)
     revision: int | None = Field(default=None, ge=0)
@@ -131,7 +134,8 @@ class Session:
                 "robot",
                 "plan",
             )
-            if editing and s.running:
+            visual_edit = kind in ("appearance", "randomize_appearance")
+            if (editing or visual_edit) and s.running:
                 raise ValueError("Pause simulation before editing")
             if (
                 kind
@@ -143,15 +147,30 @@ class Session:
                     "object_remove",
                     "robot",
                     "camera",
+                    "appearance",
+                    "randomize_appearance",
                 )
                 and cmd.revision is not None
                 and cmd.revision != s.revision
             ):
                 raise Conflict("Stale scene revision; retry after latest snapshot")
-            if kind == "load":
+            if visual_edit:
+                scene = s.scene.model_copy(deep=True)
+                if kind == "randomize_appearance":
+                    scene = randomize_scene(scene, Randomization.model_validate(cmd.value or {}))
+                else:
+                    scene.appearance = Appearance.model_validate(cmd.value)
+                    if cmd.patch:
+                        if set(cmd.patch) != {"tableColor"}:
+                            raise ValueError("Appearance patch only accepts tableColor")
+                        scene.table.color = cmd.patch["tableColor"]
+                s.update_appearance(Scene.model_validate(scene.model_dump()))
+            elif kind == "load":
                 s.load(Scene.model_validate(cmd.scene))
             elif kind == "reset":
                 scene = Scene(cameras=s.scene.cameras)
+                scene.appearance = s.scene.appearance.model_copy(deep=True)
+                scene.table.color = s.scene.table.color
                 scene.robot.reset_joints = list(s.scene.robot.reset_joints)
                 scene.robot.joints = list(scene.robot.reset_joints)
                 s.load(scene)
@@ -160,6 +179,8 @@ class Session:
                     example_scene(cmd.exampleId) if cmd.exampleId else example_scene()
                 )
                 scene.cameras = s.scene.cameras
+                scene.appearance = s.scene.appearance.model_copy(deep=True)
+                scene.table.color = s.scene.table.color
                 scene.robot.reset_joints = list(s.scene.robot.reset_joints)
                 scene.robot.joints = list(scene.robot.reset_joints)
                 s.load(scene)

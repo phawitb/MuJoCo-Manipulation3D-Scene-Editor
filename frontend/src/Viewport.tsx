@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, TransformControls } from "@react-three/drei";
+import {
+  OrbitControls,
+  TransformControls,
+  useTexture,
+} from "@react-three/drei";
 import {
   BoxGeometry,
   BufferAttribute,
@@ -20,11 +24,14 @@ import {
   Vector3,
   MOUSE,
   PerspectiveCamera,
+  RepeatWrapping,
+  SRGBColorSpace,
 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Focus, RotateCcw, Maximize2, Settings2 } from "lucide-react";
 import type {
   Asset,
+  RenderMaterial,
   CameraState,
   Geometry,
   MeshData,
@@ -109,11 +116,71 @@ function makeGeometry(g: Geometry, meshes: MeshData) {
       break;
     default:
       geometry = new PlaneGeometry(200, 200);
+      // Tile over a 6 m reference patch, rather than stretching across 200 m.
+      {
+        const uv = geometry.getAttribute("uv");
+        for (let i = 0; i < uv.count; i++)
+          uv.setXY(i, (uv.getX(i) * 200) / 6, (uv.getY(i) * 200) / 6);
+      }
+  }
+  if (!geometry.getAttribute("uv")) {
+    // Mesh exports contain positions/normals; use box-projected UVs for skins.
+    geometry.computeBoundingBox();
+    const bounds = geometry.boundingBox!;
+    const span = bounds.getSize(new Vector3());
+    const positions = geometry.getAttribute("position");
+    const normals = geometry.getAttribute("normal");
+    const uv = new Float32Array(positions.count * 2);
+    for (let i = 0; i < positions.count; i++) {
+      const p = [positions.getX(i), positions.getY(i), positions.getZ(i)];
+      const n = [
+        Math.abs(normals.getX(i)),
+        Math.abs(normals.getY(i)),
+        Math.abs(normals.getZ(i)),
+      ];
+      const axes =
+        n[0] > n[1] && n[0] > n[2] ? [1, 2] : n[1] > n[2] ? [0, 2] : [0, 1];
+      axes.forEach((axis, j) => {
+        uv[2 * i + j] =
+          (p[axis] - bounds.min.getComponent(axis)) /
+          (span.getComponent(axis) || 1);
+      });
+    }
+    geometry.setAttribute("uv", new BufferAttribute(uv, 2));
   }
   return geometry;
 }
+function TexturedMaterial({
+  material,
+  selected,
+}: {
+  material: RenderMaterial;
+  selected: boolean;
+}) {
+  const source = useTexture(material.texture!);
+  const texture = useMemo(() => {
+    const t = source.clone();
+    t.wrapS = t.wrapT = RepeatWrapping;
+    t.repeat.set(material.repeat, material.repeat);
+    t.colorSpace = SRGBColorSpace;
+    t.needsUpdate = true;
+    return t;
+  }, [source, material.repeat]);
+  useEffect(() => () => texture.dispose(), [texture]);
+  return (
+    <meshStandardMaterial
+      map={texture}
+      color="white"
+      roughness={material.roughness}
+      metalness={material.metallic}
+      emissive={selected ? "#28574e" : "#000000"}
+      emissiveIntensity={0.24}
+    />
+  );
+}
 function SimGeom({
   geom,
+  material,
   meshes,
   live,
   selected,
@@ -121,6 +188,7 @@ function SimGeom({
   preview,
 }: Pick<Props, "meshes" | "live" | "selected" | "select" | "preview"> & {
   geom: Geometry;
+  material?: RenderMaterial;
 }) {
   const ref = useRef<Mesh>(null);
   const geometry = useMemo(() => makeGeometry(geom, meshes), [geom, meshes]);
@@ -182,19 +250,28 @@ function SimGeom({
       onClick={(e) => {
         e.stopPropagation();
         select(
-          geom.owner === "floor" || geom.owner === "table" ? null : geom.owner,
+          ["floor", "table", "environment"].includes(geom.owner)
+            ? null
+            : geom.owner,
         );
       }}
     >
-      <meshStandardMaterial
-        color={color}
-        roughness={
-          geom.owner === "floor" ? 1 : geom.owner === "table" ? 0.9 : 0.65
-        }
-        metalness={geom.owner === "robot" ? 0.12 : 0}
-        emissive={selected === geom.owner ? "#28574e" : "#000000"}
-        emissiveIntensity={0.24}
-      />
+      {material?.texture ? (
+        <Suspense fallback={<meshStandardMaterial color={material.color} />}>
+          <TexturedMaterial
+            material={material}
+            selected={selected === geom.owner}
+          />
+        </Suspense>
+      ) : (
+        <meshStandardMaterial
+          color={material?.color || color}
+          roughness={material?.roughness ?? (geom.owner === "floor" ? 1 : 0.65)}
+          metalness={material?.metallic ?? 0}
+          emissive={selected === geom.owner ? "#28574e" : "#000000"}
+          emissiveIntensity={0.24}
+        />
+      )}
     </mesh>
   );
 }
@@ -445,19 +522,33 @@ function Contents(
     ghost: Vec3 | null;
   },
 ) {
+  const appearance = p.snapshot.scene.appearance;
+  const azimuth = ((appearance?.light_azimuth ?? -45) * Math.PI) / 180;
+  const elevation = ((appearance?.light_elevation ?? 60) * Math.PI) / 180;
+  const lightPosition: Vec3 = [
+    2.5 * Math.cos(elevation) * Math.cos(azimuth),
+    2.5 * Math.cos(elevation) * Math.sin(azimuth),
+    0.75 + 2.5 * Math.sin(elevation),
+  ];
   const highlighted = p.snapshot.scene.objects.find(
     (o) => o.id === p.highlight?.id,
   );
   return (
     <>
-      <color attach="background" args={["#202a30"]} />
-      <fog attach="fog" args={["#202a30", 2.4, 5]} />
-      <ambientLight intensity={1.3} />
-      <hemisphereLight args={["#dae8f1", "#495559", 1.3]} />
+      <color attach="background" args={[appearance?.background || "#202a30"]} />
+      <ambientLight intensity={(appearance?.ambient ?? 0.35) * 3} />
+      <hemisphereLight
+        args={[
+          appearance?.background || "#dae8f1",
+          appearance?.floor_color || "#495559",
+          (appearance?.ambient ?? 0.35) * 2,
+        ]}
+      />
       <directionalLight
-        position={[1, -1, 3]}
-        intensity={2.5}
-        castShadow
+        position={lightPosition}
+        color={appearance?.key_color || "#ffffff"}
+        intensity={(appearance?.key_intensity ?? 1) * 2.5}
+        castShadow={appearance?.shadows ?? true}
         shadow-mapSize={p.kind === "main" ? [1024, 1024] : [512, 512]}
         shadow-camera-left={-1}
         shadow-camera-right={1}
@@ -465,11 +556,15 @@ function Contents(
         shadow-camera-bottom={-1}
         shadow-bias={-0.0003}
       />
-      <directionalLight position={[-2, 2, 1.5]} intensity={1} />
+      <directionalLight
+        position={[-2, 2, 3]}
+        intensity={(appearance?.fill_intensity ?? 0.4) * 2.5}
+      />
       {p.snapshot.geometry.map((g) => (
         <SimGeom
           key={`${p.snapshot.revision}-${g.id}`}
           geom={g}
+          material={g.material ? p.snapshot.materials?.[g.material] : undefined}
           meshes={p.meshes}
           live={p.live}
           selected={p.selected}

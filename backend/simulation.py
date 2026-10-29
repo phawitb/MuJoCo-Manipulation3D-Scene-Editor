@@ -7,6 +7,7 @@ from functools import lru_cache
 import mujoco
 import numpy as np
 from .schema import Scene
+from .appearance import decorate_xml, apply_texture_pixels, render_materials
 from .catalog import KALAS, visual_mesh, collision_shapes
 
 MODEL_DIR = Path(__file__).resolve().parents[1] / "assets" / "so101"
@@ -173,6 +174,7 @@ def build_xml(scene):
                 face=" ".join(str(x) for x in obj.mesh.faces),
             )
         add_object(world, obj)
+    decorate_xml(root, scene)
     return ET.tostring(root, encoding="unicode")
 
 
@@ -201,6 +203,7 @@ class Simulation:
         """Compile before swapping live state; a failed edit never destroys work."""
         scene = Scene.model_validate(scene.model_dump())
         model = mujoco.MjModel.from_xml_string(build_xml(scene))
+        apply_texture_pixels(model, scene)
         for field in ("joints", "reset_joints"):
             for i, value in enumerate(getattr(scene.robot, field)):
                 lo, hi = model.jnt_range[i]
@@ -224,6 +227,17 @@ class Simulation:
         self.visible_ids = [
             i for i in range(model.ngeom) if model.geom_group[i] not in (3, 4)
         ]
+
+    def update_appearance(self, scene):
+        """Recompile visual assets atomically while preserving integration state."""
+        kind = mujoco.mjtState.mjSTATE_INTEGRATION
+        state = np.empty(mujoco.mj_stateSize(self.model, kind))
+        mujoco.mj_getState(self.model, self.data, state, kind)
+        policy = self.policy
+        self.load(scene)
+        mujoco.mj_setState(self.model, self.data, state, kind)
+        mujoco.mj_forward(self.model, self.data)
+        self.policy = policy
 
     def step(self, count=1):
         # A physics result must remain valid input for saving, editing and recovery.
@@ -333,6 +347,8 @@ class Simulation:
             owner = reverse.get(
                 body, "robot" if body else ("floor" if name == "floor" else "table")
             )
+            if name.startswith("decor_"):
+                owner = "environment"
             color = self.model.geom_rgba[i].copy()
             material = self.model.geom_matid[i]
             if material >= 0:
@@ -346,6 +362,7 @@ class Simulation:
                     size=self.model.geom_size[i].tolist(),
                     color=color.tolist(),
                     mesh=int(self.model.geom_dataid[i]),
+                    material=self.model.material(material).name if material >= 0 else None,
                 )
             )
         return out
@@ -355,6 +372,7 @@ class Simulation:
             **{**self.state(), "type": "snapshot"},
             scene=self.export_scene().model_dump(),
             geometry=self.geometry(),
+            materials=render_materials(self.scene),
             meshes=self.imported_meshes(),
             jointInfo=[
                 dict(
