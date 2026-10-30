@@ -100,6 +100,16 @@ def calculate_plan(sim, cancel=None):
     from .catalog import profile
 
     source = next((o for o in sim.scene.objects if o.id == sim.scene.task.source), None)
+    if source is not None and source.asset in ("mesh", "mujoco"):
+        # Tall imports on tall receivers may have valid low-clearance transfers
+        # beyond the existing high-lift candidates. Physical rehearsal remains
+        # authoritative for contact, collision, settling and withdrawal.
+        configurations.extend(
+            [
+                {"lift": 0.08, "transfer_clearance": 0.035},
+                {"reverse_grasp": True, "lift": 0.08, "transfer_clearance": 0.035},
+            ]
+        )
     if source is not None and profile(source)["family"] == "cup":
         configurations = [
             dict(rim_angle=angle)

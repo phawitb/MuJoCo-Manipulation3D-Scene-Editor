@@ -26,11 +26,14 @@ from .collection_api import router as collection_router
 from .simulation import compiled_meshes
 from .sessions import Registry, Command, Conflict
 from .importer import import_object, MAX_UPLOAD, MAX_SCENE
+from .import_library import ImportLibrary
+from .import_library_api import router as import_library_router
 
 
 @asynccontextmanager
 async def lifespan(app):
     app.state.sessions = Registry()
+    app.state.imported_assets = ImportLibrary()
     app.state.collection = CollectionJobs()
     app.state.render_slots = asyncio.Semaphore(2)
     yield
@@ -40,6 +43,7 @@ async def lifespan(app):
 
 app = FastAPI(title="SO-101 Scene Studio", version="3.2.0", lifespan=lifespan)
 app.include_router(collection_router)
+app.include_router(import_library_router)
 LOCAL = ("localhost", "127.0.0.1", "::1", "testserver")
 
 

@@ -82,6 +82,8 @@ export interface PlacementCursor {
 }
 interface Props {
   assets: Asset[];
+  storageError?: string;
+  retryStorage?: () => void;
   scene: Scene;
   selected: string | null;
   select: (id: string | null) => void;
@@ -122,6 +124,7 @@ export function Library(p: Props) {
     "Plates",
     "Spoons",
     "Other Objects",
+    "Imported",
   ];
   const filtered = p.assets.filter(
     (a) =>
@@ -172,6 +175,12 @@ export function Library(p: Props) {
       >
         <Upload size={14} /> Import object <span>Mesh · MuJoCo</span>
       </button>
+      {p.storageError && (
+        <div role="alert" className="library-storage-error">
+          <p>{p.storageError}</p>
+          <button onClick={p.retryStorage}>Retry library save</button>
+        </div>
+      )}
       <div className="asset-list">
         {filtered.map((a) => (
           <div
@@ -226,7 +235,11 @@ export function Library(p: Props) {
             <div className="asset-visual">
               <AssetArt id={a.id} color={a.color} />
               <span className="asset-type">
-                {a.approximate ? "KALAS · APPROX." : "PROCEDURAL"}
+                {a.imported
+                  ? "IMPORTED · SAVED"
+                  : a.approximate
+                    ? "KALAS · APPROX."
+                    : "PROCEDURAL"}
               </span>
               <GripVertical size={14} className="grip" />
             </div>

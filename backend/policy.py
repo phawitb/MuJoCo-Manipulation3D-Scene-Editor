@@ -417,11 +417,18 @@ class PickPlacePolicy:
             if inserting
             else position
         )
-        carry(
-            "Retreat",
-            place_point + [0, 0, 0.035 if sp["family"] == "cup" else 0.08],
-            1.7,
-        )
+        # Tall held objects can place successfully but leave too little vertical
+        # reach for an 8 cm withdrawal. Try shorter clear withdrawals without
+        # relaxing IK/collision checks; the whole release still needs rehearsal.
+        retreat_heights = [0.035] if sp["family"] == "cup" else [0.08, 0.05, 0.035]
+        for retreat_height in retreat_heights:
+            try:
+                carry("Retreat", place_point + [0, 0, retreat_height], 1.7)
+                break
+            except ValueError:
+                if retreat_height == retreat_heights[-1]:
+                    raise
+
         label, retreat, duration = self.steps[-1]
         retreat[5] = 0.8
         self.steps[-1] = (label, retreat, duration)

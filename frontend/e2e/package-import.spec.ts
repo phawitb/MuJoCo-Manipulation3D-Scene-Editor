@@ -5,13 +5,18 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+test.skip(
+  !process.env.SO101_LIBRARY_E2E,
+  "Use npm run test:library for isolated persistent storage",
+);
+
 test("folder and ZIP preview, insert, source colors, duplicate and scene reopen", async ({
   page,
   request,
 }) => {
   const browserErrors: string[] = [];
   page.on("pageerror", (e) => browserErrors.push(e.message));
-  const origin = "http://127.0.0.1:8765";
+  const origin = "";
   const sid = (await (await request.post(origin + "/api/sessions")).json())
     .sessionId;
   const folder = fileURLToPath(

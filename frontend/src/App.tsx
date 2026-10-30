@@ -32,6 +32,8 @@ import { Inspector } from "./Inspector";
 import { rememberResetJoints } from "./robotPreferences";
 import { Viewport } from "./Viewport";
 import { useSimulation } from "./useSimulation";
+import { useImportedLibrary } from "./useImportedLibrary";
+import { getImportedTemplate, instantiateAsset } from "./importedAssets";
 import { nudgePosition, objectDimensions } from "./interaction";
 import {
   dropPosition,
@@ -53,10 +55,16 @@ import type {
 
 export default function App() {
   const sim = useSimulation();
+  const importedLibrary = useImportedLibrary(
+    sim.snapshot?.scene,
+    sim.state?.sessionId,
+  );
   const libraryAssets = useMemo(
-    () =>
-      sim.assets.filter((a) => a.id.startsWith("kalas_") || a.id === "cube"),
-    [sim.assets],
+    () => [
+      ...sim.assets.filter((a) => a.id.startsWith("kalas_") || a.id === "cube"),
+      ...importedLibrary.assets,
+    ],
+    [sim.assets, importedLibrary.assets],
   );
   const path = useMemo(
     () => sim.state?.plan?.points || [],
@@ -193,9 +201,13 @@ export default function App() {
     });
   const addObject = (assetId: string, hit?: Vec3) => {
     if (!editableRef.current) return;
-    const asset = sim.assets.find((a) => a.id === assetId);
+    const asset = libraryAssets.find((a) => a.id === assetId);
     if (!asset) return;
     void safe(async () => {
+      const template = asset.imported
+        ? await getImportedTemplate(asset.id)
+        : undefined;
+      if (!editableRef.current) return;
       const scene = sim.currentScene();
       const position = dropPosition(
         hit || [
@@ -206,19 +218,9 @@ export default function App() {
         asset.dimensions,
         scene.table,
       );
-      const id = `${asset.id}_${crypto.randomUUID().slice(0, 8)}`;
-      scene.objects.push({
-        id,
-        name: asset.name,
-        asset: asset.id,
-        position,
-        quaternion: [1, 0, 0, 0],
-        scale: 1,
-        mass: asset.mass,
-        friction: [0.7, 0.005, 0.0001],
-        collision: true,
-        color: asset.color,
-      });
+      const object = instantiateAsset(asset, position, template);
+      const id = object.id;
+      scene.objects.push(object);
       await sim.command("load", { scene });
       setSelected(id);
       setNarrowPanel(null);
@@ -632,6 +634,8 @@ export default function App() {
         {scene && (
           <Library
             assets={libraryAssets}
+            storageError={importedLibrary.error}
+            retryStorage={importedLibrary.retry}
             drag={drag}
             scene={scene}
             selected={selected}
@@ -1046,8 +1050,16 @@ export default function App() {
               ? obj.package.dimensions[2] / 2
               : Math.max(...obj.mesh!.vertices.filter((_, i) => i % 3 === 2));
             obj.position = [0.06, 0, scene.table.height + halfHeight + 0.002];
-            await sim.command("object_add", { object: obj });
+            const placed = await sim.command("object_add", { object: obj });
             setSelected(obj.id);
+            try {
+              await importedLibrary.save(placed.sessionId, obj.id);
+            } catch {
+              notify(
+                "Object placed. Library save failed — use Retry in the asset library.",
+              );
+              return;
+            }
             notify(
               obj.package
                 ? "MuJoCo object imported · original physics"

@@ -1,0 +1,530 @@
+{
+  "version": 1,
+  "name": "01 \u00b7 Spoon into cup",
+  "table": {
+    "color": "#b8c2bf",
+    "width": 0.8,
+    "depth": 0.6,
+    "height": 0.75
+  },
+  "appearance": {
+    "generator": 1,
+    "last_randomization": null,
+    "robot_color": "#ffd11f",
+    "motor_color": "#1a1a1a",
+    "leg_color": "#2e3840",
+    "floor_color": "#13171c",
+    "wall_color": "#a8b1b6",
+    "background": "#202a30",
+    "robot": {
+      "pattern": "solid",
+      "secondary": "#e8e4dc",
+      "repeat": 4.0,
+      "roughness": 0.65,
+      "metallic": 0.12
+    },
+    "table": {
+      "pattern": "solid",
+      "secondary": "#e8e4dc",
+      "repeat": 4.0,
+      "roughness": 0.9,
+      "metallic": 0.0
+    },
+    "floor": {
+      "pattern": "solid",
+      "secondary": "#e8e4dc",
+      "repeat": 4.0,
+      "roughness": 1.0,
+      "metallic": 0.0
+    },
+    "wall": {
+      "pattern": "solid",
+      "secondary": "#e8e4dc",
+      "repeat": 4.0,
+      "roughness": 0.7,
+      "metallic": 0.0
+    },
+    "environment": "open",
+    "key_color": "#ffffff",
+    "key_intensity": 1.0,
+    "fill_intensity": 0.4,
+    "ambient": 0.35,
+    "light_azimuth": -45.0,
+    "light_elevation": 60.0,
+    "shadows": true
+  },
+  "robot": {
+    "model": "so101",
+    "position": [
+      -0.3,
+      0.0,
+      0.754
+    ],
+    "quaternion": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "joints": [
+      9.554014581119302e-14,
+      -1.5000524278527658,
+      1.5003579709463386,
+      -1.499996069215401,
+      4.738714674775045e-07,
+      0.8000022199982423
+    ],
+    "reset_joints": [
+      0.0,
+      -1.5,
+      1.5,
+      -1.5,
+      0.0,
+      0.0
+    ]
+  },
+  "task": {
+    "source": "mujoco_d8d24159",
+    "target": "cup"
+  },
+  "cameras": {
+    "main": {
+      "position": [
+        0.4343060577648678,
+        -0.06701409779209189,
+        1.442684177178904
+      ],
+      "target": [
+        0.06,
+        0.0,
+        0.789897501709824
+      ],
+      "zoom": 1.0,
+      "fov": 42.0
+    },
+    "top": {
+      "position": [
+        0.0,
+        0.0,
+        2.6
+      ],
+      "target": [
+        0.0,
+        0.0,
+        0.75
+      ],
+      "zoom": 320.0,
+      "fov": 50.0
+    },
+    "back": {
+      "position": [
+        -0.3,
+        0.0,
+        1.65
+      ],
+      "target": [
+        0.0,
+        0.0,
+        0.8
+      ],
+      "zoom": 1.0,
+      "fov": 55.0
+    },
+    "front": {
+      "position": [
+        0.65,
+        -0.75,
+        1.3
+      ],
+      "target": [
+        -0.04,
+        0.0,
+        0.82
+      ],
+      "zoom": 1.0,
+      "fov": 50.0
+    }
+  },
+  "objects": [
+    {
+      "id": "spoon",
+      "name": "Pick \u00b7 KALAS spoon",
+      "asset": "kalas_spoon",
+      "mesh": null,
+      "package": null,
+      "package_color_override": false,
+      "package_friction_override": false,
+      "position": [
+        -0.07996779051938516,
+        -0.1645272853459758,
+        0.7523305750884256
+      ],
+      "quaternion": [
+        -2.4192781745827228e-06,
+        0.005473101824584302,
+        -2.616900372676395e-05,
+        0.9999850221207061
+      ],
+      "scale": 1.0,
+      "mass": 0.009,
+      "friction": [
+        0.7,
+        0.005,
+        0.0001
+      ],
+      "collision": true,
+      "color": "#e9cf7c"
+    },
+    {
+      "id": "cup",
+      "name": "Place \u00b7 KALAS cup",
+      "asset": "kalas_cup",
+      "mesh": null,
+      "package": null,
+      "package_color_override": false,
+      "package_friction_override": false,
+      "position": [
+        -0.04000193700373267,
+        0.08999640697841406,
+        0.7904604240832479
+      ],
+      "quaternion": [
+        0.9999999987146291,
+        4.463111924917982e-05,
+        -2.405822762883759e-05,
+        8.19711586680099e-08
+      ],
+      "scale": 1.0,
+      "mass": 0.03,
+      "friction": [
+        0.7,
+        0.005,
+        0.0001
+      ],
+      "collision": true,
+      "color": "#eca895"
+    },
+    {
+      "id": "mujoco_d8d24159",
+      "name": "linktrack",
+      "asset": "mujoco",
+      "mesh": null,
+      "package": {
+        "version": 1,
+        "source": "scene.xml",
+        "dimensions": [
+          0.049800001125857335,
+          0.05665750235336278,
+          0.07579500341964787
+        ],
+        "mass": 0.045,
+        "com": [
+          2.0526299410184023e-11,
+          -0.004994750596522706,
+          -0.028588701709646985
+        ],
+        "inertia": [
+          1.881000675000011e-05,
+          1.5393392130000085e-05,
+          1.7177995900000096e-05,
+          -3.2835078844734106e-22,
+          6.928898108866027e-22,
+          -5.49156207600003e-06
+        ],
+        "geoms": [
+          {
+            "kind": "box",
+            "position": [
+              2.0526299410184023e-11,
+              -0.011283750596522707,
+              -0.03283250170964699
+            ],
+            "quaternion": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "size": [
+              0.011454,
+              0.017045,
+              0.005
+            ],
+            "mesh": null,
+            "rgba": [
+              0.18000000715255737,
+              0.6499999761581421,
+              0.4000000059604645,
+              0.2199999988079071
+            ],
+            "group": 0,
+            "contype": 1,
+            "conaffinity": 1,
+            "condim": 4,
+            "friction": [
+              0.7,
+              0.005,
+              0.0001
+            ],
+            "solref": [
+              0.004,
+              1.0
+            ],
+            "solimp": [
+              0.95,
+              0.99,
+              0.001,
+              0.5,
+              2.0
+            ],
+            "priority": 1,
+            "solmix": 1.0,
+            "margin": 0.0,
+            "gap": 0.0,
+            "material": {}
+          },
+          {
+            "kind": "box",
+            "position": [
+              -0.0181769999794737,
+              -0.011283750596522707,
+              -0.03283250170964699
+            ],
+            "quaternion": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "size": [
+              0.006723,
+              0.013636,
+              0.005
+            ],
+            "mesh": null,
+            "rgba": [
+              0.18000000715255737,
+              0.6499999761581421,
+              0.4000000059604645,
+              0.2199999988079071
+            ],
+            "group": 0,
+            "contype": 1,
+            "conaffinity": 1,
+            "condim": 4,
+            "friction": [
+              0.7,
+              0.005,
+              0.0001
+            ],
+            "solref": [
+              0.004,
+              1.0
+            ],
+            "solimp": [
+              0.95,
+              0.99,
+              0.001,
+              0.5,
+              2.0
+            ],
+            "priority": 1,
+            "solmix": 1.0,
+            "margin": 0.0,
+            "gap": 0.0,
+            "material": {}
+          },
+          {
+            "kind": "box",
+            "position": [
+              0.018177000020526298,
+              -0.011283750596522707,
+              -0.03283250170964699
+            ],
+            "quaternion": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "size": [
+              0.006723,
+              0.013636,
+              0.005
+            ],
+            "mesh": null,
+            "rgba": [
+              0.18000000715255737,
+              0.6499999761581421,
+              0.4000000059604645,
+              0.2199999988079071
+            ],
+            "group": 0,
+            "contype": 1,
+            "conaffinity": 1,
+            "condim": 4,
+            "friction": [
+              0.7,
+              0.005,
+              0.0001
+            ],
+            "solref": [
+              0.004,
+              1.0
+            ],
+            "solimp": [
+              0.95,
+              0.99,
+              0.001,
+              0.5,
+              2.0
+            ],
+            "priority": 1,
+            "solmix": 1.0,
+            "margin": 0.0,
+            "gap": 0.0,
+            "material": {}
+          },
+          {
+            "kind": "cylinder",
+            "position": [
+              2.0526299410184023e-11,
+              0.014761249403477292,
+              -0.03283250170964699
+            ],
+            "quaternion": [
+              0.7071067811865476,
+              0.7071067811865478,
+              0.0,
+              0.0
+            ],
+            "size": [
+              0.0045,
+              0.009,
+              0.0
+            ],
+            "mesh": null,
+            "rgba": [
+              0.18000000715255737,
+              0.6499999761581421,
+              0.4000000059604645,
+              0.2199999988079071
+            ],
+            "group": 0,
+            "contype": 1,
+            "conaffinity": 1,
+            "condim": 4,
+            "friction": [
+              0.7,
+              0.005,
+              0.0001
+            ],
+            "solref": [
+              0.004,
+              1.0
+            ],
+            "solimp": [
+              0.95,
+              0.99,
+              0.001,
+              0.5,
+              2.0
+            ],
+            "priority": 1,
+            "solmix": 1.0,
+            "margin": 0.0,
+            "gap": 0.0,
+            "material": {}
+          },
+          {
+            "kind": "capsule",
+            "position": [
+              2.0526299410184023e-11,
+              0.02376124940347729,
+              0.0025324982903530135
+            ],
+            "quaternion": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "size": [
+              0.0045,
+              0.030865,
+              0.0
+            ],
+            "mesh": null,
+            "rgba": [
+              0.18000000715255737,
+              0.6499999761581421,
+              0.4000000059604645,
+              0.2199999988079071
+            ],
+            "group": 0,
+            "contype": 1,
+            "conaffinity": 1,
+            "condim": 4,
+            "friction": [
+              0.7,
+              0.005,
+              0.0001
+            ],
+            "solref": [
+              0.004,
+              1.0
+            ],
+            "solimp": [
+              0.95,
+              0.99,
+              0.001,
+              0.5,
+              2.0
+            ],
+            "priority": 1,
+            "solmix": 1.0,
+            "margin": 0.0,
+            "gap": 0.0,
+            "material": {}
+          }
+        ],
+        "meshes": [],
+        "sites": {
+          "linktrack_origin": [
+            2.0526299410184023e-11,
+            -0.011283750596522707,
+            -0.037832501709646985
+          ],
+          "linktrack_grasp": [
+            2.0526299410184023e-11,
+            -0.011283750596522707,
+            -0.03283250170964699
+          ]
+        },
+        "provenance": {}
+      },
+      "package_color_override": false,
+      "package_friction_override": false,
+      "position": [
+        -0.08221488239375668,
+        -0.057618209107744754,
+        0.787831563204356
+      ],
+      "quaternion": [
+        0.9999999999488459,
+        -1.0114783716621119e-05,
+        -3.742112418082302e-13,
+        -2.9533460310655415e-10
+      ],
+      "scale": 1.0,
+      "mass": 0.045,
+      "friction": [
+        0.7,
+        0.005,
+        0.0001
+      ],
+      "collision": true,
+      "color": "#121416"
+    }
+  ]
+}

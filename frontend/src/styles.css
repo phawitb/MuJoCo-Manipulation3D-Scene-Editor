@@ -408,6 +408,21 @@ p {
   color: #617e8b;
   font-style: italic;
 }
+.library-storage-error {
+  margin: 8px 12px;
+  padding: 10px;
+  border: 1px solid #b77b46;
+  border-radius: 8px;
+  color: #efc18e;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.library-storage-error p {
+  margin: 0 0 8px;
+}
+.library-storage-error button {
+  padding: 5px 8px;
+}
 .library-footer {
   margin-top: auto;
   padding: 12px 17px;

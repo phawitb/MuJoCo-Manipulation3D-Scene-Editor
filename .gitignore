@@ -16,3 +16,6 @@ scene-backups/
 # Isolated LeRobot data collection runtime and local datasets
 .venv-collect/
 recordings/
+
+# Durable local imported-object shelf
+imported-assets/

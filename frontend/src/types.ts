@@ -61,7 +61,8 @@ export interface Scene {
   cameras: Record<"main" | "top" | "front" | "back", CameraState>;
 }
 export interface Asset {
-  id: AssetId;
+  id: AssetId | `imported_${string}`;
+  imported?: boolean;
   name: string;
   category: string;
   dimensions: Vec3;
