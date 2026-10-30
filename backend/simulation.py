@@ -173,7 +173,11 @@ def build_xml(scene):
                 vertex=numbers([x * obj.scale for x in obj.mesh.vertices]),
                 face=" ".join(str(x) for x in obj.mesh.faces),
             )
-        add_object(world, obj)
+        if obj.package:
+            from .package_geometry import add_package
+            add_package(root, obj)
+        else:
+            add_object(world, obj)
     decorate_xml(root, scene)
     return ET.tostring(root, encoding="unicode")
 
@@ -390,7 +394,7 @@ class Simulation:
         out = {}
         for i in range(self.model.nmesh):
             if not (self.model.mesh(i).name or "").startswith(
-                ("imported_", "catalog_")
+                ("imported_", "catalog_", "pkg_")
             ):
                 continue
             va, vn = self.model.mesh_vertadr[i], self.model.mesh_vertnum[i]

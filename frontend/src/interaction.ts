@@ -4,6 +4,8 @@ import type { Asset, SceneObject, Table, Vec3 } from "./types";
 export function objectDimensions(object: SceneObject, assets: Asset[]): Vec3 {
   const dimensions = assets.find((a) => a.id === object.asset)?.dimensions;
   if (dimensions) return dimensions.map((v) => v * object.scale) as Vec3;
+  if (object.package)
+    return object.package.dimensions.map((v) => v * object.scale) as Vec3;
   if (object.mesh)
     return [0, 1, 2].map((axis) => {
       let low = Infinity,

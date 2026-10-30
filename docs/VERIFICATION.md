@@ -199,3 +199,16 @@ The new browser regression failed on the missing button before implementation, t
 **14 frontend unit tests**, TypeScript, production build and `git diff --check` passed. Existing bundle-size warning remains. The screenshot was inspected. No backend rendering change is made: native/browser shading differences remain documented, rather than claiming pixel-identical output.
 
 ![No random collection](screenshots/collection-no-random.png)
+
+
+## MuJoCo package import — 2026-10-30
+
+- Added folder and ZIP review/import, with original-size preview and portable rigid package data. Existing standalone STL/OBJ/GLB remains supported.
+- Package tests exercise source COM/full tensor, per-part collision/colors/friction, transformed child meshes, aggregate inertia, scale/mass edits, source-color/contact reset, nested ZIP/folder equivalence, complete MJCF documents, inherited defaults, unnamed bodies, browser mesh packets, save/reopen and malformed/unsupported inputs.
+- Actual `/Users/phawit/Downloads/mujoco-package (3)` imported: LinkTrack, 45 g, 49 visible parts, five collision geoms, overall dimensions 49.8 × 56.7 × 75.8 mm. Compared compiled source against editor reconstruction: mass, COM, full inertia tensor, source colors, friction and contact parameters match; maximum mesh vertex discrepancy 8.2e-10 m. One second of physics settles on the table with finite state.
+- Playwright exercises folder and ZIP paths using a real OBJ fixture, source color override/reset, duplicate import, scene roundtrip and absence of browser errors. Real LinkTrack package was also imported through the UI and rendered in browser/native camera successfully.
+- Screenshots: `screenshots/mujoco-package-preview.png`, `screenshots/mujoco-package-editor.png`, `screenshots/mujoco-package-native.png`.
+- Fresh review identified inherited-frame defaults and complete-object documents; regression tests were observed failing and then passing. Follow-up unnamed-body matching was corrected. Actual-package visual QA caught missing package meshes in snapshot transport; fixed and covered by a backend snapshot assertion plus the browser OBJ fixture.
+- Test results: 26 package tests passed; 65 relevant backend regression tests passed before the final snapshot/unnamed-body fixes; browser import test passed; 14 frontend unit tests and production build passed. Full backend regression suite completed: 214 passed in 616.93 s. The final affected-code run (including all 26 package cases after review/visual fixes) passed 45 tests; folder/ZIP UI and No random collection browser tests both passed.
+- Backend restart preserved all six previously paused sessions in `scene-backups/2026-10-30-package-final/`. A separate LinkTrack demonstration session was created for inspection; existing user scenes and datasets were not edited.
+- Final targeted reviewer independently ran 26 package tests and confirmed inherited defaults, complete/unnamed object bodies, and package mesh transport; no blocking findings remained.

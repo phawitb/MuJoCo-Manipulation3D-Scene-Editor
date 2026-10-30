@@ -382,6 +382,7 @@ def randomize_scene(scene, config):
         elif group == "objects":
             for obj in sorted(result.objects, key=lambda obj: obj.id):
                 obj.color = color()
+                if obj.package: obj.package_color_override = True
     a.last_randomization = config.model_copy(deep=True)
     return result
 

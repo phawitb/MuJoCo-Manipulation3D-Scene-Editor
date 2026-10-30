@@ -1,6 +1,6 @@
 # MuJoCo object package import
 
-Status: proposed design; approach 1 selected by the user, awaiting design approval.
+Status: approved by user on 2026-10-30; proceed without repeat questions.
 
 ## Intent
 

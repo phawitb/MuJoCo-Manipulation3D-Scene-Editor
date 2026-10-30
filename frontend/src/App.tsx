@@ -175,7 +175,21 @@ export default function App() {
   const patchObject = (id: string, patch: Partial<SceneObject>) =>
     editScene((s) => {
       const obj = s.objects.find((o) => o.id === id);
-      if (obj) Object.assign(obj, patch);
+      if (obj) {
+        if (obj.package) {
+          if (
+            patch.color !== undefined &&
+            patch.package_color_override === undefined
+          )
+            obj.package_color_override = true;
+          if (
+            patch.friction !== undefined &&
+            patch.package_friction_override === undefined
+          )
+            obj.package_friction_override = true;
+        }
+        Object.assign(obj, patch);
+      }
     });
   const addObject = (assetId: string, hit?: Vec3) => {
     if (!editableRef.current) return;
@@ -1028,15 +1042,17 @@ export default function App() {
           add={async (obj) => {
             await sim.waitForPending();
             const scene = sim.currentScene();
-            const zValues = obj.mesh!.vertices.filter((_, i) => i % 3 === 2);
-            obj.position = [
-              0.06,
-              0,
-              scene.table.height + Math.max(...zValues) + 0.002,
-            ];
+            const halfHeight = obj.package
+              ? obj.package.dimensions[2] / 2
+              : Math.max(...obj.mesh!.vertices.filter((_, i) => i % 3 === 2));
+            obj.position = [0.06, 0, scene.table.height + halfHeight + 0.002];
             await sim.command("object_add", { object: obj });
             setSelected(obj.id);
-            notify("Object imported · convex hull collision");
+            notify(
+              obj.package
+                ? "MuJoCo object imported · original physics"
+                : "Object imported · convex hull collision",
+            );
           }}
         />
       )}

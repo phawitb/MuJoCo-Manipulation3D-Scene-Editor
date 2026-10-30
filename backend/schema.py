@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, AfterValidator, model_validat
 import math
 import json
 from .catalog import KALAS_ASSETS
+from .package_schema import RigidPackage
 from .appearance import Appearance
 
 MAX_SCENE_BYTES = 8_000_000
@@ -64,12 +65,16 @@ class SceneObject(StrictModel):
         "spoon",
         "cube",
         "mesh",
+        "mujoco",
         "kalas_bowl",
         "kalas_cup",
         "kalas_spoon",
         "kalas_plate",
     ] = "cup"
     mesh: ImportedMesh | None = None
+    package: RigidPackage | None = None
+    package_color_override: bool = False
+    package_friction_override: bool = False
     position: Vec3 = Field(default_factory=lambda: [0, 0.08, 0.802])
     quaternion: Quat = Field(default_factory=lambda: [1, 0, 0, 0])
     scale: float = Field(default=1, ge=0.25, le=3)
@@ -80,6 +85,8 @@ class SceneObject(StrictModel):
 
     @model_validator(mode="after")
     def validate_object(self):
+        if (self.asset == "mujoco") != (self.package is not None):
+            raise ValueError("MuJoCo objects require portable package data")
         if (self.asset == "mesh") != (self.mesh is not None):
             raise ValueError(
                 "Imported objects require mesh data; primitives cannot contain it"

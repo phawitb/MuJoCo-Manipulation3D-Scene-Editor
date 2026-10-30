@@ -166,10 +166,11 @@ export function Library(p: Props) {
       </div>
       <button
         className="import-button"
+        aria-label="Import object"
         disabled={!p.editable}
         onClick={p.onImport}
       >
-        <Upload size={14} /> Import object <span>STL · OBJ · GLB</span>
+        <Upload size={14} /> Import object <span>Mesh · MuJoCo</span>
       </button>
       <div className="asset-list">
         {filtered.map((a) => (

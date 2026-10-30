@@ -1,0 +1,1 @@
+<mujocoinclude><include file="assets.xml"/><body name="Package puck"><freejoint/><inertial mass=".045" pos="0 0 0" diaginertia=".000018 .000015 .000017"/><geom type="mesh" mesh="puck" rgba=".1 .2 .3 1" group="2" contype="0" conaffinity="0"/><geom type="box" size=".025 .015 .005" group="3" friction=".6 .004 .0002"/></body></mujocoinclude>

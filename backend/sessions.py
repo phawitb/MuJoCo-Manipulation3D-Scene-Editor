@@ -270,9 +270,11 @@ class Session:
                     else:
                         if "id" in (cmd.patch or {}):
                             raise ValueError("Object ID cannot be changed")
-                        scene.objects[scene.objects.index(obj)] = obj.model_copy(
-                            update=cmd.patch or {}
-                        )
+                        patch = dict(cmd.patch or {})
+                        if obj.package:
+                            if "color" in patch: patch.setdefault("package_color_override", True)
+                            if "friction" in patch: patch.setdefault("package_friction_override", True)
+                        scene.objects[scene.objects.index(obj)] = obj.model_copy(update=patch)
                 s.load(Scene.model_validate(scene.model_dump()))
             elif kind == "camera":
                 if cmd.camera is None:

@@ -167,6 +167,16 @@ interface Props {
 export function Inspector(p: Props) {
   const object = p.scene.objects.find((o) => o.id === p.selected);
   const importedAsset = useMemo<Asset | undefined>(() => {
+    if (object?.package)
+      return {
+        id: "mujoco",
+        name: object.name,
+        category: "Imported",
+        dimensions: object.package.dimensions,
+        mass: object.mass,
+        color: object.color,
+        description: "MuJoCo package · original compound collision",
+      };
     if (!object?.mesh) return;
     const dimensions = [0, 1, 2].map((axis) => {
       let min = Infinity,
@@ -186,7 +196,7 @@ export function Inspector(p: Props) {
       color: object.color,
       description: "Imported mesh · convex hull collision",
     };
-  }, [object?.mesh]);
+  }, [object]);
   const asset = p.assets.find((a) => a.id === object?.asset) || importedAsset;
   const disabled = !p.editable;
   return (
@@ -241,9 +251,11 @@ export function Inspector(p: Props) {
               <small>RIGID BODY</small>
               <h3>{object.name}</h3>
               <span>
-                {object.mesh
-                  ? "Imported / convex hull"
-                  : `${object.asset} / procedural`}
+                {object.package
+                  ? "MuJoCo package / rigid object"
+                  : object.mesh
+                    ? "Imported / convex hull"
+                    : `${object.asset} / procedural`}
               </span>
             </div>
           </div>
@@ -332,6 +344,12 @@ export function Inspector(p: Props) {
               <div className="field-heading">
                 Friction <span>CONTACT</span>
               </div>
+              {object.package && !object.package_friction_override && (
+                <p className="info-note">
+                  Using per-part package friction. Editing below overrides all
+                  parts.
+                </p>
+              )}
               {["Sliding", "Torsional", "Rolling"].map((label, i) => (
                 <NumberField
                   key={label}
@@ -348,6 +366,18 @@ export function Inspector(p: Props) {
                   }}
                 />
               ))}
+              {object.package && object.package_friction_override && (
+                <button
+                  disabled={disabled}
+                  onClick={() =>
+                    p.patchObject(object.id, {
+                      package_friction_override: false,
+                    })
+                  }
+                >
+                  Restore package friction
+                </button>
+              )}
               <label className="toggle-row">
                 Collision enabled
                 <input
@@ -372,11 +402,31 @@ export function Inspector(p: Props) {
                   }
                 />
               </label>
+              {object.package && (
+                <>
+                  <p className="info-note">
+                    {object.package_color_override
+                      ? "Using one color for all visible parts."
+                      : "Using original colors for each package part."}
+                  </p>
+                  <button
+                    disabled={disabled || !object.package_color_override}
+                    onClick={() =>
+                      p.patchObject(object.id, {
+                        package_color_override: false,
+                      })
+                    }
+                  >
+                    Restore package colors
+                  </button>
+                </>
+              )}
             </section>
             <p className="info-note">
               <Info size={13} />
-              Procedural approximation. Scaling updates visual and collision
-              geometry together.
+              {object.package
+                ? "Package physics retained. Scaling changes geometry and inertia while keeping mass fixed; mass edits scale inertia proportionally. Imported objects still need a successful grasp rehearsal."
+                : "Procedural approximation. Scaling updates visual and collision geometry together."}
             </p>
           </div>
           <div className="inspector-actions">

@@ -264,6 +264,31 @@ async def upload(
     return obj.model_dump()
 
 
+@app.post("/api/import/package")
+async def upload_package(request: Request):
+    import base64
+    import binascii
+    from .package_importer import import_package, import_package_zip, MAX_PACKAGE_BYTES, MAX_EXPANDED_BYTES, MAX_FILES
+    if request.headers.get("content-type", "").split(";")[0] == "application/zip":
+        data = await bounded_body(request, MAX_PACKAGE_BYTES)
+        obj = await asyncio.to_thread(import_package_zip, data)
+    else:
+        raw = await bounded_body(request, MAX_EXPANDED_BYTES * 4 // 3 + 100000)
+        value = json.loads(raw)
+        entries = value.get("files") if isinstance(value, dict) else None
+        if not isinstance(entries, list) or not 1 <= len(entries) <= MAX_FILES:
+            raise ValueError("Choose a package containing 1–256 files")
+        files = {}
+        for entry in entries:
+            if not isinstance(entry, dict) or not isinstance(entry.get("path"), str) or not isinstance(entry.get("data"), str):
+                raise ValueError("Package files need a relative path and base64 data")
+            if entry["path"] in files: raise ValueError("Duplicate package path")
+            try: files[entry["path"]] = base64.b64decode(entry["data"], validate=True)
+            except (binascii.Error, ValueError) as exc: raise ValueError("Invalid package file data") from exc
+        obj = await asyncio.to_thread(import_package, files)
+    return obj.model_dump()
+
+
 @app.websocket("/ws")
 async def websocket(ws: WebSocket):
     if ws.url.hostname not in LOCAL or not allowed(ws.headers.get("origin", "")):

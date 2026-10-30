@@ -69,7 +69,9 @@ KALAS_ASSETS = [
 def profile(obj):
     if obj.asset in KALAS:
         return KALAS[obj.asset]
-    if obj.asset == "mesh":
+    if obj.asset == "mujoco":
+        dimensions = obj.package.dimensions
+    elif obj.asset == "mesh":
         points = np.array(obj.mesh.vertices).reshape(-1, 3)
         dimensions = np.ptp(points, axis=0).tolist()
     else:
@@ -80,7 +82,7 @@ def profile(obj):
             "cube": [0.04, 0.04, 0.04],
         }[obj.asset]
     return dict(
-        family=obj.asset,
+        family="mesh" if obj.asset == "mujoco" else obj.asset,
         dimensions=dimensions,
         grasp=-0.04,
         bowl=0.05,

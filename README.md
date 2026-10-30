@@ -47,6 +47,16 @@ Select **Table & environment → Tabletop color** to change the tabletop appeara
 - **Reset scene** empties the table while preserving cameras. Camera preferences also survive refresh in local storage. Refresh opens a new empty session; save your scene explicitly. A transient disconnect reconnects to the same session; its controller may continue while disconnected. If the server restarted, the browser restores its last acknowledged scene paused. Failed restoration leaves a downloadable recovery copy.
 - At narrow widths, **Objects** and **Inspector** toggle side panels.
 
+## Import a MuJoCo object package
+
+Choose **Import object → MuJoCo package → Choose folder / Choose ZIP**, then **Review package → Import and place**. The review shows original dimensions, mass, visible parts and collision parts. A package such as the LinkTrack example can include `object.xml`, `assets.xml`, `scene.xml`, and local OBJ/STL meshes. Both complete `object.xml` documents and include fragments are supported.
+
+The importer retains per-part colors, compound collision, contact settings, mass, center of mass and inertia. It adds one movable rigid object to your current table; demonstration floors, lights and scene settings are excluded. Original metric size is used. Save/open and collection recipes embed the object data, so the original folder is no longer needed. **Restore package colors** and **Restore package friction** undo explicit Inspector overrides. Object-color randomization overrides part colors when enabled; No random preserves them.
+
+Uniform scale changes geometry and inertia while retaining the separate mass setting; inertia scales with length squared and proportionally with mass changes. Package physical parameters are retained as declared, not independently calibrated. Imported objects still require successful physical rehearsal before collecting successful demonstrations. Browser and native material shading remain approximate across renderers.
+
+Limits: 256 files, 20 MB folder/expanded archive, 10 MB ZIP upload, 256 geometry parts, 60k vertices / 120k triangles, 4 MB portable object and the existing 8 MB total scene budget. Internal moving joints, image textures, external resources and unsupported physics settings are rejected with an explanation. Supported geometry includes local OBJ/STL meshes and box, sphere, ellipsoid, capsule and cylinder primitives. Static child bodies are combined with their transforms and aggregate inertia intact.
+
 ## IKEA KALAS assets
 
 Defaults include bowl **603.786.69**, handleless cup **403.786.70**, spoon **204.406.54** and plate **203.786.71**. Official published dimensions are bowl Ø120 mm, spoon length 160 mm, plate Ø190 mm and cup capacity 230 mL. Heights, wall thicknesses, detailed profiles and physical properties are documented estimates. These are independently authored reconstructions, not manufacturer CAD. Open compound collision shells preserve container cavities; the visible spoon head is concave.

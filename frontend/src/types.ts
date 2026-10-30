@@ -6,6 +6,7 @@ export type AssetId =
   | "spoon"
   | "cube"
   | "mesh"
+  | "mujoco"
   | "kalas_bowl"
   | "kalas_cup"
   | "kalas_spoon"
@@ -15,6 +16,20 @@ export interface SceneObject {
   name: string;
   asset: AssetId;
   mesh?: { vertices: number[]; faces: number[]; filename: string } | null;
+  package?: {
+    version: 1;
+    source: string;
+    dimensions: Vec3;
+    mass: number;
+    com: Vec3;
+    inertia: number[];
+    geoms: { group: number; contype: number; conaffinity: number }[];
+    meshes: unknown[];
+    sites: Record<string, Vec3>;
+    provenance: Record<string, unknown>;
+  } | null;
+  package_color_override?: boolean;
+  package_friction_override?: boolean;
   position: Vec3;
   quaternion: Quat;
   scale: number;

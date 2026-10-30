@@ -26,6 +26,7 @@ def episode_scene(source: Scene, config: Variation, seed: int) -> Scene:
     for obj in scene.objects:
         if config.object_colors:
             obj.color = stream("object:" + obj.id).choice(config.object_colors)
+            if obj.package: obj.package_color_override = True
     for key in ("robot", "table", "floor", "wall"):
         patterns = getattr(config, key + "_patterns")
         surface = getattr(a, key)
